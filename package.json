@@ -1,0 +1,26 @@
+{
+  "name": "obsidian-elevenlabs-flash-tts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bunx esbuild src/main.ts --bundle --format=cjs --platform=browser --outfile=main.js --external:obsidian",
+    "build:watch": "bunx esbuild src/main.ts --bundle --format=cjs --platform=browser --outfile=main.js --sourcemap --watch --external:obsidian",
+    "dev": "bunx esbuild src/main.ts --bundle --format=cjs --platform=browser --outfile=main.js --sourcemap --watch --external:obsidian",
+    "copy:once": "bash -lc 'set -euo pipefail; : ${VAULT_PATH:?Set VAULT_PATH to your vault path}; plugin=obsidian-azure-speech-tts; DEST=\"$VAULT_PATH/.obsidian/plugins/$plugin\"; mkdir -p \"$DEST\"; rsync -a --delete --include \"manifest.json\" --include \"main.js\" --include \"styles.css\" --exclude \"*\" ./ \"$DEST/\"; echo Copied to \"$DEST\"'",
+    "deploy": "bun run build && bun run copy:once",
+    "typecheck": "bunx tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "obsidian": "latest",
+    "ramda": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.17",
+    "@types/ramda": "^0.29.8",
+    "esbuild": "^0.21.5",
+    "typescript": "^5.5.4"
+  }
+}
+

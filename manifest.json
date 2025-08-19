@@ -1,0 +1,11 @@
+{
+  "id": "obsidian-azure-speech-tts",
+  "name": "Azure AI Speech TTS",
+  "version": "0.2.0",
+  "minAppVersion": "1.4.0",
+  "author": "Piotr Loch",
+  "description": "Real-time streaming TTS via Azure AI Speech (Ava Dragon HD, Polish). Saves audio to vault and appends links.",
+  "isDesktopOnly": false,
+  "main": "main.js"
+}
+
