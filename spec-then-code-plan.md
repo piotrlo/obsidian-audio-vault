@@ -312,3 +312,15 @@ Stage 0 status update (2025-08-19)
   - Output folder name: "Audio" (capital A as in spec) vs "audio" (lowercase)?
   - Legacy file handling: keep src/main.ts in place for now, or move it to docs/legacy/ to avoid confusion?
 
+Stage 1 status update (2025-08-19)
+- Implemented (MVP basics)
+  - Settings now include Language dropdown: auto | pl-PL | en-US. Auto uses a lightweight heuristic (Polish diacritics) to choose pl-PL vs en-US at runtime.
+  - Audio output folder default is "Audio" (capital A) per spec.
+  - Voice picker: added "Fetch voices for region" button (Azure voices/list) and a toggle "Only HD neural voices" to filter results to Neural + HD (e.g., DragonHD). Dropdown is populated from the filtered list and persists selection.
+  - Legacy experimental code moved to docs/legacy/experimental-main.ts and excluded from typecheck.
+  - MVP orchestration implemented: chunking (\u003c=10k), SSML building, Azure REST streaming with MSE fallback, save under Audio/{safe}_part_{n}.mp3|wav, and auto-append link at note bottom.
+  - Minimal floating control panel with play/pause, stop, restart, download, speed slider.
+- Next steps
+  - Manual validation in Obsidian (desktop + mobile): playback, saving, links, controls.
+  - Optionally iterate on voice filtering heuristics (provider-specific tags) and language heuristic as we gather feedback.
+

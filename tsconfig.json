@@ -10,6 +10,6 @@
     "noEmit": true
   },
   "include": ["src", "tests"],
-  "exclude": ["src/main.ts"]
+  "exclude": ["src/main.ts", "docs/legacy/**/*.ts"]
 }
 
