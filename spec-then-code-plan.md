@@ -287,6 +287,28 @@ Operational checklist per stage
 - Verify vault copy to test plugin in Obsidian.
 
 Definition of Done per stage
-- Stage 1 MVP is done when: you can install the plugin, set Azure key/region/voice, run Read current note, get audio in <5s for small notes, Audio/ has files, panel controls work, link appended to note.
+- Stage 1 MVP is done when: you can install the plugin, set Azure key/region/voice, run Read current note, get audio in \u003c5s for small notes, Audio/ has files, panel controls work, link appended to note.
 - Later stages: DoD mirrors acceptance criteria listed under each stage above.
+
+
+Stage 0 status update (2025-08-19)
+- Completed
+  - Repo structure scaffolded:
+    - src/index.ts (entry), src/utils/{safe-name.ts, chunk.ts}, src/ui/panel.ts, src/obsidian/settings.ts, src/tts/azure.ts, src/types.ts.
+    - tests/utils/{safe-name.test.ts, chunk.test.ts} using bun:test.
+  - Bun-first setup verified:
+    - package.json scripts build/dev/watch now target src/index.ts with esbuild external:obsidian.
+    - ramda and @types/ramda removed from dependencies.
+    - Added bun-types and configured tsconfig types: ["obsidian", "bun-types"].
+    - Typecheck passes (bunx tsc --noEmit), tests pass (bun test), build produces main.js.
+  - tsconfig updated to include tests/ and exclude legacy src/main.ts from typecheck.
+- Notes
+  - The legacy experimental src/main.ts remains in the repo for reference but is excluded from typecheck; it will be superseded by new modules in Stage 1.
+- Next actions (Stage 1)
+  - Implement MVP modules: utils/ssml.ts, tts/azure.ts streaming + blob, obsidian/settings.ts full settings, ui/panel.ts controls, command wiring in index.ts, file save/link.
+  - Add minimal README quick start for building and deploying to a vault.
+- Decisions requested
+  - SSML language default: keep pl-PL for MVP, or expose a language setting immediately?
+  - Output folder name: "Audio" (capital A as in spec) vs "audio" (lowercase)?
+  - Legacy file handling: keep src/main.ts in place for now, or move it to docs/legacy/ to avoid confusion?
 
