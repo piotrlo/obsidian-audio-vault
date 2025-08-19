@@ -188,3 +188,5 @@ aidevs/
 *.traineddata
 /temp_extracted/
 /test_files/
+main.js
+main.js.map
