@@ -1,0 +1,292 @@
+# ListenMode — Spec-Then-Code Implementation Plan (spec-then-code-plan.md)
+
+This plan breaks down delivery into clear stages, starting from a minimal, locally working MVP plugin (no backend, no auth, no payments) that you can test in Obsidian. Each stage lists scope, tasks, acceptance criteria mapped to spec-then-code.md, risks, and test checklist. The plan aligns with your rules: use Bun, TypeScript with strict typing, JSDoc for documentation, no global state, short functions, minimal dependencies (remove ramda), and simple jest-like tests via bun:test.
+
+References
+- Source spec: spec-then-code.md
+- Experimental code for inspiration only: src/main.ts
+
+Principles and constraints
+- Bun-first: use bun, bunx, bun test; do not use npm/node directly.
+- TypeScript strict: explicit function return types, small, single-purpose functions.
+- Documentation: JSDoc-only in code (/** ... */) for public APIs; no // inline comments.
+- Tests: *.test.ts via bun:test; short and focused.
+- Minimal dependencies: remove ramda; prefer zero-deps utilities.
+- No backend in MVP: direct Azure TTS calls from the plugin allowed only in MVP/dev; production will route via backend in later stages.
+- File storage: store audio files in vault Audio/; auto-append a link at the bottom of the note.
+
+Stage overview
+- Stage 0: Repo hygiene and groundwork
+- Stage 1: MVP (local-only, no backend, no auth, no payments)
+- Stage 2: Provider abstraction and settings hardening
+- Stage 3: Backend proxy (Cloudflare Workers) — licensing, limits, voices cache
+- Stage 4: Client licensing flow and limits UI
+- Stage 5: Streaming robustness, mobile polish, offline playback
+- Stage 6: Observability and error reporting
+- Stage 7: Performance tuning and large-note handling
+- Stage 8: Docs, onboarding, and pre-release hardening
+
+Stage 0 — Repo hygiene and groundwork
+Scope
+- Prepare clean module structure for the plugin and tests.
+- Remove ramda and refactor utility usage.
+- Ensure Bun-based build/dev/test scripts.
+
+Tasks
+- Create folders: src/, src/ui/, src/tts/, src/utils/, src/obsidian/, tests/.
+- Add modules: src/index.ts (entry), src/obsidian/settings.ts, src/ui/panel.ts, src/tts/azure.ts, src/utils/chunk.ts, src/utils/ssml.ts, src/utils/fs.ts, src/utils/safe-name.ts, src/types.ts.
+- Update package.json: remove ramda and @types/ramda; keep esbuild, typescript.
+- tsconfig: strict already enabled; validate lib and types.
+
+Acceptance criteria mapping
+- spec §4 (arch, TS), §4.6 (remove ramda).
+
+Risks
+- None significant.
+
+Tests
+- Add smoke test scaffolding with bun:test that imports small utils (chunking, safe-name) and validates behavior.
+
+Stage 1 — MVP (Local, no backend, no auth, no payments)
+Scope
+- A usable Obsidian plugin generating audio from current note via Azure AI Speech REST, saving to Audio/, linking at bottom, and offering minimal playback controls. Desktop and mobile should work; streaming best-effort.
+
+Key capabilities
+- Command palette actions: read-current-note, stop-playback, restart, toggle-controls, download-last-audio.
+- Settings UI: azureRegion, azureApiKey, voiceName (manual text, optional fetch), outputFormat, rate (SSML), enableStreaming, showControls, audioFolder.
+- Text processing: split into <= 10,000-char chunks preferring sentence boundaries; language selection default to pl-PL (configurable later).
+- Synthesis: build SSML, call POST https://{region}.tts.speech.microsoft.com/cognitiveservices/v1 with X-Microsoft-OutputFormat.
+- Streaming: attempt MSE for mp3/wav; fallback to capture entire response then play.
+- Storage: write to Audio/ as {safe-basename}_part_{n}.{mp3|wav}; append [[relPath]] at note end.
+
+Tasks
+- src/types.ts: define TtsSettings, PlaybackSession types.
+- src/utils/safe-name.ts: safe base name for file paths.
+- src/utils/chunk.ts: chunking by sentence boundaries with max length; no deps.
+- src/utils/ssml.ts: generate SSML with voice/rate/lang and properly escaped content.
+- src/utils/fs.ts: vault helpers for ensureFolder, writeBinary, appendLink.
+- src/ui/panel.ts: minimal floating panel with play/pause, stop, restart, download, speed slider; hide/show capability and collapsed state.
+- src/tts/azure.ts: startHttpStream, captureToBlob, detect MIME based on outputFormat.
+- src/obsidian/settings.ts: settings tab with fields above; optional “Fetch voices” button using Azure GET voices/list (MVP convenience, skipping backend).
+- src/index.ts: main plugin class wiring commands, playback session state, calling azure synth.
+- Remove all ramda usage from logic; replace with native arrays/strings.
+
+Acceptance criteria mapping
+- spec §3.1 TTS (format mp3/wav, voices, rate), §3.2 playback and controls, §3.3 storage/linking, §3.7 docs/onboarding (brief README section), §4.1 Azure endpoints, §4.3 frontend controls, §4a defaults.
+
+Risks
+- iOS autoplay and MSE support may limit streaming; MVP must fallback gracefully to after-download playback.
+
+Tests (bun test)
+- utils/chunk.test.ts: chunk size and sentence-boundary behavior.
+- utils/safe-name.test.ts: path-safe outputs.
+- utils/ssml.test.ts: escaping &, <, > and rate insertion.
+- tts/azure.test.ts: MIME detection for formats; stream-to-blob assembly with fake reader.
+
+Stage 2 — Provider abstraction and settings hardening
+Scope
+- Introduce TtsProvider interface and AzureTtsProvider implementation; prepare optional OpenAI provider later without changing UI.
+- Harden settings validation and surfacing of missing fields.
+
+Tasks
+- types: export TtsProvider { synthesize(ssml, format, language): ReadableStream<Uint8Array>; listVoices(): Promise<Voice[]> }.
+- Refactor Stage 1 azure module to implement interface; add provider switch in settings (default azure).
+- Improve user notices for missing settings.
+
+Acceptance criteria mapping
+- spec §4.1a provider abstraction; §3.6 stability (clear errors).
+
+Risks
+- None significant.
+
+Tests
+- Provider switch unit test with a mock provider.
+
+Stage 3 — Backend proxy (Cloudflare Workers)
+Scope
+- Implement minimal Workers backend to proxy TTS and voices; secure provider keys; basic license entities scaffold (no UI yet).
+
+Tasks
+- Worker routes: POST /v1/tts (stream), GET /v1/voices; env secrets for Azure; basic logging.
+- KV cache for voices 24h; D1 schema scaffolding (licenses, usage_monthly) without enforcing yet.
+- Client: switch to backend URLs with a “Use backend” toggle; default off in MVP channel.
+
+Acceptance criteria mapping
+- spec §4.2 backend goals, §4.4 security (no provider keys in client), §4.6 dependencies minimal.
+
+Risks
+- Streaming compatibility and edge buffering — validate with MSE.
+
+Tests
+- Worker integration tests with wrangler dev; client fetch mocked.
+
+Stage 4 — Client licensing flow and limits UI
+Scope
+- License-key input and validation, token handling, monthly char limits UI, and error surfaces.
+
+Tasks
+- Settings: licenseKey input; Validate -> backend /v1/license/validate to short-lived JWT stored in memory and persisted only as license key.
+- Add remaining quota indicator in panel or settings.
+- Handle 402 from /v1/tts with a Notice linking to Stripe portal.
+
+Acceptance criteria mapping
+- spec §4.2 API, §4b Stripe models, §5 DoD backend/licensing bullets.
+
+Risks
+- Token refresh cadence; ensure silent refresh or clear messaging.
+
+Tests
+- License happy-path and expired token handling (mock backend).
+
+Stage 5 — Streaming robustness, mobile polish, offline playback
+Scope
+- Make streaming default and robust across desktop/mobile; prefetch next chunk; reliable offline playback of existing files.
+
+Tasks
+- Implement small buffer threshold before auto-play; detect MSE support and device quirks; allow disable streaming in settings.
+- If file exists in Audio/, play without generating unless user clicks Refresh.
+- Add collapsed/expanded panel header toggle and showControls setting persistence.
+
+Acceptance criteria mapping
+- spec §3.2 playback, §4.3 streaming default, §4.5 performance.
+
+Risks
+- Mobile WebView limitations, iOS auto-play; require user gesture.
+
+Tests
+- E2E manual checklist on macOS, Windows, Android, iOS; unit tests for file-exists branch.
+
+Stage 6 — Observability and error reporting
+Scope
+- Lightweight telemetry and error reporting; user-facing error clarity.
+
+Tasks
+- Workers Analytics Engine events for errors/latency; client notices for common failure modes; local error log export (optional).
+
+Acceptance criteria mapping
+- spec §4.4a monitoring, §3.6 stability, §5 monitoring DoD.
+
+Risks
+- Privacy boundaries; keep strictly to metadata, allow opt-out.
+
+Tests
+- Validate events fired and visible in Analytics; unit assertions on error mapping.
+
+Stage 7 — Performance tuning and large-note handling
+Scope
+- Automatic language detection, improved chunking (<= 10,000 chars), playback continuity, prefetch pipeline.
+
+Tasks
+- Language heuristics for xml:lang from note content; ensure chunk cutoff at sentence boundaries; prefetch next chunk while playing current.
+
+Acceptance criteria mapping
+- spec §3.1 long notes and languages, §4.5 performance.
+
+Risks
+- Over-detection on mixed-language notes; keep simple and configurable.
+
+Tests
+- Three language samples PL/EN/MIX; chunk prefetch behavior unit tests.
+
+Stage 8 — Docs, onboarding, and pre-release hardening
+Scope
+- Tight README/How-to/FAQ; first-run flow; polishing details.
+
+Tasks
+- README sections: installation, dev build via Bun, VAULT_PATH copy, first audio in 3 clicks, settings explained, troubleshooting.
+- “First run” tips notice in plugin: set keys/region; link to docs.
+- Final acceptance criterion sweep; remove “dev-only” feature flags for release channel.
+
+Acceptance criteria mapping
+- spec §3.7 documentation and onboarding; §5 DoD final checks.
+
+Risks
+- None.
+
+Tests
+- Docs lint; manual onboarding test from scratch.
+
+MVP module responsibilities (Stage 1)
+- src/index.ts
+  - Register commands: read-current-note, stop-playback, restart, toggle-controls, download-last-audio.
+  - Orchestrate reading current file, chunking, SSML build, streaming or buffered play, saving and linking output files.
+  - Manage PlaybackSession and UI updates.
+- src/obsidian/settings.ts
+  - Settings tab with Azure fields, streaming toggle, showControls, audioFolder; optional “Fetch voices” calling Azure voices/list.
+- src/ui/panel.ts
+  - Floating panel element; controls with playbackRate slider; ability to hide/show and collapse; emits callbacks.
+- src/tts/azure.ts
+  - startHttpStream(azureApiKey, region, voiceName, outputFormat, ssml, abort): Promise<ReadableStream<Uint8Array>>.
+  - captureToBlob(stream, onChunk?, outputFormat): Promise<Blob>.
+  - MIME detection for mp3/wav based on format string.
+- src/utils/chunk.ts
+  - splitTextSmart(text, maxChars = 10000): string[] preferring sentence boundaries.
+- src/utils/ssml.ts
+  - escapeXml(str), buildSsml({ text, voiceName, rate, lang }): string.
+- src/utils/safe-name.ts
+  - toSafeBase(input): string.
+- src/utils/fs.ts
+  - ensureFolder(app, path), writeBinary(app, path, ArrayBuffer), appendAudioReference(app, file, relPath).
+- src/types.ts
+  - TtsSettings, PlaybackSession, Voice types.
+
+File/folder structure (evolves by stage)
+- src/
+  - index.ts
+  - obsidian/settings.ts
+  - tts/azure.ts
+  - ui/panel.ts
+  - utils/{chunk.ts, ssml.ts, safe-name.ts, fs.ts}
+  - types.ts
+- tests/
+  - utils/{chunk.test.ts, safe-name.test.ts, ssml.test.ts}
+  - tts/azure.test.ts
+- Audio/ (vault folder at runtime)
+
+Build, dev, and test with Bun
+- Build once:
+  - bun run build
+- Watch/dev:
+  - bun run dev
+- Typecheck:
+  - bun run typecheck
+- Test:
+  - bun test
+- Copy to your vault (requires VAULT_PATH env):
+  - bun run deploy
+
+Note: package.json should not depend on ramda; ensure external:obsidian in esbuild; output main.js, manifest.json present.
+
+Acceptance criteria traceability (MVP)
+- §3.1 TTS: mp3/wav, voice selection (manual or fetched), SSML with rate +10% default, pl-PL by default, EN optional later.
+- §3.2 Playback: minimal panel controls, works desktop/mobile; refresh triggers regeneration; download last audio.
+- §3.3 Integration: store under Audio/, append [[relPath]] at note bottom; reuse existing audio unless refresh.
+- §3.6 Stability: clear notices for missing settings and TTS errors; abort/stop behavior.
+- §3.7 Docs/Onboarding: README quick start; 3 clicks to first audio.
+- §4.1 Azure endpoints and formats; §4a defaults applied; §4.6 remove ramda.
+
+Migration from experimental src/main.ts
+- Keep as a reference only; re-implement in modules listed above.
+- Replace Ramda-based chunking with native implementation.
+- Retain practical UX learnings: MSE attempt + fallback, download-last-audio, speed slider mapping from rate.
+- Remove direct UI styles duplication; centralize in ui/panel.ts.
+
+Open questions and decisions
+- Language selection default: Start with pl-PL; add setting in Stage 2; add automatic detection in Stage 7.
+- iOS streaming: If MSE not supported, default to buffered playback; require user gesture to start.
+- Audio format default: audio-24khz-48kbitrate-mono-mp3; allow wav.
+
+Testing strategy notes
+- Keep tests tiny and isolated; verify algorithms and MIME decisions.
+- E2E manual checklist for MVP across platforms; automate later stages around backend.
+
+Operational checklist per stage
+- Update spec-then-code.md if decisions or flows change.
+- Keep JSDoc current on public functions.
+- Run: bun test, bun run typecheck, bun run build before tagging stage complete.
+- Verify vault copy to test plugin in Obsidian.
+
+Definition of Done per stage
+- Stage 1 MVP is done when: you can install the plugin, set Azure key/region/voice, run Read current note, get audio in <5s for small notes, Audio/ has files, panel controls work, link appended to note.
+- Later stages: DoD mirrors acceptance criteria listed under each stage above.
+
