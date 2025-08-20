@@ -149,6 +149,14 @@ export class ListenModeSettingsTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName("Debug logs")
+      .setDesc("Print detailed streaming and fetch diagnostics to the console")
+      .addToggle((tg) => tg
+        .setValue(!!this.plugin.settings.debugLogs)
+        .onChange(async (v) => { this.plugin.settings.debugLogs = v; await this.plugin.saveSettings(); try { (await import("../utils/logger")).setDebugLogging(v); } catch {} })
+      );
+
+    new Setting(containerEl)
       .setName("Help")
       .setDesc("Use command palette: ListenMode: Read current note")
   }

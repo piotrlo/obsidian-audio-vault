@@ -52,7 +52,7 @@ Scope
 - A usable Obsidian plugin generating audio from current note via Azure AI Speech REST, saving to Audio/, linking at bottom, and offering minimal playback controls. Desktop and mobile should work; streaming best-effort.
 
 Key capabilities
-- Command palette actions: read-current-note, stop-playback, restart, toggle-controls, download-last-audio.
+- Command palette actions: read-current-note, stop-playback, restart, toggle-controls.
 - Settings UI: azureRegion, azureApiKey, voiceName (manual text, optional fetch), outputFormat, rate (SSML), enableStreaming, showControls, audioFolder.
 - Text processing: split into <= 10,000-char chunks preferring sentence boundaries; language selection default to pl-PL (configurable later).
 - Synthesis: build SSML, call POST https://{region}.tts.speech.microsoft.com/cognitiveservices/v1 with X-Microsoft-OutputFormat.
@@ -208,7 +208,7 @@ Tests
 
 MVP module responsibilities (Stage 1)
 - src/index.ts
-  - Register commands: read-current-note, stop-playback, restart, toggle-controls, download-last-audio.
+  - Register commands: read-current-note, stop-playback, restart, toggle-controls.
   - Orchestrate reading current file, chunking, SSML build, streaming or buffered play, saving and linking output files.
   - Manage PlaybackSession and UI updates.
 - src/obsidian/settings.ts
@@ -268,7 +268,7 @@ Acceptance criteria traceability (MVP)
 Migration from experimental src/main.ts
 - Keep as a reference only; re-implement in modules listed above.
 - Replace Ramda-based chunking with native implementation.
-- Retain practical UX learnings: MSE attempt + fallback, download-last-audio, speed slider mapping from rate.
+- Retain practical UX learnings: MSE attempt + fallback, speed slider mapping from rate.
 - Remove direct UI styles duplication; centralize in ui/panel.ts.
 
 Open questions and decisions
@@ -324,4 +324,14 @@ Stage 1 status update (2025-08-19)
   - Manual validation in Obsidian (desktop + mobile): playback, saving, links, controls.
   - Re-enable default streaming (MSE) with robust fallback on environments without MSE (including iOS). Streaming remains default ON on all platforms; iOS path will be tested and adjusted if needed.
   - Optionally iterate on voice filtering heuristics (provider-specific tags) and language heuristic as we gather feedback.
+
+Stage 1 status update (2025-08-20)
+- Implemented (streaming path + debug)
+  - Streaming re-enabled with immediate playback using MediaSource for MIME derived from settings (mp3 → audio/mpeg, wav → audio/wav). On environments without MSE or on failures, automatic fallback to buffered path.
+  - Streaming pipeline: startHttpStream() → SourceBuffer append queue (avoids update conflicts) → concurrent captureToBlob() → save to Audio/ and append link after stream completes.
+  - “Debug logs” setting added; centralized logger (src/utils/logger.ts) gates log/warn without scattering conditionals. Logs include streaming candidate, stream opened, sourceopen, appending chunks, and total bytes.
+  - Saved file format remains exactly as selected in settings (e.g., mp3); streaming uses the same format when possible.
+- Notes
+  - Removed any mention of "download-last-audio" from Stage 1 scope.
+  - Buffered fallback is seamless and surfaced via Notice.
 
