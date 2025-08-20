@@ -6,6 +6,7 @@ import { detectLanguage } from "./utils/lang";
 import { ensureFolder, writeBinary, appendAudioReference, deleteExistingParts } from "./utils/fs";
 import { mimeFromFormat, startHttpStream, captureToBlob, fetchTtsAudio } from "./tts/azure";
 import { ControlPanel } from "./ui/panel";
+import { log, warn, setDebugLogging } from "./utils/logger";
 import { ListenModeSettingsTab } from "./obsidian/settings";
 import type { PlaybackSession, TtsSettings } from "./types";
 
@@ -25,6 +26,7 @@ export default class ListenModePlugin extends Plugin {
    */
   async onload(): Promise<void> {
     await this.loadSettings();
+    setDebugLogging(!!this.settings.debugLogs);
     this.addCommand({ id: "listenmode-read-current-note", name: "ListenMode: Read current note", callback: () => { void this.readCurrentNote(); } });
     this.addCommand({ id: "listenmode-stop", name: "ListenMode: Stop", callback: () => { void this.stopPlayback(); } });
     this.addCommand({ id: "listenmode-restart", name: "ListenMode: Restart", callback: () => { void this.readCurrentNote(true); } });
@@ -112,33 +114,138 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
         const ssml = buildSsml({ text: chunk, voiceName: this.settings.voiceName, rate: this.settings.rate, lang });
         const abort = new AbortController();
         this.currentSession = { abort, audioEl: null, mediaSource: null, sourceBuffer: null, lastBlob: null, fileBase: base };
-        // Non-streaming fetch for reliability
-        const { buffer, mime } = await fetchTtsAudio(
-          this.settings.azureApiKey,
-          this.settings.azureRegion,
-          this.settings.outputFormat,
-          ssml,
-          abort.signal
-        );
-        if (!buffer || buffer.byteLength === 0) { throw new Error("Empty audio buffer"); }
-        const blob = new Blob([buffer], { type: mime });
-        if (this.currentSession) this.currentSession.lastBlob = blob;
 
-        // Play blob
-        const url = URL.createObjectURL(blob);
-        const audioEl = new Audio(url);
-        audioEl.playbackRate = this.getPlaybackRateFromRateSetting(this.settings.rate);
-        try { await audioEl.play(); } catch {}
-        this.currentSession.audioEl = audioEl;
-        audioEl.addEventListener("ended", () => { this.currentSession = null; });
-        audioEl.addEventListener("ended", () => { this.currentSession = null; });
+        // Decide streaming format for MSE: try native MIME from settings (mp3/wav)
+        const streamFormat = this.settings.outputFormat;
+        const streamMime = mimeFromFormat(streamFormat);
+        const canStream = typeof MediaSource !== "undefined"
+          && (MediaSource as any).isTypeSupported
+          && MediaSource.isTypeSupported(streamMime);
+        log("streaming candidate", { streamFormat, streamMime, canStream, enableStreaming: this.settings.enableStreaming });
 
-        const arrayBuf = buffer;
-        const ext = /wav/i.test(this.settings.outputFormat) ? "wav" : "mp3";
-        const audioPath = `${folder}/${base}_part_${part}.${ext}`;
-        await writeBinary(this.app, audioPath, arrayBuf);
-        new Notice(`Saved ${audioPath}`);
-        await appendAudioReference(this.app, file, audioPath);
+        if (this.settings.enableStreaming && canStream) {
+          try {
+            log("startHttpStream", { region: this.settings.azureRegion, streamFormat });
+            // Streaming path with immediate playback using MediaSource (same format as output)
+            const stream = await startHttpStream(
+              this.settings.azureApiKey,
+              this.settings.azureRegion,
+              streamFormat,
+              ssml,
+              abort.signal
+            );
+            log("stream opened");
+
+            const mediaSource = new MediaSource();
+            const objectUrl = URL.createObjectURL(mediaSource);
+            const audioEl = new Audio(objectUrl);
+            audioEl.playbackRate = this.getPlaybackRateFromRateSetting(this.settings.rate);
+            audioEl.play().catch(() => {});
+
+            await new Promise<void>((res) => mediaSource.addEventListener("sourceopen", () => res(), { once: true }));
+            log("mediaSource opened, adding SourceBuffer", streamMime);
+            const sourceBuffer = mediaSource.addSourceBuffer(streamMime);
+
+            // Queue-based append to avoid InvalidStateError
+            const queue: Uint8Array[] = [];
+            let draining = false;
+            const drain = () => {
+              if (draining || sourceBuffer.updating) return;
+              const next = queue.shift();
+              if (!next) return;
+              try {
+                const copy = new Uint8Array(next.byteLength);
+                copy.set(next);
+                sourceBuffer.appendBuffer(copy.buffer);
+                draining = true;
+              } catch {
+                draining = false;
+              }
+            };
+            sourceBuffer.addEventListener('updateend', () => { draining = false; drain(); });
+
+            const onChunk = (u8: Uint8Array) => { queue.push(u8); drain(); };
+            log("streaming started, appending chunks...");
+
+            // Track session
+            if (this.currentSession) {
+              this.currentSession.audioEl = audioEl;
+              this.currentSession.mediaSource = mediaSource;
+              this.currentSession.sourceBuffer = sourceBuffer;
+            }
+
+            // Assemble final Blob while streaming to player
+            const blob = await captureToBlob(stream, onChunk, streamFormat);
+            log("streaming finished, total blob bytes", blob.size);
+            if (this.currentSession) this.currentSession.lastBlob = blob;
+            if (mediaSource.readyState === "open") { try { mediaSource.endOfStream(); } catch {} }
+
+            // Persist to vault and append link (use original target extension)
+            const arrayBuf = await blob.arrayBuffer();
+            const ext = /wav/i.test(this.settings.outputFormat) ? 'wav' : 'mp3';
+            const audioPath = `${folder}/${base}_part_${part}.${ext}`;
+            await writeBinary(this.app, audioPath, arrayBuf);
+            new Notice(`Saved ${audioPath}`);
+            await appendAudioReference(this.app, file, audioPath);
+          } catch (err) {
+            const detail = (err && (err as any).message) ? (err as any).message : String(err);
+            warn("streaming failed, falling back to buffered", { detail, streamFormat, streamMime });
+            new Notice(`Streaming failed (fallback to buffered): ${detail}`);
+            // Fall through to buffered path below
+            const { buffer, mime } = await fetchTtsAudio(
+              this.settings.azureApiKey,
+              this.settings.azureRegion,
+              this.settings.outputFormat,
+              ssml,
+              abort.signal
+            );
+            if (!buffer || buffer.byteLength === 0) { throw new Error("Empty audio buffer"); }
+            const blob = new Blob([buffer], { type: mime });
+            if (this.currentSession) this.currentSession.lastBlob = blob;
+
+            const url = URL.createObjectURL(blob);
+            const audioEl = new Audio(url);
+            audioEl.playbackRate = this.getPlaybackRateFromRateSetting(this.settings.rate);
+            try { await audioEl.play(); } catch {}
+            this.currentSession.audioEl = audioEl;
+            audioEl.addEventListener("ended", () => { this.currentSession = null; });
+
+            const arrayBuf = buffer;
+            const ext = /wav/i.test(this.settings.outputFormat) ? "wav" : "mp3";
+            const audioPath = `${folder}/${base}_part_${part}.${ext}`;
+            await writeBinary(this.app, audioPath, arrayBuf);
+            new Notice(`Saved ${audioPath}`);
+            await appendAudioReference(this.app, file, audioPath);
+          }
+        } else {
+          // Fallback non-streaming path (existing buffered flow)
+          log("buffered fetch start", { format: this.settings.outputFormat });
+          const { buffer, mime } = await fetchTtsAudio(
+            this.settings.azureApiKey,
+            this.settings.azureRegion,
+            this.settings.outputFormat,
+            ssml,
+            abort.signal
+          );
+          log("buffered fetch done", { bytes: buffer?.byteLength || 0, mime });
+          if (!buffer || buffer.byteLength === 0) { throw new Error("Empty audio buffer"); }
+          const blob = new Blob([buffer], { type: mime });
+          if (this.currentSession) this.currentSession.lastBlob = blob;
+
+          const url = URL.createObjectURL(blob);
+          const audioEl = new Audio(url);
+          audioEl.playbackRate = this.getPlaybackRateFromRateSetting(this.settings.rate);
+          try { await audioEl.play(); } catch {}
+          this.currentSession.audioEl = audioEl;
+          audioEl.addEventListener("ended", () => { this.currentSession = null; });
+
+          const arrayBuf = buffer;
+          const ext = /wav/i.test(this.settings.outputFormat) ? "wav" : "mp3";
+          const audioPath = `${folder}/${base}_part_${part}.${ext}`;
+          await writeBinary(this.app, audioPath, arrayBuf);
+          new Notice(`Saved ${audioPath}`);
+          await appendAudioReference(this.app, file, audioPath);
+        }
       } catch (e: unknown) {
         const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
         new Notice(`TTS failed on part ${part}: ${msg}`);
@@ -195,7 +302,8 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
       showControls: true,
       audioFolder: "Audio",
       language: "pl-PL",
-      onlyHdVoices: true
+      onlyHdVoices: true,
+      debugLogs: false
     }, data || {});
   }
 

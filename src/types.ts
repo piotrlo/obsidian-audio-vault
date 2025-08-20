@@ -26,6 +26,8 @@ export interface TtsSettings {
   language: string;
   /** If true, voice picker shows only Neural HD voices. */
   onlyHdVoices: boolean;
+  /** Enable debug console logs. */
+  debugLogs?: boolean;
 }
 
 /**
