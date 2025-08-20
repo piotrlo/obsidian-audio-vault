@@ -259,7 +259,7 @@ Note: package.json should not depend on ramda; ensure external:obsidian in esbui
 
 Acceptance criteria traceability (MVP)
 - §3.1 TTS: mp3/wav, voice selection (manual or fetched), SSML with rate +10% default, pl-PL by default, EN optional later.
-- §3.2 Playback: minimal panel controls, works desktop/mobile; refresh triggers regeneration; download last audio.
+- §3.2 Playback: minimal panel controls, works desktop/mobile; refresh triggers regeneration; no separate download control (files are saved in Audio/ and linked).
 - §3.3 Integration: store under Audio/, append [[relPath]] at note bottom; reuse existing audio unless refresh.
 - §3.6 Stability: clear notices for missing settings and TTS errors; abort/stop behavior.
 - §3.7 Docs/Onboarding: README quick start; 3 clicks to first audio.
@@ -318,9 +318,10 @@ Stage 1 status update (2025-08-19)
   - Audio output folder default is "Audio" (capital A) per spec.
   - Voice picker: added "Fetch voices for region" button (Azure voices/list) and a toggle "Only HD neural voices" to filter results to Neural + HD (e.g., DragonHD). Dropdown is populated from the filtered list and persists selection.
   - Legacy experimental code moved to docs/legacy/experimental-main.ts and excluded from typecheck.
-  - MVP orchestration implemented: chunking (\u003c=10k), SSML building, Azure REST streaming with MSE fallback, save under Audio/{safe}_part_{n}.mp3|wav, and auto-append link at note bottom.
-  - Minimal floating control panel with play/pause, stop, restart, download, speed slider.
+  - MVP orchestration implemented: chunking (\u003c=10k), SSML building, Azure REST fetch (temporary non-streaming for reliability) saving under Audio/{safe}_part_{n}.mp3|wav, and auto-append link at note bottom (no duplicates).
+  - Minimal floating control panel with play/pause, stop, restart, speed slider. Download control removed.
 - Next steps
   - Manual validation in Obsidian (desktop + mobile): playback, saving, links, controls.
+  - Re-enable default streaming (MSE) with robust fallback on environments without MSE (including iOS). Streaming remains default ON on all platforms; iOS path will be tested and adjusted if needed.
   - Optionally iterate on voice filtering heuristics (provider-specific tags) and language heuristic as we gather feedback.
 
