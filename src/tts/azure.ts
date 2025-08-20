@@ -13,6 +13,40 @@ export function mimeFromFormat(outputFormat: string): string {
 }
 
 /**
+ * Convenience: fetch full audio as ArrayBuffer (non-streaming).
+ */
+export async function fetchTtsAudio(
+  apiKey: string,
+  region: string,
+  outputFormat: string,
+  ssml: string,
+  abortSignal: AbortSignal
+): Promise<{ buffer: ArrayBuffer; mime: string }> {
+  const url = `https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`;
+  const fmt = outputFormat && outputFormat.trim() ? outputFormat.trim() : "audio-24khz-48kbitrate-mono-mp3";
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      accept: "audio/*",
+      "User-Agent": "ListenMode/0.1",
+      "Ocp-Apim-Subscription-Key": apiKey,
+      "Content-Type": "application/ssml+xml",
+      "X-Microsoft-OutputFormat": fmt
+    },
+    body: ssml,
+    signal: abortSignal
+  });
+  if (!res.ok) {
+    let detail = "";
+    try { detail = await res.text(); } catch {}
+    throw new Error(`TTS fetch failed: ${res.status}${detail ? ` - ${detail}` : ""}`);
+  }
+  const buffer = await res.arrayBuffer();
+  const mime = mimeFromFormat(fmt);
+  return { buffer, mime };
+}
+
+/**
  * Start Azure AI Speech HTTP streaming for a chunk of SSML.
  *
  * @param {string} apiKey Azure API key.
@@ -34,7 +68,8 @@ export async function startHttpStream(
   const res = await fetch(url, {
     method: "POST",
     headers: {
-      accept: "*/*",
+      accept: "audio/*",
+      "User-Agent": "ListenMode/0.1",
       "Ocp-Apim-Subscription-Key": apiKey,
       "Content-Type": "application/ssml+xml",
       "X-Microsoft-OutputFormat": fmt

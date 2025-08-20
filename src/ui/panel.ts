@@ -6,7 +6,6 @@ export type PanelCallbacks = {
   onPlayOrStart: () => void;
   onStop: () => void;
   onRefresh: () => void;
-  onDownload: () => void;
   onRateChange: (rate: number) => void;
 };
 
@@ -41,7 +40,6 @@ export class ControlPanel {
     const playPause = mkBtn("⏯️", "Play/Pause or Start", () => cb.onPlayOrStart());
     const stop = mkBtn("⏹️", "Stop", () => cb.onStop());
     const refresh = mkBtn("🔁", "Restart", () => cb.onRefresh());
-    const download = mkBtn("⬇️", "Download last audio", () => cb.onDownload());
 
     const label = document.createElement("span");
     label.textContent = "Speed";
@@ -59,7 +57,6 @@ export class ControlPanel {
     el.appendChild(playPause);
     el.appendChild(stop);
     el.appendChild(refresh);
-    el.appendChild(download);
     el.appendChild(label);
     el.appendChild(slider);
 
