@@ -12,6 +12,16 @@ export function escapeXml(input: string): string {
 }
 
 /**
+ * Try to derive xml:lang from a voice name like "pl-PL-AgnieszkaNeural" or "en-US-Ava:DragonHDLatestNeural".
+ * @param {string} voiceName Voice identifier.
+ * @returns {string | null} Derived BCP47 tag or null.
+ */
+export function deriveLangFromVoiceName(voiceName: string): string | null {
+  const m = /([a-z]{2}-[A-Z]{2})/.exec(voiceName);
+  return m ? m[1] : null;
+}
+
+/**
  * Build an SSML payload for Azure TTS.
  *
  * @param {{ text: string; voiceName: string; rate: string; lang: string }} p Parameters.

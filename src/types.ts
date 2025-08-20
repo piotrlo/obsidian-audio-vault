@@ -37,6 +37,7 @@ export interface PlaybackSession {
   mediaSource: MediaSource | null;
   sourceBuffer: SourceBuffer | null;
   lastBlob: Blob | null;
+  fileBase?: string;
 }
 
 /**

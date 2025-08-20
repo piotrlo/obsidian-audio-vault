@@ -27,7 +27,30 @@ export async function ensureFolder(app: App, folder: string): Promise<void> {
  * @returns {Promise<void>} When written.
  */
 export async function writeBinary(app: App, path: string, data: ArrayBuffer): Promise<void> {
+  // Overwrite if exists
   await app.vault.adapter.writeBinary(path, data);
+}
+
+/**
+ * Delete all generated audio parts for a given base and extension in a folder.
+ * Example matches: `${folder}/${base}_part_1.${ext}` ... `${folder}/${base}_part_N.${ext}`.
+ *
+ * @param {App} app Obsidian app.
+ * @param {string} folder Folder path.
+ * @param {string} base Safe base name.
+ * @param {string} ext File extension without dot (mp3|wav).
+ */
+export async function deleteExistingParts(app: App, folder: string, base: string, ext: string): Promise<void> {
+  try {
+    // List all files in vault and filter by our pattern; simple and safe for MVP.
+    const files = app.vault.getFiles();
+    const prefix = `${folder}/${base}_part_`;
+    const suffix = `.${ext}`;
+    const targets = files.filter(f => f.path.startsWith(prefix) && f.path.endsWith(suffix));
+    for (const f of targets) {
+      await app.vault.adapter.remove(f.path).catch(() => {});
+    }
+  } catch {}
 }
 
 /**
@@ -40,6 +63,13 @@ export async function writeBinary(app: App, path: string, data: ArrayBuffer): Pr
  */
 export async function appendAudioReference(app: App, file: TFile, relPath: string): Promise<void> {
   const original = await app.vault.read(file);
-  const updated = `${original}\n\nGenerated audio: [[${relPath}]]`;
+  const line = `Generated audio: [[${relPath}]]`;
+  if (original.includes(line)) return;
+  // Remove previous Generated audio lines to avoid duplicates, keep only one
+  const updated = original
+    .split("\n")
+    .filter(l => !l.startsWith("Generated audio: [["))
+    .concat(["", line])
+    .join("\n");
   await app.vault.modify(file, updated);
 }

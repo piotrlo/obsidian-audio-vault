@@ -1,10 +1,10 @@
 import { Plugin, Notice, Platform, TFile } from "obsidian";
 import { splitTextSmart } from "./utils/chunk";
 import { toSafeBase } from "./utils/safe-name";
-import { buildSsml } from "./utils/ssml";
+import { buildSsml, deriveLangFromVoiceName } from "./utils/ssml";
 import { detectLanguage } from "./utils/lang";
-import { ensureFolder, writeBinary, appendAudioReference } from "./utils/fs";
-import { mimeFromFormat, startHttpStream, captureToBlob } from "./tts/azure";
+import { ensureFolder, writeBinary, appendAudioReference, deleteExistingParts } from "./utils/fs";
+import { mimeFromFormat, startHttpStream, captureToBlob, fetchTtsAudio } from "./tts/azure";
 import { ControlPanel } from "./ui/panel";
 import { ListenModeSettingsTab } from "./obsidian/settings";
 import type { PlaybackSession, TtsSettings } from "./types";
@@ -27,8 +27,7 @@ export default class ListenModePlugin extends Plugin {
     await this.loadSettings();
     this.addCommand({ id: "listenmode-read-current-note", name: "ListenMode: Read current note", callback: () => { void this.readCurrentNote(); } });
     this.addCommand({ id: "listenmode-stop", name: "ListenMode: Stop", callback: () => { void this.stopPlayback(); } });
-    this.addCommand({ id: "listenmode-restart", name: "ListenMode: Restart", callback: () => { void this.readCurrentNote(); } });
-    this.addCommand({ id: "listenmode-download-last", name: "ListenMode: Download last audio", callback: () => { this.downloadLastAudio(); } });
+    this.addCommand({ id: "listenmode-restart", name: "ListenMode: Restart", callback: () => { void this.readCurrentNote(true); } });
     this.addCommand({ id: "listenmode-toggle-controls", name: "ListenMode: Toggle panel", callback: () => { if (this.settings.showControls) this.destroyPanel(); else this.ensurePanel(); this.settings.showControls = !this.settings.showControls; void this.saveSettings(); } });
     this.addSettingTab(new ListenModeSettingsTab(this.app, this));
     if (this.settings.showControls) this.ensurePanel();
@@ -47,8 +46,7 @@ export default class ListenModePlugin extends Plugin {
     this.panel.create({
       onPlayOrStart: () => this.playOrStart(),
       onStop: () => { void this.stopPlayback(); },
-      onRefresh: () => { void this.readCurrentNote(); },
-      onDownload: () => this.downloadLastAudio(),
+      onRefresh: () => { void this.readCurrentNote(true); },
       onRateChange: (rate) => this.setPlaybackRate(rate)
     }, this.getPlaybackRateFromRateSetting(this.settings.rate));
   }
@@ -59,7 +57,7 @@ export default class ListenModePlugin extends Plugin {
   /**
    * Read the active note, stream playback, and save audio files.
    */
-  async readCurrentNote(): Promise<void> {
+async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
     await this.stopPlayback();
     const file = this.app.workspace.getActiveFile();
     if (!file) { new Notice("No active note"); return; }
@@ -79,57 +77,68 @@ export default class ListenModePlugin extends Plugin {
     const folder = this.settings.audioFolder || "Audio";
     await ensureFolder(this.app, folder);
 
+    // Try to play existing local audio for part 1 if available (no regeneration unless user triggers Restart)
+    try {
+      const extExisting = /wav/i.test(this.settings.outputFormat) ? "wav" : "mp3";
+      const existingPath = `${folder}/${base}_part_1.${extExisting}`;
+      const exists = await this.app.vault.adapter.exists(existingPath);
+      if (exists && !forceRegenerate) {
+        const data = await this.app.vault.adapter.readBinary(existingPath);
+        const mime = mimeFromFormat(this.settings.outputFormat);
+        const blob = new Blob([data], { type: mime });
+        const url = URL.createObjectURL(blob);
+        const audioEl = new Audio(url);
+        audioEl.playbackRate = this.getPlaybackRateFromRateSetting(this.settings.rate);
+        try { await audioEl.play(); } catch {}
+        this.currentSession = { abort: new AbortController(), audioEl, mediaSource: null, sourceBuffer: null, lastBlob: blob, fileBase: base };
+        new Notice(`Playing existing audio: ${existingPath}`);
+        return;
+      }
+    } catch {}
+
+    // If forcing regeneration, remove old parts first so new files take effect
+    if (forceRegenerate) {
+      const ext = /wav/i.test(this.settings.outputFormat) ? "wav" : "mp3";
+      await deleteExistingParts(this.app, folder, base, ext).catch(() => {});
+    }
+
     let part = 1;
     for (const chunk of chunks) {
       try {
-        const lang = this.settings.language === "auto" ? autoLang : this.settings.language;
+        new Notice(`TTS start part ${part}...`);
+        const configuredLang = this.settings.language === "auto" ? autoLang : this.settings.language;
+        const voiceLang = deriveLangFromVoiceName(this.settings.voiceName) || configuredLang;
+        const lang = voiceLang;
         const ssml = buildSsml({ text: chunk, voiceName: this.settings.voiceName, rate: this.settings.rate, lang });
         const abort = new AbortController();
-        this.currentSession = { abort, audioEl: null, mediaSource: null, sourceBuffer: null, lastBlob: null };
-        const stream = await startHttpStream(
+        this.currentSession = { abort, audioEl: null, mediaSource: null, sourceBuffer: null, lastBlob: null, fileBase: base };
+        // Non-streaming fetch for reliability
+        const { buffer, mime } = await fetchTtsAudio(
           this.settings.azureApiKey,
           this.settings.azureRegion,
           this.settings.outputFormat,
           ssml,
           abort.signal
         );
-
-        const mime = mimeFromFormat(this.settings.outputFormat);
-        const supportsMSE = typeof MediaSource !== "undefined" && MediaSource.isTypeSupported && MediaSource.isTypeSupported(mime);
-        let onChunk: ((u8: Uint8Array) => void) | undefined;
-        if (this.settings.enableStreaming && supportsMSE) {
-          const mediaSource = new MediaSource();
-          const objectUrl = URL.createObjectURL(mediaSource);
-          const audioEl = new Audio(objectUrl);
-          audioEl.playbackRate = this.getPlaybackRateFromRateSetting(this.settings.rate);
-          try { await audioEl.play(); } catch {}
-          await new Promise<void>((res) => mediaSource.addEventListener("sourceopen", () => res(), { once: true }));
-          const sourceBuffer = mediaSource.addSourceBuffer(mime);
-          onChunk = (u8) => {
-            try {
-              const view = u8;
-              const copy = new Uint8Array(view.byteLength);
-              copy.set(view);
-              sourceBuffer.appendBuffer(copy.buffer);
-            } catch {}
-          };
-          this.currentSession.audioEl = audioEl;
-          this.currentSession.mediaSource = mediaSource;
-          this.currentSession.sourceBuffer = sourceBuffer;
-        }
-
-        const blob = await captureToBlob(stream, onChunk, this.settings.outputFormat);
+        if (!buffer || buffer.byteLength === 0) { throw new Error("Empty audio buffer"); }
+        const blob = new Blob([buffer], { type: mime });
         if (this.currentSession) this.currentSession.lastBlob = blob;
-        if (this.currentSession?.mediaSource && this.currentSession.mediaSource.readyState === "open") {
-          try { this.currentSession.mediaSource.endOfStream(); } catch {}
-        }
 
-        const arrayBuf = await blob.arrayBuffer();
+        // Play blob
+        const url = URL.createObjectURL(blob);
+        const audioEl = new Audio(url);
+        audioEl.playbackRate = this.getPlaybackRateFromRateSetting(this.settings.rate);
+        try { await audioEl.play(); } catch {}
+        this.currentSession.audioEl = audioEl;
+        audioEl.addEventListener("ended", () => { this.currentSession = null; });
+        audioEl.addEventListener("ended", () => { this.currentSession = null; });
+
+        const arrayBuf = buffer;
         const ext = /wav/i.test(this.settings.outputFormat) ? "wav" : "mp3";
         const audioPath = `${folder}/${base}_part_${part}.${ext}`;
         await writeBinary(this.app, audioPath, arrayBuf);
-        await appendAudioReference(this.app, file, audioPath);
         new Notice(`Saved ${audioPath}`);
+        await appendAudioReference(this.app, file, audioPath);
       } catch (e: unknown) {
         const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
         new Notice(`TTS failed on part ${part}: ${msg}`);
@@ -152,7 +161,13 @@ export default class ListenModePlugin extends Plugin {
   /** Toggle play/pause or start reading if nothing is playing. */
   playOrStart(): void {
     const a = this.currentSession?.audioEl;
-    if (a) { if (a.paused) { a.play().catch(() => {}); } else { a.pause(); } return; }
+    const file = this.app.workspace.getActiveFile();
+    const currentBase = file ? toSafeBase(file.basename) : undefined;
+    const sameFile = currentBase && this.currentSession?.fileBase === currentBase;
+    if (a && sameFile && !a.ended) {
+      if (a.paused) { a.play().catch(() => {}); } else { a.pause(); }
+      return;
+    }
     void this.readCurrentNote();
   }
 
@@ -166,19 +181,6 @@ export default class ListenModePlugin extends Plugin {
     return Math.max(0.5, Math.min(2.0, 1 + pct / 100));
   }
 
-  /** Download last audio blob if available. */
-  downloadLastAudio(): void {
-    const blob = this.currentSession?.lastBlob;
-    if (!blob) { new Notice("No audio available yet"); return; }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "tts_audio.mp3";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
 
   /** Load settings from storage with defaults. */
   async loadSettings(): Promise<void> {
