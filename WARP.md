@@ -25,7 +25,7 @@ Commands (Bun-first)
 Notes
 - Linting: there is no linter configured in this repo.
 - Build output is main.js (bundled from src/index.ts) and consumed by Obsidian via manifest.json ("main": "main.js").
-- The deploy script syncs manifest.json, main.js, styles.css (if present) into "$VAULT_PATH/.obsidian/plugins/obsidian-azure-speech-tts".
+- The deploy script syncs manifest.json, main.js, styles.css (if present) into "$VAULT_PATH/.obsidian/plugins/obsidian-listen-mode".
 
 High-level architecture
 - Entry/plugin lifecycle (src/index.ts)
@@ -69,7 +69,7 @@ Conventions and tests
 Important repository files
 - package.json: Bun-based scripts (build/dev/typecheck/test/deploy), esbuild bundling with external:obsidian.
 - tsconfig.json: ESNext modules, strict, types: ["obsidian", "bun-types"], includes src and tests, excludes legacy code.
-- manifest.json: Obsidian plugin manifest (id: obsidian-azure-speech-tts, main: main.js).
+- manifest.json: Obsidian plugin manifest (id: obsidian-listen-mode, main: main.js).
 - docs/legacy/experimental-main.ts: previous experimental implementation; excluded from type-checks; do not modify for MVP.
 - spec-then-code.md and spec-then-code-plan.md: governing product/tech spec and staged implementation plan; keep them authoritative and updated upon significant changes.
 

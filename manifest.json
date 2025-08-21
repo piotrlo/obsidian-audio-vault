@@ -1,10 +1,10 @@
 {
-  "id": "obsidian-azure-speech-tts",
-  "name": "Azure AI Speech TTS",
+  "id": "obsidian-listen-mode",
+  "name": "ListenMode",
   "version": "0.2.0",
   "minAppVersion": "1.4.0",
   "author": "Piotr Loch",
-  "description": "Real-time streaming TTS via Azure AI Speech (Ava Dragon HD, Polish). Saves audio to vault and appends links.",
+  "description": "ListenMode: instant text-to-speech for Obsidian with streaming playback and offline save.",
   "isDesktopOnly": false,
   "main": "main.js"
 }
