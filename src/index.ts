@@ -93,6 +93,10 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
         audioEl.playbackRate = this.getPlaybackRateFromRateSetting(this.settings.rate);
         try { await audioEl.play(); } catch {}
         this.currentSession = { abort: new AbortController(), audioEl, mediaSource: null, sourceBuffer: null, lastBlob: blob, fileBase: base };
+        audioEl.addEventListener("play", () => this.panel.setPlaying(true));
+        audioEl.addEventListener("pause", () => this.panel.setPlaying(false));
+        audioEl.addEventListener("ended", () => this.panel.setPlaying(false));
+        this.panel.setPlaying(true);
         new Notice(`Playing existing audio: ${existingPath}`);
         return;
       }
@@ -139,8 +143,9 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
             const mediaSource = new MediaSource();
             const objectUrl = URL.createObjectURL(mediaSource);
             const audioEl = new Audio(objectUrl);
-            audioEl.playbackRate = this.getPlaybackRateFromRateSetting(this.settings.rate);
-            audioEl.play().catch(() => {});
+          audioEl.playbackRate = this.getPlaybackRateFromRateSetting(this.settings.rate);
+          audioEl.play().catch(() => {});
+          this.panel.setPlaying(true);
 
             await new Promise<void>((res) => mediaSource.addEventListener("sourceopen", () => res(), { once: true }));
             log("mediaSource opened, adding SourceBuffer", streamMime);
@@ -173,6 +178,9 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
               this.currentSession.mediaSource = mediaSource;
               this.currentSession.sourceBuffer = sourceBuffer;
             }
+            audioEl.addEventListener("play", () => this.panel.setPlaying(true));
+            audioEl.addEventListener("pause", () => this.panel.setPlaying(false));
+            audioEl.addEventListener("ended", () => this.panel.setPlaying(false));
 
             // Assemble final Blob while streaming to player
             const blob = await captureToBlob(stream, onChunk, streamFormat);
@@ -238,6 +246,10 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
           try { await audioEl.play(); } catch {}
           this.currentSession.audioEl = audioEl;
           audioEl.addEventListener("ended", () => { this.currentSession = null; });
+          audioEl.addEventListener("play", () => this.panel.setPlaying(true));
+          audioEl.addEventListener("pause", () => this.panel.setPlaying(false));
+          audioEl.addEventListener("ended", () => this.panel.setPlaying(false));
+          this.panel.setPlaying(true);
 
           const arrayBuf = buffer;
           const ext = /wav/i.test(this.settings.outputFormat) ? "wav" : "mp3";
@@ -257,6 +269,7 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
   /** Stop playback and abort any in-flight request. */
   async stopPlayback(): Promise<void> {
     try { this.currentSession?.abort?.abort(); } catch {}
+    this.panel.setPlaying(false);
     try {
       const ms = this.currentSession?.mediaSource;
       if (ms && ms.readyState === "open") ms.endOfStream();
@@ -272,7 +285,7 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
     const currentBase = file ? toSafeBase(file.basename) : undefined;
     const sameFile = currentBase && this.currentSession?.fileBase === currentBase;
     if (a && sameFile && !a.ended) {
-      if (a.paused) { a.play().catch(() => {}); } else { a.pause(); }
+      if (a.paused) { a.play().catch(() => {}); this.panel.setPlaying(true); } else { a.pause(); this.panel.setPlaying(false); }
       return;
     }
     void this.readCurrentNote();
