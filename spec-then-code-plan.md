@@ -231,14 +231,14 @@ MVP module responsibilities (Stage 1)
 - src/utils/fs.ts
   - ensureFolder(app, path), writeBinary(app, path, ArrayBuffer), appendAudioReference(app, file, relPath).
 - src/types.ts
-  - TtsSettings (including panelPosition), PlaybackSession, Voice types; PanelCallbacks with onPositionChange.
+  - TtsSettings, PlaybackSession, Voice types.
 
 File/folder structure (evolves by stage)
 - src/
   - index.ts
   - obsidian/settings.ts
   - tts/azure.ts
-  - ui/panel.ts
+  - (no ui/panel.ts)
   - utils/{chunk.ts, ssml.ts, safe-name.ts, fs.ts}
   - types.ts
 - tests/
@@ -290,7 +290,7 @@ Operational checklist per stage
 - Verify vault copy to test plugin in Obsidian.
 
 Definition of Done per stage
-- Stage 1 MVP is done when: you can install the plugin, set Azure key/region/voice, run Read current note, get audio in \u003c5s for small notes, Audio/ has files, panel controls work, link appended to note.
+ - Stage 1 MVP is done when: you can install the plugin, set Azure key/region/voice, run Play/Pause current note from Ribbon/Commands, get audio in \u003c5s for small notes, Audio/ has files, link appended to note.
 - Later stages: DoD mirrors acceptance criteria listed under each stage above.
 
 
@@ -337,4 +337,15 @@ Stage 1 status update (2025-08-20)
 - Notes
   - Removed any mention of "download-last-audio" from Stage 1 scope.
   - Buffered fallback is seamless and surfaced via Notice.
+
+Stage 1 status update (2025-08-22)
+- Simplified controls (no floating panel)
+  - Removed floating control panel and mini button across desktop/mobile.
+  - Control surface unified to Ribbon + Commands: Play/Pause current note, Stop, Restart.
+  - Ribbon icon switched to 'headphones' with Play/Pause behavior.
+  - Speed is configured via settings (SSML rate → playbackRate mapping).
+- Settings cleaned up
+  - Removed showControls and panelPosition from TtsSettings and settings UI.
+- Docs updated
+  - spec-then-code.md and spec-then-code-plan.md updated to reflect Ribbon/Commands-only control model.
 
