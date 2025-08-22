@@ -130,6 +130,20 @@ export class ListenModeSettingsTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
+      .setName("Chunk size (characters)")
+      .setDesc("Max characters per part. Range: 500 – 9000. Default 5000.")
+      .addText((t) =>
+        t.setPlaceholder("5000")
+          .setValue(String(this.plugin.settings.chunkSize || 5000))
+          .onChange(async (v) => {
+            const n = Math.floor(Number(v));
+            const clamped = isFinite(n) ? Math.max(500, Math.min(9000, n)) : 5000;
+            this.plugin.settings.chunkSize = clamped;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
       .setName("Streaming (realtime)")
       .setDesc("Disable if playback fails on iOS")
       .addToggle((tg) => tg.setValue(this.plugin.settings.enableStreaming).onChange(async (v) => { this.plugin.settings.enableStreaming = v; await this.plugin.saveSettings(); }));

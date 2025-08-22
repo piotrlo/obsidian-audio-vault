@@ -53,9 +53,9 @@ Scope
 
 Key capabilities
 - Command palette actions: read-current-note, stop-playback, restart, toggle-controls.
-- Settings UI: azureRegion, azureApiKey, voiceName (manual text, optional fetch), outputFormat, rate (SSML), enableStreaming, showControls, audioFolder.
+- Settings UI: azureRegion, azureApiKey, voiceName (manual text, optional fetch), outputFormat, rate (SSML), enableStreaming, chunkSize (500–9000; default 5000), audioFolder.
 - Mobile UI: Ribbon menu integration as primary access (always visible, 1-click) via Obsidian toolbar; optional draggable floating panel (touch + mouse) constrained to viewport; default offset above mobile bottom navigation; collapsible header; position persisted across sessions; safe positioning away from system buttons.
-- Text processing: split into <= 10,000-char chunks preferring sentence boundaries; language selection default to pl-PL (configurable later).
+- Text processing: split into <= chunkSize (default 5,000; max 9,000) preferring sentence boundaries; if a sentence exceeds limit, split by words; language selection default to pl-PL (configurable later).
 - Synthesis: build SSML, call POST https://{region}.tts.speech.microsoft.com/cognitiveservices/v1 with X-Microsoft-OutputFormat.
 - Streaming: attempt MSE for mp3/wav; fallback to capture entire response then play.
 - Storage: write to Audio/ as {safe-basename}_part_{n}.{mp3|wav}; append [[relPath]] at note end.
@@ -262,7 +262,7 @@ Note: package.json should not depend on ramda; ensure external:obsidian in esbui
 
 Acceptance criteria traceability (MVP)
 - §3.1 TTS: mp3/wav, voice selection (manual or fetched), SSML with rate +10% default, pl-PL by default, EN optional later.
-- §3.2 Playback: controls via Ribbon/Commands (Play/Pause, Stop, Restart); refresh via Restart; no  download (files in Audio/ and links).
+- §3.2 Playback: controls via Ribbon/Commands (Play/Pause, Stop, Restart); refresh via Restart; sequential playback — next chunk starts after previous ends; no download (files in Audio/ and links).
 - §3.3 Integration: store under Audio/, append [[relPath]] at note bottom; reuse existing audio unless refresh.
 - §3.6 Stability: clear notices for missing settings and TTS errors; abort/stop behavior.
 - §3.7 Docs/Onboarding: README quick start; 3 clicks to first audio.

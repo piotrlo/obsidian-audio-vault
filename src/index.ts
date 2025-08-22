@@ -3,7 +3,7 @@ import { splitTextSmart } from "./utils/chunk";
 import { toSafeBase } from "./utils/safe-name";
 import { buildSsml, deriveLangFromVoiceName } from "./utils/ssml";
 import { detectLanguage } from "./utils/lang";
-import { ensureFolder, writeBinary, appendAudioReference, deleteExistingParts } from "./utils/fs";
+import { ensureFolder, writeBinary, appendAudioReference, deleteExistingParts, upsertAudioReferenceSorted } from "./utils/fs";
 import { mimeFromFormat, startHttpStream, captureToBlob, fetchTtsAudio } from "./tts/azure";
 import { log, warn, setDebugLogging } from "./utils/logger";
 import { ListenModeSettingsTab } from "./obsidian/settings";
@@ -18,6 +18,8 @@ export default class ListenModePlugin extends Plugin {
   /** Session state. */
   currentSession: PlaybackSession | null = null;
   /** No on-screen panel. */
+  /** Stop flag to cancel entire multi-part session. */
+  private stopRequested: boolean = false;
 
   /**
    * Load settings and register commands.
@@ -50,6 +52,7 @@ export default class ListenModePlugin extends Plugin {
    */
 async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
     await this.stopPlayback();
+    this.stopRequested = false;
     const file = this.app.workspace.getActiveFile();
     if (!file) { new Notice("No active note"); return; }
     const missing: string[] = [];
@@ -62,27 +65,42 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
     const content = await this.app.vault.read(file);
     if (!content.trim()) { new Notice("Note is empty"); return; }
 
-    const chunks = splitTextSmart(content, 10000);
+    const maxChars = Math.max(500, Math.min(9000, Number(this.settings.chunkSize) || 5000));
+    const chunks = splitTextSmart(content, maxChars);
+    log("chunking result", { count: chunks.length });
     const base = toSafeBase(file.basename);
     const autoLang = detectLanguage(content);
     const folder = this.settings.audioFolder || "Audio";
     await ensureFolder(this.app, folder);
 
-    // Try to play existing local audio for part 1 if available (no regeneration unless user triggers Restart)
+    // Try to play existing local audio for parts 1..N if available (sequential, no regeneration)
     try {
       const extExisting = /wav/i.test(this.settings.outputFormat) ? "wav" : "mp3";
-      const existingPath = `${folder}/${base}_part_1.${extExisting}`;
-      const exists = await this.app.vault.adapter.exists(existingPath);
-      if (exists && !forceRegenerate) {
-        const data = await this.app.vault.adapter.readBinary(existingPath);
-        const mime = mimeFromFormat(this.settings.outputFormat);
-        const blob = new Blob([data], { type: mime });
-        const url = URL.createObjectURL(blob);
-        const audioEl = new Audio(url);
-        audioEl.playbackRate = this.getPlaybackRateFromRateSetting(this.settings.rate);
-        try { await audioEl.play(); } catch {}
-        this.currentSession = { abort: new AbortController(), audioEl, mediaSource: null, sourceBuffer: null, lastBlob: blob, fileBase: base };
-        new Notice(`Playing existing audio: ${existingPath}`);
+      const existingPaths: string[] = [];
+      for (let i = 1; i < 10000; i++) {
+        const p = `${folder}/${base}_part_${i}.${extExisting}`;
+        // eslint-disable-next-line no-await-in-loop
+        const ok = await this.app.vault.adapter.exists(p);
+        if (!ok) break;
+        existingPaths.push(p);
+      }
+      if (existingPaths.length && !forceRegenerate) {
+        for (const p of existingPaths) {
+          if (this.stopRequested) break;
+          const data = await this.app.vault.adapter.readBinary(p);
+          const mime = mimeFromFormat(this.settings.outputFormat);
+          const blob = new Blob([data], { type: mime });
+          const url = URL.createObjectURL(blob);
+          const audioEl = new Audio(url);
+          audioEl.playbackRate = this.getPlaybackRateFromRateSetting(this.settings.rate);
+          const abort = new AbortController();
+          this.currentSession = { abort, audioEl, mediaSource: null, sourceBuffer: null, lastBlob: blob, fileBase: base, objectUrl: url };
+          try { await audioEl.play(); } catch {}
+          // eslint-disable-next-line no-await-in-loop
+          await this.waitForEndOrAbort(audioEl, abort.signal);
+          // eslint-disable-next-line no-await-in-loop
+          await this.cleanupSessionResources();
+        }
         return;
       }
     } catch {}
@@ -95,6 +113,7 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
 
     let part = 1;
     for (const chunk of chunks) {
+      if (this.stopRequested) break;
       try {
         new Notice(`TTS start part ${part}...`);
         const configuredLang = this.settings.language === "auto" ? autoLang : this.settings.language;
@@ -112,6 +131,7 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
           && MediaSource.isTypeSupported(streamMime);
         log("streaming candidate", { streamFormat, streamMime, canStream, enableStreaming: this.settings.enableStreaming });
 
+        let playbackWait: Promise<void> | null = null;
         if (this.settings.enableStreaming && canStream) {
           try {
             log("startHttpStream", { region: this.settings.azureRegion, streamFormat });
@@ -128,8 +148,8 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
             const mediaSource = new MediaSource();
             const objectUrl = URL.createObjectURL(mediaSource);
             const audioEl = new Audio(objectUrl);
-          audioEl.playbackRate = this.getPlaybackRateFromRateSetting(this.settings.rate);
-          audioEl.play().catch(() => {});
+            audioEl.playbackRate = this.getPlaybackRateFromRateSetting(this.settings.rate);
+            audioEl.play().catch(() => {});
 
             await new Promise<void>((res) => mediaSource.addEventListener("sourceopen", () => res(), { once: true }));
             log("mediaSource opened, adding SourceBuffer", streamMime);
@@ -161,6 +181,7 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
               this.currentSession.audioEl = audioEl;
               this.currentSession.mediaSource = mediaSource;
               this.currentSession.sourceBuffer = sourceBuffer;
+              this.currentSession.objectUrl = objectUrl;
             }
             // optional listeners for state
 
@@ -170,13 +191,16 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
             if (this.currentSession) this.currentSession.lastBlob = blob;
             if (mediaSource.readyState === "open") { try { mediaSource.endOfStream(); } catch {} }
 
+            // Wait for playback to finish or be aborted before continuing to next part
+            playbackWait = this.waitForEndOrAbort(audioEl, abort.signal);
+
             // Persist to vault and append link (use original target extension)
             const arrayBuf = await blob.arrayBuffer();
             const ext = /wav/i.test(this.settings.outputFormat) ? 'wav' : 'mp3';
             const audioPath = `${folder}/${base}_part_${part}.${ext}`;
             await writeBinary(this.app, audioPath, arrayBuf);
             new Notice(`Saved ${audioPath}`);
-            await appendAudioReference(this.app, file, audioPath);
+            await upsertAudioReferenceSorted(this.app, file, audioPath);
           } catch (err) {
             const detail = (err && (err as any).message) ? (err as any).message : String(err);
             warn("streaming failed, falling back to buffered", { detail, streamFormat, streamMime });
@@ -198,14 +222,17 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
             audioEl.playbackRate = this.getPlaybackRateFromRateSetting(this.settings.rate);
             try { await audioEl.play(); } catch {}
             this.currentSession.audioEl = audioEl;
-            audioEl.addEventListener("ended", () => { this.currentSession = null; });
+            this.currentSession.objectUrl = url;
+
+            // Wait for playback to finish or be aborted before continuing
+            playbackWait = this.waitForEndOrAbort(audioEl, abort.signal);
 
             const arrayBuf = buffer;
             const ext = /wav/i.test(this.settings.outputFormat) ? "wav" : "mp3";
             const audioPath = `${folder}/${base}_part_${part}.${ext}`;
             await writeBinary(this.app, audioPath, arrayBuf);
             new Notice(`Saved ${audioPath}`);
-            await appendAudioReference(this.app, file, audioPath);
+            await upsertAudioReferenceSorted(this.app, file, audioPath);
           }
         } else {
           // Fallback non-streaming path (existing buffered flow)
@@ -227,33 +254,41 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
           audioEl.playbackRate = this.getPlaybackRateFromRateSetting(this.settings.rate);
           try { await audioEl.play(); } catch {}
           this.currentSession.audioEl = audioEl;
-          audioEl.addEventListener("ended", () => { this.currentSession = null; });
+          this.currentSession.objectUrl = url;
+
+          // Wait for playback to finish or be aborted before continuing
+          playbackWait = this.waitForEndOrAbort(audioEl, abort.signal);
 
           const arrayBuf = buffer;
           const ext = /wav/i.test(this.settings.outputFormat) ? "wav" : "mp3";
           const audioPath = `${folder}/${base}_part_${part}.${ext}`;
           await writeBinary(this.app, audioPath, arrayBuf);
           new Notice(`Saved ${audioPath}`);
-          await appendAudioReference(this.app, file, audioPath);
+          await upsertAudioReferenceSorted(this.app, file, audioPath);
         }
+        // After starting playback (any path), save file and append link already handled.
+        // Now wait for playback end/abort before proceeding to next chunk.
+        if (playbackWait) {
+          try { await playbackWait; } catch {}
+        }
+        // Cleanup resources for the finished part
+        await this.cleanupSessionResources();
+        this.currentSession = null;
+        if (this.stopRequested || abort.signal.aborted) { break; }
       } catch (e: unknown) {
         const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
         new Notice(`TTS failed on part ${part}: ${msg}`);
       }
       part += 1;
     }
+    log("generation finished", { requestedParts: chunks.length, processedUntil: part - 1, stopped: this.stopRequested });
   }
 
   /** Stop playback and abort any in-flight request. */
   async stopPlayback(): Promise<void> {
+    this.stopRequested = true;
     try { this.currentSession?.abort?.abort(); } catch {}
-    // no panel
-    try {
-      const ms = this.currentSession?.mediaSource;
-      if (ms && ms.readyState === "open") ms.endOfStream();
-    } catch {}
-    try { this.currentSession?.audioEl?.pause(); } catch {}
-    this.currentSession = null;
+    try { await this.cleanupSessionResources(true); } catch {}
   }
 
   /** Toggle play/pause or start reading if nothing is playing. */
@@ -279,6 +314,45 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
     return Math.max(0.5, Math.min(2.0, 1 + pct / 100));
   }
 
+  /** Waits until the audio ends or the abort signal fires. */
+  private waitForEndOrAbort(audioEl: HTMLAudioElement, abortSignal: AbortSignal): Promise<void> {
+    return new Promise<void>((resolve) => {
+      const onEnded = () => {
+        cleanup();
+        resolve();
+      };
+      const onAbort = () => {
+        try { audioEl.pause(); } catch {}
+        cleanup();
+        resolve();
+      };
+      const cleanup = () => {
+        audioEl.removeEventListener("ended", onEnded);
+        abortSignal.removeEventListener("abort", onAbort as any);
+      };
+      audioEl.addEventListener("ended", onEnded, { once: true });
+      abortSignal.addEventListener("abort", onAbort as any, { once: true });
+    });
+  }
+
+  /** Clean up current session resources: pause, end MSE, revoke object URLs. */
+  private async cleanupSessionResources(setNull: boolean = false): Promise<void> {
+    const session = this.currentSession;
+    if (!session) return;
+    try { session.audioEl?.pause(); } catch {}
+    try {
+      if (session.mediaSource && session.mediaSource.readyState === "open") {
+        session.mediaSource.endOfStream();
+      }
+    } catch {}
+    try {
+      if (session.objectUrl) {
+        URL.revokeObjectURL(session.objectUrl);
+      }
+    } catch {}
+    if (setNull) this.currentSession = null;
+  }
+
 
   /** Load settings from storage with defaults. */
   async loadSettings(): Promise<void> {
@@ -293,7 +367,8 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
       audioFolder: "Audio",
       language: "pl-PL",
       onlyHdVoices: true,
-      debugLogs: false
+      debugLogs: false,
+      chunkSize: 5000
     }, data || {});
   }
 

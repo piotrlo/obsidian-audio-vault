@@ -65,11 +65,32 @@ export async function appendAudioReference(app: App, file: TFile, relPath: strin
   const original = await app.vault.read(file);
   const line = `Generated audio: [[${relPath}]]`;
   if (original.includes(line)) return;
-  // Remove previous Generated audio lines to avoid duplicates, keep only one
-  const updated = original
-    .split("\n")
-    .filter(l => !l.startsWith("Generated audio: [["))
-    .concat(["", line])
-    .join("\n");
+  const needsNewline = !original.endsWith("\n");
+  const updated = original + (needsNewline ? "\n" : "") + line + "\n";
+  await app.vault.modify(file, updated);
+}
+
+/**
+ * Upsert a Generated audio line and keep the whole block sorted by part number.
+ * Sorting is based on `_part_(\d+)` extracted from the relPath.
+ */
+export async function upsertAudioReferenceSorted(app: App, file: TFile, relPath: string): Promise<void> {
+  const original = await app.vault.read(file);
+  const lines = original.split("\n");
+  const prefix = "Generated audio: [[";
+  const existing = lines.filter(l => l.startsWith(prefix));
+  const others = lines.filter(l => !l.startsWith(prefix));
+  const set = new Set(existing);
+  const newLine = `${prefix}${relPath}]]`;
+  set.add(newLine);
+  const arr = Array.from(set);
+  const extractPart = (s: string): number => {
+    const m = /_part_(\d+)\.(mp3|wav)\]\]/i.exec(s);
+    return m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER;
+  };
+  arr.sort((a, b) => extractPart(a) - extractPart(b));
+  const trimmedOthers = others.join("\n");
+  const needsNewline = !trimmedOthers.endsWith("\n") && trimmedOthers.length > 0;
+  const updated = trimmedOthers + (needsNewline ? "\n" : "") + (arr.length ? arr.join("\n") + "\n" : "");
   await app.vault.modify(file, updated);
 }
