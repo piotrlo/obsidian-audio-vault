@@ -26,6 +26,8 @@ export interface TtsSettings {
   onlyHdVoices: boolean;
   /** Enable debug console logs. */
   debugLogs?: boolean;
+  /** Maximum characters per TTS part (chunk). */
+  chunkSize?: number;
   // Panel removed
 }
 
@@ -39,6 +41,7 @@ export interface PlaybackSession {
   sourceBuffer: SourceBuffer | null;
   lastBlob: Blob | null;
   fileBase?: string;
+  objectUrl?: string;
 }
 
 /**
