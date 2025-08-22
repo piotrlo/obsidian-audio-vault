@@ -71,11 +71,9 @@ Tasks
 - src/obsidian/settings.ts: settings tab with fields above; optional “Fetch voices” button using Azure GET voices/list (MVP convenience, skipping backend).
 - src/index.ts: main plugin class wiring commands, playback session state, calling azure synth.
 - Remove all ramda usage from logic; replace with native arrays/strings.
-- Mobile UI (ribbon menu + draggable + persistence):
-  - index.ts: add ribbon menu entries using addRibbonIcon (e.g., 'play-circle' → 'ListenMode: Play current note' calling readCurrentNote) and a 'Toggle panel' action; toggle panel visibility (showControls) and persist setting.
-  - ui/panel.ts: implement draggable behavior for touch and mouse; constrain to viewport; visual feedback (grab/grabbing); default style positioned above bottom navigation (bottom: 80px) and away from system buttons; 
-  - types.ts: extend TtsSettings with optional panelPosition { x; y }; extend PanelCallbacks with onPositionChange.
-  - index.ts: pass saved position to panel create(); persist position via onPositionChange; wire ribbon menu actions to toggle panel and start playback.
+- Mobile UI (Ribbon only):
+  - index.ts: add ribbon entry using addRibbonIcon ('headphones' → 'Play/Pause current note').
+  - No floating panel, no draggable, no position persistence.
 
 Acceptance criteria mapping
 - spec §3.1 TTS (format mp3/wav, voices, rate), §3.2 playback and controls (including mobile ribbon/draggable/persistence), §3.3 storage/linking, §3.7 docs/onboarding (brief README section), §4.1 Azure endpoints, §4.3 frontend controls, §4a defaults.
@@ -214,13 +212,12 @@ Tests
 
 MVP module responsibilities (Stage 1)
 - src/index.ts
-  - Register commands: read-current-note, stop-playback, restart, toggle-controls.
+  - Register commands: play-pause-current-note, stop-playback, restart.
   - Orchestrate reading current file, chunking, SSML build, streaming or buffered play, saving and linking output files.
   - Manage PlaybackSession and UI updates.
 - src/obsidian/settings.ts
-  - Settings tab with Azure fields, streaming toggle, showControls, audioFolder; optional “Fetch voices” calling Azure voices/list.
-- src/ui/panel.ts
-  - Floating panel element; controls with playbackRate slider; ability to hide/show and collapse; draggable (touch + mouse) constrained to viewport; safe-area offset maintained; emits callbacks including onPositionChange.
+  - Settings tab with Azure fields, streaming toggle, audioFolder; optional “Fetch voices” calling Azure voices/list.
+// Panel UI removed in MVP.
 - src/tts/azure.ts
   - startHttpStream(azureApiKey, region, voiceName, outputFormat, ssml, abort): Promise<ReadableStream<Uint8Array>>.
   - captureToBlob(stream, onChunk?, outputFormat): Promise<Blob>.
@@ -265,7 +262,7 @@ Note: package.json should not depend on ramda; ensure external:obsidian in esbui
 
 Acceptance criteria traceability (MVP)
 - §3.1 TTS: mp3/wav, voice selection (manual or fetched), SSML with rate +10% default, pl-PL by default, EN optional later.
-- §3.2 Playback: minimal panel controls, works desktop/mobile; refresh triggers regeneration; no separate download control (files are saved in Audio/ and linked).
+- §3.2 Playback: controls via Ribbon/Commands (Play/Pause, Stop, Restart); refresh via Restart; no  download (files in Audio/ and links).
 - §3.3 Integration: store under Audio/, append [[relPath]] at note bottom; reuse existing audio unless refresh.
 - §3.6 Stability: clear notices for missing settings and TTS errors; abort/stop behavior.
 - §3.7 Docs/Onboarding: README quick start; 3 clicks to first audio.

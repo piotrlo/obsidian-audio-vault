@@ -18,8 +18,6 @@ export interface TtsSettings {
   rate: string;
   /** Enable streaming via MSE if available. */
   enableStreaming: boolean;
-  /** Whether to show the floating control panel. */
-  showControls: boolean;
   /** Target vault folder for audio files. */
   audioFolder: string;
   /** Language selection: 'auto' | 'pl-PL' | 'en-US'. */
@@ -28,6 +26,7 @@ export interface TtsSettings {
   onlyHdVoices: boolean;
   /** Enable debug console logs. */
   debugLogs?: boolean;
+  // Panel removed
 }
 
 /**

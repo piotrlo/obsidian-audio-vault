@@ -5,7 +5,6 @@ import { buildSsml, deriveLangFromVoiceName } from "./utils/ssml";
 import { detectLanguage } from "./utils/lang";
 import { ensureFolder, writeBinary, appendAudioReference, deleteExistingParts } from "./utils/fs";
 import { mimeFromFormat, startHttpStream, captureToBlob, fetchTtsAudio } from "./tts/azure";
-import { ControlPanel } from "./ui/panel";
 import { log, warn, setDebugLogging } from "./utils/logger";
 import { ListenModeSettingsTab } from "./obsidian/settings";
 import type { PlaybackSession, TtsSettings } from "./types";
@@ -18,8 +17,7 @@ export default class ListenModePlugin extends Plugin {
   settings!: TtsSettings;
   /** Session state. */
   currentSession: PlaybackSession | null = null;
-  /** UI panel manager. */
-  panel = new ControlPanel();
+  /** No on-screen panel. */
 
   /**
    * Load settings and register commands.
@@ -27,12 +25,14 @@ export default class ListenModePlugin extends Plugin {
   async onload(): Promise<void> {
     await this.loadSettings();
     setDebugLogging(!!this.settings.debugLogs);
-    this.addCommand({ id: "listenmode-read-current-note", name: "ListenMode: Read current note", callback: () => { void this.readCurrentNote(); } });
-    this.addCommand({ id: "listenmode-stop", name: "ListenMode: Stop", callback: () => { void this.stopPlayback(); } });
-    this.addCommand({ id: "listenmode-restart", name: "ListenMode: Restart", callback: () => { void this.readCurrentNote(true); } });
-    this.addCommand({ id: "listenmode-toggle-controls", name: "ListenMode: Toggle panel", callback: () => { if (this.settings.showControls) this.destroyPanel(); else this.ensurePanel(); this.settings.showControls = !this.settings.showControls; void this.saveSettings(); } });
+    this.addCommand({ id: "listenmode-play-pause", name: "Play/Pause current note", callback: () => { this.playOrStart(); } });
+    this.addCommand({ id: "listenmode-stop", name: "Stop", callback: () => { void this.stopPlayback(); } });
+    this.addCommand({ id: "listenmode-restart", name: "Restart", callback: () => { void this.readCurrentNote(true); } });
+
+    // Ribbon: Play/Pause current note
+    this.addRibbonIcon('headphones', 'Play/Pause current note', () => { this.playOrStart(); });
+
     this.addSettingTab(new ListenModeSettingsTab(this.app, this));
-    if (this.settings.showControls) this.ensurePanel();
   }
 
   /**
@@ -40,21 +40,10 @@ export default class ListenModePlugin extends Plugin {
    */
   async onunload(): Promise<void> {
     await this.stopPlayback();
-    this.destroyPanel();
   }
-
-  /** Ensure the floating panel is created. */
-  ensurePanel(): void {
-    this.panel.create({
-      onPlayOrStart: () => this.playOrStart(),
-      onStop: () => { void this.stopPlayback(); },
-      onRefresh: () => { void this.readCurrentNote(true); },
-      onRateChange: (rate) => this.setPlaybackRate(rate)
-    }, this.getPlaybackRateFromRateSetting(this.settings.rate));
-  }
-
-  /** Remove the floating panel if present. */
-  destroyPanel(): void { this.panel.destroy(); }
+  /** Panel removed. */
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  destroyPanel(): void {}
 
   /**
    * Read the active note, stream playback, and save audio files.
@@ -93,10 +82,6 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
         audioEl.playbackRate = this.getPlaybackRateFromRateSetting(this.settings.rate);
         try { await audioEl.play(); } catch {}
         this.currentSession = { abort: new AbortController(), audioEl, mediaSource: null, sourceBuffer: null, lastBlob: blob, fileBase: base };
-        audioEl.addEventListener("play", () => this.panel.setPlaying(true));
-        audioEl.addEventListener("pause", () => this.panel.setPlaying(false));
-        audioEl.addEventListener("ended", () => this.panel.setPlaying(false));
-        this.panel.setPlaying(true);
         new Notice(`Playing existing audio: ${existingPath}`);
         return;
       }
@@ -145,7 +130,6 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
             const audioEl = new Audio(objectUrl);
           audioEl.playbackRate = this.getPlaybackRateFromRateSetting(this.settings.rate);
           audioEl.play().catch(() => {});
-          this.panel.setPlaying(true);
 
             await new Promise<void>((res) => mediaSource.addEventListener("sourceopen", () => res(), { once: true }));
             log("mediaSource opened, adding SourceBuffer", streamMime);
@@ -178,9 +162,7 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
               this.currentSession.mediaSource = mediaSource;
               this.currentSession.sourceBuffer = sourceBuffer;
             }
-            audioEl.addEventListener("play", () => this.panel.setPlaying(true));
-            audioEl.addEventListener("pause", () => this.panel.setPlaying(false));
-            audioEl.addEventListener("ended", () => this.panel.setPlaying(false));
+            // optional listeners for state
 
             // Assemble final Blob while streaming to player
             const blob = await captureToBlob(stream, onChunk, streamFormat);
@@ -246,10 +228,6 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
           try { await audioEl.play(); } catch {}
           this.currentSession.audioEl = audioEl;
           audioEl.addEventListener("ended", () => { this.currentSession = null; });
-          audioEl.addEventListener("play", () => this.panel.setPlaying(true));
-          audioEl.addEventListener("pause", () => this.panel.setPlaying(false));
-          audioEl.addEventListener("ended", () => this.panel.setPlaying(false));
-          this.panel.setPlaying(true);
 
           const arrayBuf = buffer;
           const ext = /wav/i.test(this.settings.outputFormat) ? "wav" : "mp3";
@@ -269,7 +247,7 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
   /** Stop playback and abort any in-flight request. */
   async stopPlayback(): Promise<void> {
     try { this.currentSession?.abort?.abort(); } catch {}
-    this.panel.setPlaying(false);
+    // no panel
     try {
       const ms = this.currentSession?.mediaSource;
       if (ms && ms.readyState === "open") ms.endOfStream();
@@ -285,7 +263,7 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
     const currentBase = file ? toSafeBase(file.basename) : undefined;
     const sameFile = currentBase && this.currentSession?.fileBase === currentBase;
     if (a && sameFile && !a.ended) {
-      if (a.paused) { a.play().catch(() => {}); this.panel.setPlaying(true); } else { a.pause(); this.panel.setPlaying(false); }
+      if (a.paused) { a.play().catch(() => {}); } else { a.pause(); }
       return;
     }
     void this.readCurrentNote();
@@ -312,7 +290,6 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
       outputFormat: "audio-24khz-48kbitrate-mono-mp3",
       rate: "+10%",
       enableStreaming: true,
-      showControls: true,
       audioFolder: "Audio",
       language: "pl-PL",
       onlyHdVoices: true,
