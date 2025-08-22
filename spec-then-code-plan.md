@@ -54,6 +54,7 @@ Scope
 Key capabilities
 - Command palette actions: read-current-note, stop-playback, restart, toggle-controls.
 - Settings UI: azureRegion, azureApiKey, voiceName (manual text, optional fetch), outputFormat, rate (SSML), enableStreaming, showControls, audioFolder.
+- Mobile UI: Ribbon menu integration as primary access (always visible, 1-click) via Obsidian toolbar; optional draggable floating panel (touch + mouse) constrained to viewport; default offset above mobile bottom navigation; collapsible header; position persisted across sessions; safe positioning away from system buttons.
 - Text processing: split into <= 10,000-char chunks preferring sentence boundaries; language selection default to pl-PL (configurable later).
 - Synthesis: build SSML, call POST https://{region}.tts.speech.microsoft.com/cognitiveservices/v1 with X-Microsoft-OutputFormat.
 - Streaming: attempt MSE for mp3/wav; fallback to capture entire response then play.
@@ -70,9 +71,14 @@ Tasks
 - src/obsidian/settings.ts: settings tab with fields above; optional “Fetch voices” button using Azure GET voices/list (MVP convenience, skipping backend).
 - src/index.ts: main plugin class wiring commands, playback session state, calling azure synth.
 - Remove all ramda usage from logic; replace with native arrays/strings.
+- Mobile UI (ribbon menu + draggable + persistence):
+  - index.ts: add ribbon menu entries using addRibbonIcon (e.g., 'play-circle' → 'ListenMode: Play current note' calling readCurrentNote) and a 'Toggle panel' action; toggle panel visibility (showControls) and persist setting.
+  - ui/panel.ts: implement draggable behavior for touch and mouse; constrain to viewport; visual feedback (grab/grabbing); default style positioned above bottom navigation (bottom: 80px) and away from system buttons; 
+  - types.ts: extend TtsSettings with optional panelPosition { x; y }; extend PanelCallbacks with onPositionChange.
+  - index.ts: pass saved position to panel create(); persist position via onPositionChange; wire ribbon menu actions to toggle panel and start playback.
 
 Acceptance criteria mapping
-- spec §3.1 TTS (format mp3/wav, voices, rate), §3.2 playback and controls, §3.3 storage/linking, §3.7 docs/onboarding (brief README section), §4.1 Azure endpoints, §4.3 frontend controls, §4a defaults.
+- spec §3.1 TTS (format mp3/wav, voices, rate), §3.2 playback and controls (including mobile ribbon/draggable/persistence), §3.3 storage/linking, §3.7 docs/onboarding (brief README section), §4.1 Azure endpoints, §4.3 frontend controls, §4a defaults.
 
 Risks
 - iOS autoplay and MSE support may limit streaming; MVP must fallback gracefully to after-download playback.
@@ -214,7 +220,7 @@ MVP module responsibilities (Stage 1)
 - src/obsidian/settings.ts
   - Settings tab with Azure fields, streaming toggle, showControls, audioFolder; optional “Fetch voices” calling Azure voices/list.
 - src/ui/panel.ts
-  - Floating panel element; controls with playbackRate slider; ability to hide/show and collapse; emits callbacks.
+  - Floating panel element; controls with playbackRate slider; ability to hide/show and collapse; draggable (touch + mouse) constrained to viewport; safe-area offset maintained; emits callbacks including onPositionChange.
 - src/tts/azure.ts
   - startHttpStream(azureApiKey, region, voiceName, outputFormat, ssml, abort): Promise<ReadableStream<Uint8Array>>.
   - captureToBlob(stream, onChunk?, outputFormat): Promise<Blob>.
@@ -228,7 +234,7 @@ MVP module responsibilities (Stage 1)
 - src/utils/fs.ts
   - ensureFolder(app, path), writeBinary(app, path, ArrayBuffer), appendAudioReference(app, file, relPath).
 - src/types.ts
-  - TtsSettings, PlaybackSession, Voice types.
+  - TtsSettings (including panelPosition), PlaybackSession, Voice types; PanelCallbacks with onPositionChange.
 
 File/folder structure (evolves by stage)
 - src/
