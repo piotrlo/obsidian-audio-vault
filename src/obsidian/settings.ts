@@ -134,10 +134,7 @@ export class ListenModeSettingsTab extends PluginSettingTab {
       .setDesc("Disable if playback fails on iOS")
       .addToggle((tg) => tg.setValue(this.plugin.settings.enableStreaming).onChange(async (v) => { this.plugin.settings.enableStreaming = v; await this.plugin.saveSettings(); }));
 
-    new Setting(containerEl)
-      .setName("Show control panel")
-      .setDesc("Toggle the on-screen playback controls")
-      .addToggle((tg) => tg.setValue(this.plugin.settings.showControls).onChange(async (v) => { this.plugin.settings.showControls = v; await this.plugin.saveSettings(); if (v) this.plugin.ensurePanel(); else this.plugin.destroyPanel(); }));
+    // Panel removed – control via ribbon/commands only
 
     new Setting(containerEl)
       .setName("Audio folder")

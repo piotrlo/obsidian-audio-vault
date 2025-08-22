@@ -7,6 +7,7 @@ export type PanelCallbacks = {
   onStop: () => void;
   onRefresh: () => void;
   onRateChange: (rate: number) => void;
+  onPositionChange?: (position: { x: number; y: number }) => void;
 };
 
 /**
@@ -21,21 +22,40 @@ export class ControlPanel {
   private playMainBtn: HTMLButtonElement | null = null;
   private rateLabel: HTMLButtonElement | null = null;
   private miniBtn: HTMLButtonElement | null = null;
+  private callbacks: PanelCallbacks | null = null;
+  private currentPosition: { x: number; y: number } | null = null;
+  private modalObserver: MutationObserver | null = null;
+
+  /** Update z-index to be below settings modal when open, otherwise above content. */
+  private updateZIndexBasedOnModal(): void {
+    const modalPresent = !!document.querySelector('.modal-container, .modal-bg, .modal');
+    const z = modalPresent ? 500 : 9999;
+    if (this.root) this.root.style.zIndex = String(z);
+    if (this.miniBtn) this.miniBtn.style.zIndex = String(z);
+  }
 
   /**
    * Create the panel if not present.
    *
    * @param {PanelCallbacks} cb Event callbacks.
    * @param {number} initialRate Initial playback rate.
+   * @param {object} position Optional initial position {x, y}.
    */
-  create(cb: PanelCallbacks, initialRate: number): void {
+  create(cb: PanelCallbacks, initialRate: number, position?: { x: number; y: number }): void {
     if (this.root) return;
     this.injectStyleIfNeeded();
     const el = document.createElement("div");
     el.className = "lm-panel";
+    // Apply position if provided, otherwise use default
+    let positionStyle = "position:fixed;bottom:80px;right:4px;";
+    if (position) {
+      positionStyle = `position:fixed;left:${position.x}px;top:${position.y}px;`;
+      this.currentPosition = position;
+    }
+
     el.setAttr(
       "style",
-      "position:fixed;bottom:31px;right:4px;z-index:9999;background:var(--background-primary);border:1px solid var(--background-modifier-border);padding:6px 10px;border-radius:12px;display:flex;gap:10px;align-items:center;box-shadow:0 6px 16px rgba(0,0,0,.2);min-width:220px;"
+      `${positionStyle}z-index:9999;background:var(--background-primary);border:1px solid var(--background-modifier-border);padding:6px 10px;border-radius:12px;display:flex;gap:10px;align-items:center;box-shadow:0 6px 16px rgba(0,0,0,.2);min-width:220px;cursor:grab;user-select:none;pointer-events:auto;`
     );
 
     const body = document.createElement("div");
@@ -99,7 +119,14 @@ export class ControlPanel {
     mini.innerHTML = this.speakerSvg();
     mini.title = "ListenMode";
     mini.className = "lm-btn lm-mini";
-    mini.setAttr("style", "display:none;position:fixed;bottom:31px;right:4px;z-index:9999;background:var(--background-primary);border:1px solid var(--background-modifier-border);padding:6px 10px;border-radius:12px;display:flex;gap:10px;align-items:center;box-shadow:0 6px 16px rgba(0,0,0,.2);");
+
+    // Mini button uses same position as main panel
+    let miniPositionStyle = "display:none;position:fixed;bottom:80px;right:4px;";
+    if (position) {
+      miniPositionStyle = `display:none;position:fixed;left:${position.x}px;top:${position.y}px;`;
+    }
+
+    mini.setAttr("style", `${miniPositionStyle}z-index:9999;background:var(--background-primary);border:1px solid var(--background-modifier-border);padding:6px 10px;border-radius:12px;display:flex;gap:10px;align-items:center;box-shadow:0 6px 16px rgba(0,0,0,.2);cursor:grab;user-select:none;pointer-events:auto;`);
     mini.addEventListener("click", (e) => { e.preventDefault(); this.setCollapsed(false); });
     document.body.appendChild(mini);
 
@@ -107,13 +134,39 @@ export class ControlPanel {
     this.root = el;
     this.bodyRow = body;
     this.miniBtn = mini;
+    this.callbacks = cb;
+
+    // Make panel draggable
+    this.makeDraggable(el);
+    if (mini) this.makeDraggable(mini);
+
+    // Clamp saved position into current viewport (desktop -> mobile, rotation, etc.)
+    this.clampToViewport();
+    // Re-clamp on viewport/rotation changes
+    window.addEventListener('resize', this._onResize);
+    // orientationchange may not exist everywhere
+    try { (window as any).addEventListener('orientationchange', this._onResize); } catch {}
+
+    // Adjust stacking relative to settings modal
+    this.updateZIndexBasedOnModal();
+    if (!this.modalObserver) {
+      this.modalObserver = new MutationObserver(() => this.updateZIndexBasedOnModal());
+      this.modalObserver.observe(document.body, { childList: true, subtree: true });
+    }
   }
 
   /**
    * Destroy the panel.
    */
   destroy(): void {
-    if (this.root) { this.root.detach(); this.root = null; this.slider = null; this.bodyRow = null; this.collapsed = false; this.playBtn = null; this.playMainBtn = null; this.rateLabel = null; this.miniBtn = null; }
+    try { this.modalObserver?.disconnect(); } catch {}
+    this.modalObserver = null;
+    if (this.miniBtn) { this.miniBtn.detach(); }
+    if (this.root) { this.root.detach(); }
+    // Remove listeners
+    window.removeEventListener('resize', this._onResize);
+    try { (window as any).removeEventListener('orientationchange', this._onResize); } catch {}
+    this.root = null; this.slider = null; this.bodyRow = null; this.collapsed = false; this.playBtn = null; this.playMainBtn = null; this.rateLabel = null; this.miniBtn = null; this.callbacks = null; this.currentPosition = null;
   }
 
   /**
@@ -135,8 +188,20 @@ export class ControlPanel {
     style.id = "lm-style";
     style.textContent = `
     @keyframes lm-pulse { 0%{ box-shadow:0 0 0 0 var(--interactive-accent, rgba(0,150,255,.35));} 70%{ box-shadow:0 0 0 6px rgba(0,0,0,0);} 100%{ box-shadow:0 0 0 0 rgba(0,0,0,0);} }
-    .lm-panel { backdrop-filter: blur(6px); }
-    .lm-btn { transition: background .2s ease, transform .05s ease, border-color .2s ease, color .2s ease; background: var(--background-primary); }
+    .lm-panel {
+      backdrop-filter: blur(6px);
+      z-index: 500;
+      pointer-events: auto;
+    }
+    .lm-mini {
+      z-index: 500;
+      pointer-events: auto;
+    }
+    .lm-btn {
+      transition: background .2s ease, transform .05s ease, border-color .2s ease, color .2s ease;
+      background: var(--background-primary);
+      user-select: none;
+    }
     .lm-btn:hover { background: var(--background-modifier-hover); }
     .lm-btn:active { transform: scale(0.98); }
     /* Make icons inherit theme icon color and opacity like other Obsidian clickable icons */
@@ -151,6 +216,15 @@ export class ControlPanel {
     /* Collapsed: panel hides, only mini button stays */
     .lm-collapsed { background: transparent !important; border: none !important; box-shadow:none !important; padding:0 !important; }
     .lm-collapsed .lm-row { display:none !important; }
+
+    /* Mobile-specific styles */
+    @media (max-width: 768px) {
+      .lm-panel, .lm-mini {
+        z-index: 501;
+        position: fixed;
+        touch-action: none;
+      }
+    }
     `;
     document.head.appendChild(style);
   }
@@ -160,6 +234,139 @@ private setCollapsed(next: boolean): void {
     if (!this.root) return;
     if (this.miniBtn) this.miniBtn.style.display = this.collapsed ? "grid" : "none";
     this.root.style.display = this.collapsed ? "none" : "flex";
+  }
+
+  /**
+   * Make panel draggable on touch and mouse devices
+   */
+  private makeDraggable(element: HTMLElement): void {
+    let isDragging = false;
+    let startX = 0, startY = 0;
+    let currentX = 0, currentY = 0;
+    let hasMoved = false; // Track if element has actually moved
+
+    const handleStart = (e: TouchEvent | MouseEvent) => {
+      isDragging = true;
+      hasMoved = false;
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+
+      const rect = element.getBoundingClientRect();
+      startX = clientX - rect.left;
+      startY = clientY - rect.top;
+
+      element.style.cursor = 'grabbing';
+      element.style.transition = 'none'; // Disable transitions during drag
+      e.preventDefault();
+    };
+
+    const handleMove = (e: TouchEvent | MouseEvent) => {
+      if (!isDragging) return;
+
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+
+      currentX = clientX - startX;
+      currentY = clientY - startY;
+
+      // Constrain to viewport bounds
+      const maxX = window.innerWidth - element.offsetWidth;
+      const maxY = window.innerHeight - element.offsetHeight;
+
+      currentX = Math.max(0, Math.min(maxX, currentX));
+      currentY = Math.max(0, Math.min(maxY, currentY));
+
+      element.style.left = currentX + 'px';
+      element.style.top = currentY + 'px';
+      element.style.right = 'auto';
+      element.style.bottom = 'auto';
+
+      // Update both panel and mini button positions
+      this.updatePosition({ x: currentX, y: currentY });
+
+      hasMoved = true;
+      e.preventDefault();
+    };
+
+    const handleEnd = () => {
+      if (!isDragging) return;
+      isDragging = false;
+      element.style.cursor = 'grab';
+      element.style.transition = ''; // Re-enable transitions
+
+      // Save position for persistence only if it actually moved
+      if (hasMoved && this.callbacks?.onPositionChange) {
+        this.callbacks.onPositionChange({ x: currentX, y: currentY });
+      }
+
+      // Prevent click event if we were dragging
+      if (hasMoved) {
+        const preventClick = (e: Event) => {
+          e.preventDefault();
+          e.stopPropagation();
+          element.removeEventListener('click', preventClick, { capture: true });
+        };
+        element.addEventListener('click', preventClick, { capture: true, once: true });
+      }
+    };
+
+    // Touch events
+    element.addEventListener('touchstart', handleStart, { passive: false });
+    document.addEventListener('touchmove', handleMove, { passive: false });
+    document.addEventListener('touchend', handleEnd);
+    document.addEventListener('touchcancel', handleEnd);
+
+    // Mouse events (desktop)
+    element.addEventListener('mousedown', handleStart);
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleEnd);
+
+    // Visual feedback
+    element.style.cursor = 'grab';
+  }
+
+  /**
+   * Update position for both panel and mini button
+   */
+  private updatePosition(position: { x: number; y: number }): void {
+    this.currentPosition = position;
+
+    // Update main panel position
+    if (this.root) {
+      this.root.style.left = position.x + 'px';
+      this.root.style.top = position.y + 'px';
+      this.root.style.right = 'auto';
+      this.root.style.bottom = 'auto';
+    }
+
+    // Update mini button position to match
+    if (this.miniBtn) {
+      this.miniBtn.style.left = position.x + 'px';
+      this.miniBtn.style.top = position.y + 'px';
+      this.miniBtn.style.right = 'auto';
+      this.miniBtn.style.bottom = 'auto';
+    }
+  }
+
+  /** Resize handler to keep the panel within viewport on device changes. */
+  private _onResize = (): void => {
+    this.clampToViewport();
+  };
+
+  /**
+   * Clamp current saved position to fit within the current viewport and apply it.
+   * If no saved position exists, keep default bottom/right positioning.
+   */
+  private clampToViewport(): void {
+    if (!this.root) return;
+    if (!this.currentPosition) return;
+    const width = this.root.offsetWidth || 240;
+    const height = this.root.offsetHeight || 56;
+    const maxX = Math.max(0, window.innerWidth - width);
+    const maxY = Math.max(0, window.innerHeight - height);
+    const x = Math.max(0, Math.min(maxX, this.currentPosition.x));
+    const y = Math.max(0, Math.min(maxY, this.currentPosition.y));
+    this.updatePosition({ x, y });
   }
 
   private stopSvg(): string {
