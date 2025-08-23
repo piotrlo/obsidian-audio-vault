@@ -148,11 +148,12 @@ Scope
 
 Tasks
 - Implement small buffer threshold before auto-play; detect MSE support and device quirks; allow disable streaming in settings.
+- iOS default: Buffered (Prefetch) mode with chunkSize forced to 500 and prefetch of 2–3 parts to ensure gapless playback.
 - If file exists in Audio/, play without generating unless user clicks Refresh.
 - Add collapsed/expanded panel header toggle and showControls setting persistence.
 
 Acceptance criteria mapping
-- spec §3.2 playback, §4.3 streaming default, §4.5 performance.
+- spec §3.2 playback, §4.3 streaming default, §4.5 performance, and §4.1 iOS default Buffered (Prefetch) with forced `chunkSize=500`.
 
 Risks
 - Mobile WebView limitations, iOS auto-play; require user gesture.
