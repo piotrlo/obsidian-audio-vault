@@ -65,7 +65,9 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
     const content = await this.app.vault.read(file);
     if (!content.trim()) { new Notice("Note is empty"); return; }
 
-    const maxChars = Math.max(500, Math.min(9000, Number(this.settings.chunkSize) || 5000));
+    // On iOS enforce smaller chunk size for reliable buffered playback
+    const isIos = Platform.isIosApp === true;
+    const maxChars = isIos ? 500 : Math.max(500, Math.min(9000, Number(this.settings.chunkSize) || 5000));
     const chunks = splitTextSmart(content, maxChars);
     log("chunking result", { count: chunks.length });
     const base = toSafeBase(file.basename);
@@ -109,6 +111,12 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
     if (forceRegenerate) {
       const ext = /wav/i.test(this.settings.outputFormat) ? "wav" : "mp3";
       await deleteExistingParts(this.app, folder, base, ext).catch(() => {});
+    }
+
+    // iOS: force Buffered Prefetch mode with window size 3
+    if (isIos) {
+      await this.playBufferedPrefetch(chunks, 0, base, autoLang, folder, file);
+      return;
     }
 
     let part = 1;
@@ -205,66 +213,15 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
             const detail = (err && (err as any).message) ? (err as any).message : String(err);
             warn("streaming failed, falling back to buffered", { detail, streamFormat, streamMime });
             new Notice(`Streaming failed (fallback to buffered): ${detail}`);
-            // Fall through to buffered path below
-            const { buffer, mime } = await fetchTtsAudio(
-              this.settings.azureApiKey,
-              this.settings.azureRegion,
-              this.settings.outputFormat,
-              ssml,
-              abort.signal
-            );
-            if (!buffer || buffer.byteLength === 0) { throw new Error("Empty audio buffer"); }
-            const blob = new Blob([buffer], { type: mime });
-            if (this.currentSession) this.currentSession.lastBlob = blob;
-
-            const url = URL.createObjectURL(blob);
-            const audioEl = new Audio(url);
-            audioEl.playbackRate = this.getPlaybackRateFromRateSetting(this.settings.rate);
-            try { await audioEl.play(); } catch {}
-            this.currentSession.audioEl = audioEl;
-            this.currentSession.objectUrl = url;
-
-            // Wait for playback to finish or be aborted before continuing
-            playbackWait = this.waitForEndOrAbort(audioEl, abort.signal);
-
-            const arrayBuf = buffer;
-            const ext = /wav/i.test(this.settings.outputFormat) ? "wav" : "mp3";
-            const audioPath = `${folder}/${base}_part_${part}.${ext}`;
-            await writeBinary(this.app, audioPath, arrayBuf);
-            new Notice(`Saved ${audioPath}`);
-            await upsertAudioReferenceSorted(this.app, file, audioPath);
+            // Switch to buffered prefetch for the rest (including current part)
+            await this.playBufferedPrefetch(chunks, part - 1, base, autoLang, folder, file);
+            return;
           }
         } else {
-          // Fallback non-streaming path (existing buffered flow)
-          log("buffered fetch start", { format: this.settings.outputFormat });
-          const { buffer, mime } = await fetchTtsAudio(
-            this.settings.azureApiKey,
-            this.settings.azureRegion,
-            this.settings.outputFormat,
-            ssml,
-            abort.signal
-          );
-          log("buffered fetch done", { bytes: buffer?.byteLength || 0, mime });
-          if (!buffer || buffer.byteLength === 0) { throw new Error("Empty audio buffer"); }
-          const blob = new Blob([buffer], { type: mime });
-          if (this.currentSession) this.currentSession.lastBlob = blob;
-
-          const url = URL.createObjectURL(blob);
-          const audioEl = new Audio(url);
-          audioEl.playbackRate = this.getPlaybackRateFromRateSetting(this.settings.rate);
-          try { await audioEl.play(); } catch {}
-          this.currentSession.audioEl = audioEl;
-          this.currentSession.objectUrl = url;
-
-          // Wait for playback to finish or be aborted before continuing
-          playbackWait = this.waitForEndOrAbort(audioEl, abort.signal);
-
-          const arrayBuf = buffer;
-          const ext = /wav/i.test(this.settings.outputFormat) ? "wav" : "mp3";
-          const audioPath = `${folder}/${base}_part_${part}.${ext}`;
-          await writeBinary(this.app, audioPath, arrayBuf);
-          new Notice(`Saved ${audioPath}`);
-          await upsertAudioReferenceSorted(this.app, file, audioPath);
+          // Non-streaming environment: use buffered prefetch mode for all parts
+          new Notice("Streaming not available (using buffered prefetch)");
+          await this.playBufferedPrefetch(chunks, part - 1, base, autoLang, folder, file);
+          return;
         }
         // After starting playback (any path), save file and append link already handled.
         // Now wait for playback end/abort before proceeding to next chunk.
@@ -353,6 +310,73 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
     if (setNull) this.currentSession = null;
   }
 
+  /** Buffered prefetch playback used on iOS and as desktop fallback */
+  private async playBufferedPrefetch(
+    chunks: string[],
+    startIndex: number,
+    base: string,
+    autoLang: string,
+    folder: string,
+    file: TFile
+  ): Promise<void> {
+    const configuredLang = this.settings.language === "auto" ? autoLang : this.settings.language;
+    const voiceLang = deriveLangFromVoiceName(this.settings.voiceName) || configuredLang;
+    const lang = voiceLang;
+    const abortAll = new AbortController();
+    const prefetchWindow = 3;
+    const ext = /wav/i.test(this.settings.outputFormat) ? "wav" : "mp3";
+
+    const makeTask = (idx: number) => {
+      const ssml = buildSsml({ text: chunks[idx], voiceName: this.settings.voiceName, rate: this.settings.rate, lang });
+      return fetchTtsAudio(
+        this.settings.azureApiKey,
+        this.settings.azureRegion,
+        this.settings.outputFormat,
+        ssml,
+        abortAll.signal
+      ).then(({ buffer, mime }) => ({ buffer, mime, idx }));
+    };
+
+    const tasks: Array<Promise<{ buffer: ArrayBuffer; mime: string; idx: number }>> = new Array(chunks.length);
+    let started = startIndex;
+    while (started < Math.min(startIndex + prefetchWindow, chunks.length)) { tasks[started] = makeTask(started); started += 1; }
+
+    let partIdx = startIndex;
+    while (partIdx < chunks.length) {
+      if (this.stopRequested) break;
+      try {
+        new Notice(`TTS start part ${partIdx + 1}...`);
+        while (started < chunks.length && started - partIdx < prefetchWindow) { tasks[started] = makeTask(started); started += 1; }
+        const { buffer, mime } = await tasks[partIdx];
+        if (!buffer || (buffer as ArrayBuffer).byteLength === 0) { throw new Error("Empty audio buffer"); }
+        const blob = new Blob([buffer], { type: mime });
+        const url = URL.createObjectURL(blob);
+        const audioEl = new Audio(url);
+        audioEl.playbackRate = this.getPlaybackRateFromRateSetting(this.settings.rate);
+        this.currentSession = { abort: abortAll, audioEl, mediaSource: null, sourceBuffer: null, lastBlob: blob, fileBase: base, objectUrl: url };
+        try { await audioEl.play(); } catch {}
+
+        const audioPath = `${folder}/${base}_part_${partIdx + 1}.${ext}`;
+        await writeBinary(this.app, audioPath, buffer);
+        new Notice(`Saved ${audioPath}`);
+        await upsertAudioReferenceSorted(this.app, file, audioPath);
+
+        while (started < chunks.length && started - partIdx < prefetchWindow) { tasks[started] = makeTask(started); started += 1; }
+
+        try { await this.waitForEndOrAbort(audioEl, abortAll.signal); } catch {}
+        await this.cleanupSessionResources();
+        this.currentSession = null;
+        if (this.stopRequested || abortAll.signal.aborted) break;
+      } catch (e: unknown) {
+        const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
+        new Notice(`TTS failed on part ${partIdx + 1}: ${msg}`);
+        break;
+      }
+      partIdx += 1;
+    }
+    log("buffered prefetch finished", { startIndex, requestedParts: chunks.length, processedUntil: partIdx });
+  }
+
 
   /** Load settings from storage with defaults. */
   async loadSettings(): Promise<void> {
@@ -375,4 +399,9 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
   /** Persist settings. */
   async saveSettings(): Promise<void> { await this.saveData(this.settings); }
 }
+
+// Helper: buffered prefetch mode used on iOS and as desktop fallback
+// Maintains a prefetch window of 3 parallel downloads and plays sequentially
+// starting from startIndex.
+export interface _Tmp_ {}
 
