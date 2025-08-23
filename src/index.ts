@@ -30,6 +30,7 @@ export default class ListenModePlugin extends Plugin {
     this.addCommand({ id: "listenmode-play-pause", name: "Play/Pause current note", callback: () => { this.playOrStart(); } });
     this.addCommand({ id: "listenmode-stop", name: "Stop", callback: () => { void this.stopPlayback(); } });
     this.addCommand({ id: "listenmode-restart", name: "Restart", callback: () => { void this.readCurrentNote(true); } });
+    this.addCommand({ id: "listenmode-download", name: "Download audio (no playback)", callback: () => { void this.downloadCurrentNote(); } });
 
     // Ribbon: Play/Pause current note
     this.addRibbonIcon('headphones', 'Play/Pause current note', () => { this.playOrStart(); });
@@ -398,6 +399,67 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
 
   /** Persist settings. */
   async saveSettings(): Promise<void> { await this.saveData(this.settings); }
+
+  /** Generate and save audio for the current note without playback. Respects settings.chunkSize */
+  async downloadCurrentNote(): Promise<void> {
+    await this.stopPlayback();
+    this.stopRequested = false;
+    const file = this.app.workspace.getActiveFile();
+    if (!file) { new Notice("No active note"); return; }
+    const missing: string[] = [];
+    if (!this.settings.azureApiKey?.trim()) missing.push("Azure API Key");
+    if (!this.settings.azureRegion?.trim()) missing.push("Azure Region");
+    if (!this.settings.voiceName?.trim()) missing.push("Voice name");
+    if (!this.settings.outputFormat?.trim()) missing.push("Output format");
+    if (missing.length) { new Notice(`Missing settings: ${missing.join(", ")}`); return; }
+
+    const content = await this.app.vault.read(file);
+    if (!content.trim()) { new Notice("Note is empty"); return; }
+
+    const maxChars = Math.max(500, Math.min(9000, Number(this.settings.chunkSize) || 5000));
+    const chunks = splitTextSmart(content, maxChars);
+    const base = toSafeBase(file.basename);
+    const autoLang = detectLanguage(content);
+    const configuredLang = this.settings.language === "auto" ? autoLang : this.settings.language;
+    const voiceLang = deriveLangFromVoiceName(this.settings.voiceName) || configuredLang;
+    const lang = voiceLang;
+    const folder = this.settings.audioFolder || "Audio";
+    await ensureFolder(this.app, folder);
+
+    // Ask to overwrite: if files exist and user wants fresh, reuse deleteExistingParts behavior
+    const ext = /wav/i.test(this.settings.outputFormat) ? "wav" : "mp3";
+    await deleteExistingParts(this.app, folder, base, ext).catch(() => {});
+
+    let part = 1;
+    for (const chunk of chunks) {
+      if (this.stopRequested) break;
+      try {
+        const ssml = buildSsml({ text: chunk, voiceName: this.settings.voiceName, rate: this.settings.rate, lang });
+        const abort = new AbortController();
+        this.currentSession = { abort, audioEl: null, mediaSource: null, sourceBuffer: null, lastBlob: null, fileBase: base };
+        const { buffer } = await fetchTtsAudio(
+          this.settings.azureApiKey,
+          this.settings.azureRegion,
+          this.settings.outputFormat,
+          ssml,
+          abort.signal
+        );
+        if (!buffer || buffer.byteLength === 0) { throw new Error("Empty audio buffer"); }
+        const audioPath = `${folder}/${base}_part_${part}.${ext}`;
+        await writeBinary(this.app, audioPath, buffer);
+        await upsertAudioReferenceSorted(this.app, file, audioPath);
+        new Notice(`Saved ${audioPath}`);
+      } catch (e: unknown) {
+        const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
+        new Notice(`Download failed on part ${part}: ${msg}`);
+        break;
+      }
+      part += 1;
+    }
+    await this.cleanupSessionResources(true);
+    this.currentSession = null;
+    new Notice(`Download complete: ${part - 1} part(s)`);
+  }
 }
 
 // Helper: buffered prefetch mode used on iOS and as desktop fallback
