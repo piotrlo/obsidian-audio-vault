@@ -70,11 +70,17 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
     const isIos = Platform.isIosApp === true;
     const maxChars = isIos ? 500 : Math.max(500, Math.min(9000, Number(this.settings.chunkSize) || 5000));
     const chunks = splitTextSmart(content, maxChars);
+    new Notice(`Starting playback and generation (${chunks.length} part(s))...`);
     log("chunking result", { count: chunks.length });
     const base = toSafeBase(file.basename);
     const autoLang = detectLanguage(content);
     const folder = this.settings.audioFolder || "Audio";
-    await ensureFolder(this.app, folder);
+    try {
+      await ensureFolder(this.app, folder);
+    } catch (e) {
+      new Notice(`Failed to ensure folder "${folder}": ${((e as any)?.message) || String(e)}`);
+      return;
+    }
 
     // Try to play existing local audio for parts 1..N if available (sequential, no regeneration)
     try {
@@ -88,8 +94,11 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
         existingPaths.push(p);
       }
       if (existingPaths.length && !forceRegenerate) {
-        for (const p of existingPaths) {
+        new Notice(`Playing existing local audio (${existingPaths.length} part(s))...`);
+        for (let i = 0; i < existingPaths.length; i++) {
+          const p = existingPaths[i];
           if (this.stopRequested) break;
+          try { new Notice(`Playing existing part ${i + 1} of ${existingPaths.length}`); } catch {}
           const data = await this.app.vault.adapter.readBinary(p);
           const mime = mimeFromFormat(this.settings.outputFormat);
           const blob = new Blob([data], { type: mime });
@@ -104,6 +113,7 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
           // eslint-disable-next-line no-await-in-loop
           await this.cleanupSessionResources();
         }
+        if (!this.stopRequested) { new Notice("Finished playing existing audio."); }
         return;
       }
     } catch {}
@@ -111,11 +121,15 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
     // If forcing regeneration, remove old parts first so new files take effect
     if (forceRegenerate) {
       const ext = /wav/i.test(this.settings.outputFormat) ? "wav" : "mp3";
-      await deleteExistingParts(this.app, folder, base, ext).catch(() => {});
+      new Notice("Regenerating audio: removing old parts");
+      await deleteExistingParts(this.app, folder, base, ext).catch((e: unknown) => {
+        new Notice(`Could not remove old parts (continuing): ${((e as any)?.message) || String(e)}`);
+      });
     }
 
     // iOS: force Buffered Prefetch mode with window size 3
     if (isIos) {
+      new Notice("Using buffered prefetch mode (iOS)");
       await this.playBufferedPrefetch(chunks, 0, base, autoLang, folder, file);
       return;
     }
@@ -240,11 +254,17 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
       part += 1;
     }
     log("generation finished", { requestedParts: chunks.length, processedUntil: part - 1, stopped: this.stopRequested });
+    if (this.stopRequested) {
+      new Notice(`Playback stopped after ${part - 1} of ${chunks.length} part(s)`);
+    } else {
+      new Notice(`Playback finished: ${part - 1} of ${chunks.length} part(s)`);
+    }
   }
 
   /** Stop playback and abort any in-flight request. */
   async stopPlayback(): Promise<void> {
     this.stopRequested = true;
+    try { new Notice("Stopping playback..."); } catch {}
     try { this.currentSession?.abort?.abort(); } catch {}
     try { await this.cleanupSessionResources(true); } catch {}
   }
@@ -256,9 +276,10 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
     const currentBase = file ? toSafeBase(file.basename) : undefined;
     const sameFile = currentBase && this.currentSession?.fileBase === currentBase;
     if (a && sameFile && !a.ended) {
-      if (a.paused) { a.play().catch(() => {}); } else { a.pause(); }
+      if (a.paused) { a.play().then(() => { try { new Notice("Resumed playback"); } catch {} }).catch(() => {}); } else { a.pause(); try { new Notice("Paused playback"); } catch {} }
       return;
     }
+    try { new Notice("Starting playback..."); } catch {}
     void this.readCurrentNote();
   }
 
@@ -320,6 +341,7 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
     folder: string,
     file: TFile
   ): Promise<void> {
+    try { new Notice(`Starting buffered prefetch playback (${chunks.length} part(s))...`); } catch {}
     const configuredLang = this.settings.language === "auto" ? autoLang : this.settings.language;
     const voiceLang = deriveLangFromVoiceName(this.settings.voiceName) || configuredLang;
     const lang = voiceLang;
@@ -376,6 +398,11 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
       partIdx += 1;
     }
     log("buffered prefetch finished", { startIndex, requestedParts: chunks.length, processedUntil: partIdx });
+    if (this.stopRequested || abortAll.signal.aborted) {
+      new Notice(`Buffered playback stopped after ${partIdx - startIndex} of ${chunks.length - startIndex} part(s)`);
+    } else {
+      new Notice(`Buffered playback finished: ${partIdx - startIndex} of ${chunks.length - startIndex} part(s)`);
+    }
   }
 
 
@@ -418,17 +445,26 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
 
     const maxChars = Math.max(500, Math.min(9000, Number(this.settings.chunkSize) || 5000));
     const chunks = splitTextSmart(content, maxChars);
+    const totalParts = chunks.length;
     const base = toSafeBase(file.basename);
     const autoLang = detectLanguage(content);
     const configuredLang = this.settings.language === "auto" ? autoLang : this.settings.language;
     const voiceLang = deriveLangFromVoiceName(this.settings.voiceName) || configuredLang;
     const lang = voiceLang;
     const folder = this.settings.audioFolder || "Audio";
-    await ensureFolder(this.app, folder);
+    try {
+      await ensureFolder(this.app, folder);
+    } catch (e) {
+      new Notice(`Failed to ensure folder "${folder}": ${((e as any)?.message) || String(e)}`);
+      return;
+    }
+    new Notice(`Starting download (${totalParts} part(s))...`);
 
     // Ask to overwrite: if files exist and user wants fresh, reuse deleteExistingParts behavior
     const ext = /wav/i.test(this.settings.outputFormat) ? "wav" : "mp3";
-    await deleteExistingParts(this.app, folder, base, ext).catch(() => {});
+    await deleteExistingParts(this.app, folder, base, ext).catch((e: unknown) => {
+      new Notice(`Could not remove old parts (continuing): ${((e as any)?.message) || String(e)}`);
+    });
 
     let part = 1;
     for (const chunk of chunks) {
@@ -448,7 +484,7 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
         const audioPath = `${folder}/${base}_part_${part}.${ext}`;
         await writeBinary(this.app, audioPath, buffer);
         await upsertAudioReferenceSorted(this.app, file, audioPath);
-        new Notice(`Saved ${audioPath}`);
+        new Notice(`Downloaded part ${part} of ${totalParts}`);
       } catch (e: unknown) {
         const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
         new Notice(`Download failed on part ${part}: ${msg}`);
@@ -458,7 +494,11 @@ async readCurrentNote(forceRegenerate: boolean = false): Promise<void> {
     }
     await this.cleanupSessionResources(true);
     this.currentSession = null;
-    new Notice(`Download complete: ${part - 1} part(s)`);
+    if (this.stopRequested) {
+      new Notice(`Download stopped after ${part - 1} of ${totalParts} part(s)`);
+    } else {
+      new Notice(`Download complete: ${part - 1} of ${totalParts} part(s)`);
+    }
   }
 }
 
