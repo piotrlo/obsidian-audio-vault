@@ -149,17 +149,19 @@ Scope
 Tasks
 - Implement small buffer threshold before auto-play; detect MSE support and device quirks; allow disable streaming in settings.
 - iOS default: Buffered (Prefetch) mode with chunkSize forced to 500 and prefetch of 2–3 parts to ensure gapless playback.
+- Desktop fallback: when MSE is unavailable or streaming fails, switch to Buffered Prefetch (window=3) and surface a Notice informing about the fallback.
 - If file exists in Audio/, play without generating unless user clicks Refresh.
 - Add collapsed/expanded panel header toggle and showControls setting persistence.
 
 Acceptance criteria mapping
-- spec §3.2 playback, §4.3 streaming default, §4.5 performance, and §4.1 iOS default Buffered (Prefetch) with forced `chunkSize=500`.
+- spec §3.2 playback, §4.3 streaming default, §4.5 performance, and §4.1 iOS default Buffered (Prefetch) with forced `chunkSize=500`; desktop fallback to Buffered Prefetch (window=3) with user Notice when streaming fails.
 
 Risks
 - Mobile WebView limitations, iOS auto-play; require user gesture.
 
 Tests
 - E2E manual checklist on macOS, Windows, Android, iOS; unit tests for file-exists branch.
+- Verify desktop fallback: force a streaming error/unavailable MSE and confirm automatic switch to Buffered Prefetch (window=3) and that a Notice is shown to the user.
 
 Stage 6 — Observability and error reporting
 Scope
