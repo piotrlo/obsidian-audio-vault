@@ -5,6 +5,7 @@
 import type { App } from "obsidian";
 import { Notice, PluginSettingTab, Setting } from "obsidian";
 import type ListenModePlugin from "../index";
+import type { SupportedLang } from "../types";
 
 /**
  * Build the settings tab UI.
@@ -58,7 +59,7 @@ export class ListenModeSettingsTab extends PluginSettingTab {
       dd.onChange(async (v) => { this.plugin.settings.voiceName = v; await this.plugin.saveSettings(); });
     });
     voiceRow.addButton((btn) =>
-      btn.setButtonText("Fetch voices for region").onClick(async () => {
+      btn.setButtonText("Fetch voices for region").setCta().onClick(async () => {
         if (!this.plugin.settings.azureApiKey?.trim() || !this.plugin.settings.azureRegion?.trim()) {
           new Notice("Set Azure API Key and Region first");
           return;
@@ -79,7 +80,9 @@ export class ListenModeSettingsTab extends PluginSettingTab {
           const options: Record<string, string> = {};
           for (const v of filtered) { const key = v.ShortName || v.Name; if (key) options[key] = key; }
           if (voiceDropdown) {
-            voiceDropdown.selectEl.innerHTML = "";
+            while (voiceDropdown.selectEl.firstChild) {
+              voiceDropdown.selectEl.removeChild(voiceDropdown.selectEl.firstChild);
+            }
             Object.entries(options).forEach(([k, label]) => voiceDropdown!.addOption(k, label));
             const preferred = this.plugin.settings.voiceName;
             if (options[preferred]) voiceDropdown.setValue(preferred);
@@ -126,7 +129,7 @@ export class ListenModeSettingsTab extends PluginSettingTab {
         dd.addOption("pl-PL", "pl-PL");
         dd.addOption("en-US", "en-US");
         dd.setValue(this.plugin.settings.language);
-        dd.onChange(async (v) => { this.plugin.settings.language = v; await this.plugin.saveSettings(); });
+dd.onChange(async (v) => { this.plugin.settings.language = (v as SupportedLang); await this.plugin.saveSettings(); });
       });
 
     new Setting(containerEl)
@@ -148,7 +151,7 @@ export class ListenModeSettingsTab extends PluginSettingTab {
       .setDesc("Disable if playback fails on iOS")
       .addToggle((tg) => tg.setValue(this.plugin.settings.enableStreaming).onChange(async (v) => { this.plugin.settings.enableStreaming = v; await this.plugin.saveSettings(); }));
 
-    // Panel removed – control via ribbon/commands only
+/** Panel removed – control via ribbon/commands only */
 
     new Setting(containerEl)
       .setName("Audio folder")

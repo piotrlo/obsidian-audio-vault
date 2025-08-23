@@ -8,8 +8,10 @@
 export function splitTextSmart(text: string, maxChars: number = 10000): string[] {
   if (!text) return [];
 
-  // Split into sentences while preserving punctuation. Treat new lines as boundaries too.
-  // Matches sequences ending with ., !, ? (optionally repeated) or line breaks, or end-of-string.
+  /**
+   * Split into sentences while preserving punctuation. Treat new lines as boundaries too.
+   * Matches sequences ending with ., !, ? (optionally repeated) or line breaks, or end-of-string.
+   */
   const normalized = text.replace(/\r\n/g, "\n");
   const sentenceRegex = /[^.!?\n]+[.!?]+\s*|[^.!?\n]+\n+|[^.!?\n]+$/g;
   const sentences = normalized.match(sentenceRegex) || [normalized];
