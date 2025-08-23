@@ -1,0 +1,61 @@
+/**
+ * Playback of existing local audio parts without regeneration.
+ */
+
+import type { App, TAbstractFile } from "obsidian";
+import type { PlaybackSession, TtsSettings } from "../types";
+import { mimeFromFormat } from "../tts/azure";
+import { fileExtFromFormat, playbackRateFromRateSetting } from "../core/helpers";
+import { waitForEndOrAbort } from "../core/audio";
+import { cleanupSessionResources as cleanupSessionResourcesHelper } from "./session";
+import { notify as notifyUtil } from "../core/notify";
+
+export async function tryPlayExistingParts(params: {
+  app: App;
+  settings: TtsSettings;
+  base: string;
+  folder: string;
+  stopRequested: () => boolean;
+  setSession: (s: PlaybackSession | null) => void;
+}): Promise<boolean> {
+  const { app, settings, base, folder, stopRequested, setSession } = params;
+
+  const extExisting = fileExtFromFormat(settings.outputFormat);
+  const existingPaths: string[] = [];
+  for (let i = 1; i < 10000; i++) {
+    const p = `${folder}/${base}_part_${i}.${extExisting}`;
+    const ok = await app.vault.adapter.exists(p);
+    if (!ok) break;
+    existingPaths.push(p);
+  }
+  if (!existingPaths.length) return false;
+
+  try {
+    for (let i = 0; i < existingPaths.length; i++) {
+      if (stopRequested()) break;
+      const p = existingPaths[i];
+      const data = await app.vault.adapter.readBinary(p);
+      const mime = mimeFromFormat(settings.outputFormat);
+      const blob = new Blob([data], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const audioEl = new Audio(url);
+      audioEl.playbackRate = playbackRateFromRateSetting(settings.rate);
+      const abort = new AbortController();
+      const session: PlaybackSession = { abort, audioEl, mediaSource: null, sourceBuffer: null, lastBlob: blob, fileBase: base, objectUrl: url };
+      setSession(session);
+      try { await audioEl.play(); } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        try { notifyUtil(settings, `Audio play failed (existing): ${msg}`); } catch {}
+      }
+      await waitForEndOrAbort(audioEl, abort.signal);
+      await cleanupSessionResourcesHelper(session);
+      setSession(null);
+    }
+    if (!stopRequested()) { try { notifyUtil(settings, "Finished playing existing audio."); } catch {} }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+
