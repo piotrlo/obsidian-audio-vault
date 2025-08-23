@@ -53,6 +53,7 @@ Scope
 
 Key capabilities
 - Command palette actions: read-current-note, stop-playback, restart, toggle-controls.
+- New command: Download audio (no playback) — generate and save all parts without playing; uses settings.chunkSize.
 - Settings UI: azureRegion, azureApiKey, voiceName (manual text, optional fetch), outputFormat, rate (SSML), enableStreaming, chunkSize (500–9000; default 5000), audioFolder.
 - Mobile UI: Ribbon menu integration as primary access (always visible, 1-click) via Obsidian toolbar; optional draggable floating panel (touch + mouse) constrained to viewport; default offset above mobile bottom navigation; collapsible header; position persisted across sessions; safe positioning away from system buttons.
 - Text processing: split into <= chunkSize (default 5,000; max 9,000) preferring sentence boundaries; if a sentence exceeds limit, split by words; language selection default to pl-PL (configurable later).
@@ -70,6 +71,7 @@ Tasks
 - src/tts/azure.ts: startHttpStream, captureToBlob, detect MIME based on outputFormat.
 - src/obsidian/settings.ts: settings tab with fields above; optional “Fetch voices” button using Azure GET voices/list (MVP convenience, skipping backend).
 - src/index.ts: main plugin class wiring commands, playback session state, calling azure synth.
+- Add command `listenmode-download` implementing non‑playback generation of all chunks and saving to Audio/ with link updates.
 - Remove all ramda usage from logic; replace with native arrays/strings.
 - Mobile UI (Ribbon only):
   - index.ts: add ribbon entry using addRibbonIcon ('headphones' → 'Play/Pause current note').
