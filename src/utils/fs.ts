@@ -27,7 +27,7 @@ export async function ensureFolder(app: App, folder: string): Promise<void> {
  * @returns {Promise<void>} When written.
  */
 export async function writeBinary(app: App, path: string, data: ArrayBuffer): Promise<void> {
-  // Overwrite if exists
+  /** Overwrite if exists */
   await app.vault.adapter.writeBinary(path, data);
 }
 
@@ -42,7 +42,7 @@ export async function writeBinary(app: App, path: string, data: ArrayBuffer): Pr
  */
 export async function deleteExistingParts(app: App, folder: string, base: string, ext: string): Promise<void> {
   try {
-    // List all files in vault and filter by our pattern; simple and safe for MVP.
+    /** List all files in vault and filter by our pattern; simple and safe for MVP. */
     const files = app.vault.getFiles();
     const prefix = `${folder}/${base}_part_`;
     const suffix = `.${ext}`;
@@ -84,13 +84,10 @@ export async function upsertAudioReferenceSorted(app: App, file: TFile, relPath:
   const newLine = `${prefix}${relPath}]]`;
   set.add(newLine);
   const arr = Array.from(set);
-  const extractPart = (s: string): number => {
-    const m = /_part_(\d+)\.(mp3|wav)\]\]/i.exec(s);
-    return m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER;
-  };
-  arr.sort((a, b) => extractPart(a) - extractPart(b));
+  const { sortGeneratedAudioLines } = await import("../core/helpers");
+  const sorted = sortGeneratedAudioLines(arr);
   const trimmedOthers = others.join("\n");
   const needsNewline = !trimmedOthers.endsWith("\n") && trimmedOthers.length > 0;
-  const updated = trimmedOthers + (needsNewline ? "\n" : "") + (arr.length ? arr.join("\n") + "\n" : "");
+  const updated = trimmedOthers + (needsNewline ? "\n" : "") + (sorted.length ? sorted.join("\n") + "\n" : "");
   await app.vault.modify(file, updated);
 }

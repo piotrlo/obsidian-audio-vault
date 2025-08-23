@@ -5,6 +5,8 @@
 /**
  * Settings for the ListenMode plugin.
  */
+export type SupportedLang = 'auto' | 'pl-PL' | 'en-US';
+
 export interface TtsSettings {
   /** Azure AI Speech API key stored in plugin data. */
   azureApiKey: string;
@@ -20,8 +22,8 @@ export interface TtsSettings {
   enableStreaming: boolean;
   /** Target vault folder for audio files. */
   audioFolder: string;
-  /** Language selection: 'auto' | 'pl-PL' | 'en-US'. */
-  language: string;
+  /** Language selection constrained to supported values. */
+  language: SupportedLang;
   /** If true, voice picker shows only Neural HD voices. */
   onlyHdVoices: boolean;
   /** Enable debug console logs. */
