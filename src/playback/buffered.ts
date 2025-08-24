@@ -71,7 +71,7 @@ export async function playBufferedPrefetch(params: {
       setSession(session);
 
       try {
-        try { notifyUtil(settings, `Rozpoczynam odtwarzanie (buforowane) — część ${partIdx + 1}`, true); } catch {}
+        try { notifyUtil(settings, `Starting playback (buffered) — part ${partIdx + 1}`, true); } catch {}
         await audioEl.play();
         try { notifyUtil(settings, "Playback started", true); } catch {}
       } catch (err) {
