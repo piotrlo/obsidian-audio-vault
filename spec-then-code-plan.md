@@ -58,8 +58,8 @@ Key capabilities
 - Mobile UI: Ribbon menu integration as primary access (always visible, 1-click) via Obsidian toolbar; optional draggable floating panel (touch + mouse) constrained to viewport; default offset above mobile bottom navigation; collapsible header; position persisted across sessions; safe positioning away from system buttons.
 - Text processing: split into <= chunkSize (default 5,000; max 9,000) preferring sentence boundaries; if a sentence exceeds limit, split by words; language selection default to pl-PL (configurable later).
 - Synthesis: build SSML, call POST https://{region}.tts.speech.microsoft.com/cognitiveservices/v1 with X-Microsoft-OutputFormat.
-- Streaming: attempt MSE for mp3/wav; fallback to capture entire response then play.
-- Storage: write to Audio/ as {safe-basename}_part_{n}.{mp3|wav}; append [[relPath]] at note end. Optional MP3 merge into a single file when the setting is enabled.
+- Streaming: attempt MSE for MP3 (MVP wspiera wyłącznie MP3); fallback do capture‑then‑play.
+- Storage: write to Audio/ jako {safe-basename}_part_{n}.mp3; append [[relPath]] at note end. MP3 merge dostępne i wdrożone.
 
 Tasks
 - src/types.ts: define TtsSettings, PlaybackSession types.
@@ -78,7 +78,7 @@ Tasks
   - No floating panel, no draggable, no position persistence.
 
 Acceptance criteria mapping
-- spec §3.1 TTS (format mp3/wav, voices, rate), §3.2 playback and controls (including mobile ribbon/draggable/persistence), §3.3 storage/linking, §3.7 docs/onboarding (brief README section), §4.1 Azure endpoints, §4.3 frontend controls, §4a defaults.
+- spec §3.1 TTS (MVP: tylko MP3), §3.2 playback and controls (including mobile ribbon/draggable/persistence), §3.3 storage/linking, §3.7 docs/onboarding (brief README section), §4.1 Azure endpoints, §4.3 frontend controls, §4a defaults.
 
 Risks
 - iOS autoplay and MSE support may limit streaming; MVP must fallback gracefully to after-download playback.
@@ -355,6 +355,13 @@ Stage 1 status update (2025-08-22)
   - Removed showControls and panelPosition from TtsSettings and settings UI.
 - Docs updated
   - spec-then-code.md and spec-then-code-plan.md updated to reflect Ribbon/Commands-only control model.
+
+Stage 1 status update (2025-08-24)
+- Completed (MVP locked to MP3)
+  - MVP używa wyłącznie formatu MP3; streaming MSE oraz fallback buffered działają poprawnie.
+  - Scalanie MP3 jest wdrożone: preferowane odtwarzanie pliku scalonego, pojedynczy link w notatce.
+  - Ustawienia zweryfikowane: region, klucz, głos (wraz z fetch), rate, streaming, chunkSize, folder, mergeParts, debug logs.
+  - Testy, typecheck i build zielone (bun test/typecheck/build).
 
 
 // Optional MP3 merge of parts into a single file
