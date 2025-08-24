@@ -5,8 +5,13 @@ import type { TtsSettings } from "../types";
  */
 export function notify(settings: TtsSettings | undefined, msg: string, important: boolean = false): void {
   if (!(important || settings?.debugLogs)) return;
+  // Prefer CJS require when available (plugin runtime), fallback to dynamic import.
   try {
-    // Fire-and-forget dynamic import to avoid hard runtime dependency in tests
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const mod = require("obsidian");
+    try { new mod.Notice(msg); return; } catch {}
+  } catch {}
+  try {
     void import("obsidian").then((mod) => {
       try { new mod.Notice(msg); } catch {}
     }).catch(() => {});
