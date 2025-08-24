@@ -2,7 +2,7 @@
  * Audio-related helpers extracted from the plugin entrypoint for reuse and testability.
  */
 
-import { mimeFromFormat } from "../tts/azure";
+import { mimeFromFormat } from "../core/helpers";
 
 /**
  * Waits until the audio ends or the abort signal fires.
@@ -37,6 +37,37 @@ export function canStream(outputFormat: string): { supported: boolean; mime: str
     && (MediaSource as any).isTypeSupported
     && MediaSource.isTypeSupported(mime);
   return { supported, mime };
+}
+
+/**
+ * Capture a byte stream into a Blob while optionally invoking a per-chunk callback.
+ *
+ * @param {ReadableStream<Uint8Array>} stream Input stream.
+ * @param {(chunk: Uint8Array) => void | undefined} onChunk Optional per-chunk callback.
+ * @param {string} outputFormat Format string for MIME detection.
+ * @returns {Promise<Blob>} Final Blob.
+ */
+export async function captureToBlob(
+  stream: ReadableStream<Uint8Array>,
+  onChunk: ((chunk: Uint8Array) => void) | undefined,
+  outputFormat: string
+): Promise<Blob> {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) {
+      if (onChunk) onChunk(value);
+      chunks.push(value);
+    }
+  }
+  const totalLen = chunks.reduce((n, a) => n + a.byteLength, 0);
+  const out = new Uint8Array(totalLen);
+  let offset = 0;
+  for (const c of chunks) { out.set(c, offset); offset += c.byteLength; }
+  const mime = mimeFromFormat(outputFormat);
+  return new Blob([out], { type: mime });
 }
 
 

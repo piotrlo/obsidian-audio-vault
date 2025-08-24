@@ -2,12 +2,12 @@ import { Plugin, Platform, TFile } from "obsidian";
 import { toSafeBase } from "./utils/safe-name";
 import { buildSsml } from "./utils/ssml";
 import { ensureFolder, writeBinary, deleteExistingParts, upsertAudioReferenceSorted, replaceAudioReferencesWithSingle } from "./utils/fs";
-import { fetchTtsAudio } from "./tts/azure";
+import { AzureTtsProvider } from "./tts/azure-provider";
 import { log, warn, setDebugLogging } from "./utils/logger";
 import { ListenModeSettingsTab } from "./obsidian/settings";
 import { fileExtFromFormat, missingSettings, resolveLang, buildChunks } from "./core/helpers";
-import type { PlaybackSession, TtsSettings } from "./types";
-import { canStream } from "./core/audio";
+import type { PlaybackSession, TtsProvider, TtsSettings } from "./types";
+import { canStream, captureToBlob } from "./core/audio";
 import { cleanupSessionResources as cleanupSessionResourcesHelper } from "./playback/session";
 import { tryPlayExistingParts as tryPlayExistingPartsHelper } from "./playback/existing";
 import { playBufferedPrefetch as playBufferedPrefetchHelper } from "./playback/buffered";
@@ -30,6 +30,8 @@ export default class ListenModePlugin extends Plugin {
   private stopRequested: boolean = false;
   /** Guard to prevent concurrent read/download operations. */
   private isBusy: boolean = false;
+  /** Active TTS provider. */
+  private provider: TtsProvider | null = null;
 
   /**
    * Load settings and register commands.
@@ -37,6 +39,7 @@ export default class ListenModePlugin extends Plugin {
   async onload(): Promise<void> {
     await this.loadSettings();
     setDebugLogging(!!this.settings.debugLogs);
+    this.provider = this.buildProviderFromSettings();
     this.addCommand({ id: "listenmode-play-pause", name: "Play/Pause current note", callback: () => { this.playOrStart(); } });
     this.addCommand({ id: "listenmode-stop", name: "Stop", callback: () => { void this.stopPlayback(); } });
     this.addCommand({ id: "listenmode-restart", name: "Restart", callback: () => { void this.readCurrentNote(true); } });
@@ -90,6 +93,7 @@ destroyPanel(): void {}
           ctx.lang,
           ctx.folder,
           ctx.file,
+          this.buildProviderFromSettings(),
           assembler ? (u8) => assembler.append(u8) : undefined,
           assembler ? false : true
         );
@@ -182,6 +186,8 @@ destroyPanel(): void {}
     let part = 1;
     const mergingEnabled = !!this.settings.mergeParts && /mp3/i.test(this.settings.outputFormat);
     const assembler = mergingEnabled ? new Mp3Assembler() : null;
+    const provider = this.buildProviderFromSettings();
+    this.provider = provider;
     for (const chunk of chunks) {
       if (this.stopRequested) break;
       try {
@@ -195,7 +201,7 @@ destroyPanel(): void {}
 
         if (!(this.settings.enableStreaming && streamSupported)) {
 notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
-          await this.playBufferedPrefetch(chunks, part - 1, base, lang, folder, file, assembler ? (u8) => assembler.append(u8) : undefined, assembler ? false : true);
+          await this.playBufferedPrefetch(chunks, part - 1, base, lang, folder, file, provider, assembler ? (u8) => assembler.append(u8) : undefined, assembler ? false : true);
           if (assembler && !this.stopRequested) {
             try {
               const merged = assembler.build();
@@ -217,6 +223,7 @@ notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
           await playStreamedPartAndSave({
             app: this.app,
             settings: this.settings,
+            provider,
             ssml,
             base,
             part,
@@ -235,7 +242,7 @@ notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
           const detail = (err && (err as any).message) ? (err as any).message : String(err);
           warn("Streaming failed; falling back to buffered", { detail, part });
           this.currentSession = await cleanupSessionResourcesHelper(this.currentSession, true);
-          await this.playBufferedPrefetch(chunks, part - 1, base, lang, folder, file, assembler ? (u8) => assembler.append(u8) : undefined, assembler ? false : true);
+          await this.playBufferedPrefetch(chunks, part - 1, base, lang, folder, file, provider, assembler ? (u8) => assembler.append(u8) : undefined, assembler ? false : true);
           if (assembler && !this.stopRequested) {
             try {
               const merged = assembler.build();
@@ -316,12 +323,14 @@ notifyUtil(this.settings, `TTS failed on part ${part}: ${msg}` , true);
     lang: string,
     folder: string,
     file: TFile,
+    provider: TtsProvider,
     appendToMerged?: (u8: Uint8Array) => void,
     savePerPart: boolean = true
   ): Promise<void> {
     await playBufferedPrefetchHelper({
       app: this.app,
       settings: this.settings,
+      provider,
       chunks,
       startIndex,
       base,
@@ -375,13 +384,11 @@ notifyUtil(this.settings, `Could not remove old parts (continuing): ${((e as any
           const ssml = buildSsml({ text: chunk, voiceName: this.settings.voiceName, rate: this.settings.rate, lang: ctx.lang });
           const abort = new AbortController();
           this.currentSession = { abort, audioEl: null, mediaSource: null, sourceBuffer: null, lastBlob: null, fileBase: ctx.base };
-          const { buffer } = await fetchTtsAudio(
-            this.settings.azureApiKey,
-            this.settings.azureRegion,
-            this.settings.outputFormat,
-            ssml,
-            abort.signal
-          );
+          const provider = this.buildProviderFromSettings();
+          this.provider = provider;
+          const stream = await provider.synthesize(ssml, this.settings.outputFormat, ctx.lang, abort.signal);
+          const blob = await captureToBlob(stream, undefined, this.settings.outputFormat);
+          const buffer = await blob.arrayBuffer();
           if (!buffer || buffer.byteLength === 0) { throw new Error("Empty audio buffer"); }
           if (assembler) {
             assembler.append(new Uint8Array(buffer));
@@ -444,6 +451,11 @@ notifyUtil(this.settings, `Failed to ensure folder "${folder}": ${((e as any)?.m
     const lang = resolveLang(content, this.settings);
     const autoLang = lang; // retained for signature compatibility if ever needed
     return { file, content, chunks, base, folder, lang, autoLang };
+  }
+
+  private buildProviderFromSettings(): TtsProvider {
+    // Only Azure for now
+    return new AzureTtsProvider({ apiKey: this.settings.azureApiKey, region: this.settings.azureRegion });
   }
 }
 

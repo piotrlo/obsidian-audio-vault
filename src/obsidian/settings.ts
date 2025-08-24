@@ -97,6 +97,14 @@ export class ListenModeSettingsTab extends PluginSettingTab {
         }
       })
     );
+    new Setting(containerEl)
+      .setName("TTS Provider")
+      .setDesc("For now only Azure is available; OpenAI later")
+      .addDropdown((dd) => {
+        dd.addOption("azure", "Azure");
+        dd.setValue(this.plugin.settings.ttsProvider || "azure");
+        dd.onChange(async (v) => { this.plugin.settings.ttsProvider = v as any; await this.plugin.saveSettings(); });
+      });
 
     new Setting(containerEl)
       .setName("Output format")
