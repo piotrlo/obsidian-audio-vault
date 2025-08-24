@@ -11,7 +11,8 @@ export const DEFAULT_SETTINGS: TtsSettings = {
   language: "pl-PL",
   onlyHdVoices: true,
   debugLogs: false,
-  chunkSize: 5000
+  chunkSize: 5000,
+  mergeParts: false
 };
 
 

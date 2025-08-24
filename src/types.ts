@@ -30,6 +30,8 @@ export interface TtsSettings {
   debugLogs?: boolean;
   /** Maximum characters per TTS part (chunk). */
   chunkSize?: number;
+  /** If true and output format is MP3, merge parts into a single file. */
+  mergeParts: boolean;
   // Panel removed
 }
 
