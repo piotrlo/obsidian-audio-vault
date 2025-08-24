@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test";
-import { mimeFromFormat, captureToBlob } from "../../src/tts/azure";
+import { mimeFromFormat } from "../../src/core/helpers";
+import { captureToBlob } from "../../src/core/audio";
 
 function streamFromChunks(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
   return new ReadableStream<Uint8Array>({

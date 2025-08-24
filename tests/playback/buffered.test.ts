@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test";
 import { playBufferedPrefetch } from "../../src/playback/buffered";
+import type { TtsProvider, Voice } from "../../src/types";
 
 test("playBufferedPrefetch starts and finishes with empty chunks", async () => {
   const app: any = {
@@ -12,6 +13,10 @@ test("playBufferedPrefetch starts and finishes with empty chunks", async () => {
   await playBufferedPrefetch({
     app,
     settings: { voiceName: "en-US", rate: "+0%", azureApiKey: "k", azureRegion: "r", outputFormat: "audio-24khz-48kbitrate-mono-mp3" } as any,
+    provider: new (class implements TtsProvider {
+      async synthesize(): Promise<ReadableStream<Uint8Array>> { return new ReadableStream<Uint8Array>({ start(c){ c.close(); } }); }
+      async listVoices(): Promise<Voice[]> { return []; }
+    })(),
     chunks: [],
     startIndex: 0,
     base: "note",

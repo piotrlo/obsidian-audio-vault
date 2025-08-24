@@ -18,6 +18,16 @@ export function fileExtFromFormat(fmt: string): "mp3" | "wav" {
 }
 
 /**
+ * Resolve a MIME type based on output format string.
+ *
+ * @param {string} outputFormat Provider format string (Azure-compatible).
+ * @returns {string} MIME type.
+ */
+export function mimeFromFormat(outputFormat: string): string {
+  return /riff|wav/i.test(outputFormat) ? "audio/wav" : "audio/mpeg";
+}
+
+/**
  * Validate required settings and return missing labels.
  *
  * @param {TtsSettings} s Plugin settings.

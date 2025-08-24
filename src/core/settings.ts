@@ -1,6 +1,7 @@
 import type { TtsSettings } from "../types";
 
 export const DEFAULT_SETTINGS: TtsSettings = {
+  ttsProvider: "azure",
   azureApiKey: "",
   azureRegion: "westeurope",
   voiceName: "en-US-Ava:DragonHDLatestNeural",

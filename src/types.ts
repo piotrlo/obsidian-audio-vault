@@ -8,6 +8,8 @@
 export type SupportedLang = 'auto' | 'pl-PL' | 'en-US';
 
 export interface TtsSettings {
+  /** Selected TTS provider identifier. */
+  ttsProvider?: "azure";
   /** Azure AI Speech API key stored in plugin data. */
   azureApiKey: string;
   /** Azure region, e.g., westeurope. */
@@ -54,5 +56,19 @@ export interface PlaybackSession {
 export interface Voice {
   name: string;
   shortName: string;
+}
+
+/**
+ * TTS provider abstraction (Stage 2).
+ */
+export interface TtsProvider {
+  /**
+   * Start synthesis as a byte stream for given SSML and format.
+   */
+  synthesize(ssml: string, outputFormat: string, lang: string, abortSignal: AbortSignal): Promise<ReadableStream<Uint8Array>>;
+  /**
+   * List available voices for a region.
+   */
+  listVoices(region: string, apiKey?: string): Promise<Voice[]>;
 }
 

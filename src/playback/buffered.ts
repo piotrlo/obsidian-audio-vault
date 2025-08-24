@@ -3,17 +3,17 @@
  */
 
 import type { App, TFile } from "obsidian";
-import type { PlaybackSession, TtsSettings } from "../types";
+import type { PlaybackSession, TtsProvider, TtsSettings } from "../types";
 import { buildSsml } from "../utils/ssml";
-import { fetchTtsAudio } from "../tts/azure";
 import { fileExtFromFormat, playbackRateFromRateSetting } from "../core/helpers";
-import { waitForEndOrAbort } from "../core/audio";
+import { captureToBlob, waitForEndOrAbort } from "../core/audio";
 import { cleanupSessionResources as cleanupSessionResourcesHelper } from "./session";
 import { notify as notifyUtil } from "../core/notify";
 
 export async function playBufferedPrefetch(params: {
   app: App;
   settings: TtsSettings;
+  provider: TtsProvider;
   chunks: string[];
   startIndex: number;
   base: string;
@@ -29,7 +29,7 @@ export async function playBufferedPrefetch(params: {
   /** If false, the function will not persist per-part files/links. */
   savePerPart?: boolean;
 }): Promise<void> {
-  const { app, settings, chunks, startIndex, base, lang, folder, file, stopRequested, setSession, writeBinary, upsertAudioReferenceSorted, appendToMerged, savePerPart } = params;
+  const { app, settings, provider, chunks, startIndex, base, lang, folder, file, stopRequested, setSession, writeBinary, upsertAudioReferenceSorted, appendToMerged, savePerPart } = params;
 
   const abortAll = new AbortController();
   setSession({ abort: abortAll, audioEl: null, mediaSource: null, sourceBuffer: null, lastBlob: null, fileBase: base });
@@ -42,13 +42,13 @@ export async function playBufferedPrefetch(params: {
 
     const makeTask = (idx: number) => {
       const ssml = buildSsml({ text: chunks[idx], voiceName: settings.voiceName, rate: settings.rate, lang });
-      return fetchTtsAudio(
-        settings.azureApiKey,
-        settings.azureRegion,
-        settings.outputFormat,
-        ssml,
-        abortAll.signal
-      ).then(({ buffer, mime }) => ({ buffer, mime, idx }));
+      return provider.synthesize(ssml, settings.outputFormat, lang, abortAll.signal)
+        .then(async (stream) => {
+          const blob = await captureToBlob(stream, undefined, settings.outputFormat);
+          const buffer = await blob.arrayBuffer();
+          const mime = blob.type || (/(wav|riff)/i.test(settings.outputFormat) ? "audio/wav" : "audio/mpeg");
+          return { buffer, mime, idx };
+        });
     };
 
     const tasks: Array<Promise<{ buffer: ArrayBuffer; mime: string; idx: number }>> = new Array(chunks.length);

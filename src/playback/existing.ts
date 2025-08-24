@@ -4,7 +4,7 @@
 
 import type { App, TAbstractFile } from "obsidian";
 import type { PlaybackSession, TtsSettings } from "../types";
-import { mimeFromFormat } from "../tts/azure";
+import { mimeFromFormat } from "../core/helpers";
 import { fileExtFromFormat, playbackRateFromRateSetting } from "../core/helpers";
 import { waitForEndOrAbort } from "../core/audio";
 import { cleanupSessionResources as cleanupSessionResourcesHelper } from "./session";

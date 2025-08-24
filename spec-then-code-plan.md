@@ -381,3 +381,12 @@ Stage 1 status update (2025-08-24)
 // Tests
 // - utils/mp3.test.ts (stripId3v2), existing.test.ts preference.
 
+
+Stage 2 status update (2025-08-24)
+- Completed (provider abstraction + settings hardening)
+  - Introduced TtsProvider interface: synthesize(stream) + listVoices().
+  - Implemented AzureTtsProvider using Azure REST; UI remains Azure-only.
+  - Refactored playback (streaming/buffered) and index.ts to inject provider.
+  - Moved MIME detection and captureToBlob to core helpers; tests updated.
+  - Settings extended with ttsProvider ("azure"); validation kept provider-specific.
+  - Tests/typecheck/build are green (bun test/typecheck/build).

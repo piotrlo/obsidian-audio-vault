@@ -3,8 +3,9 @@
  */
 
 import type { App, TFile } from "obsidian";
-import type { PlaybackSession, TtsSettings } from "../types";
-import { startHttpStream, captureToBlob, mimeFromFormat } from "../tts/azure";
+import type { PlaybackSession, TtsProvider, TtsSettings } from "../types";
+import { captureToBlob } from "../core/audio";
+import { mimeFromFormat } from "../core/helpers";
 import { fileExtFromFormat, playbackRateFromRateSetting } from "../core/helpers";
 import { waitForEndOrAbort } from "../core/audio";
 import { writeBinary, upsertAudioReferenceSorted } from "../utils/fs";
@@ -13,6 +14,7 @@ import { notify as notifyUtil } from "../core/notify";
 export async function playStreamedPartAndSave(params: {
   app: App;
   settings: TtsSettings;
+  provider: TtsProvider;
   ssml: string;
   base: string;
   part: number;
@@ -25,18 +27,12 @@ export async function playStreamedPartAndSave(params: {
   /** If false, the function will not persist per-part files/links. */
   savePerPart?: boolean;
 }): Promise<void> {
-  const { app, settings, ssml, base, part, folder, file, abort, setSession, appendToMerged, savePerPart } = params;
+  const { app, settings, provider, ssml, base, part, folder, file, abort, setSession, appendToMerged, savePerPart } = params;
 
   const streamFormat = settings.outputFormat;
   const streamMime = mimeFromFormat(streamFormat);
 
-  const stream = await startHttpStream(
-    settings.azureApiKey,
-    settings.azureRegion,
-    streamFormat,
-    ssml,
-    abort.signal
-  );
+  const stream = await provider.synthesize(ssml, streamFormat, "", abort.signal);
 
   const mediaSource = new MediaSource();
   const objectUrl = URL.createObjectURL(mediaSource);
