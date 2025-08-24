@@ -163,9 +163,8 @@ Inspekcja KV i cache
 curl -s -X DELETE "$BASE/v1/voices/cache?region=westeurope" -H 'X-Admin-Token: <TOKEN>' | jq .
 ```
 
-Notatka o Hono
+Hono
 - Hono zapewnia szybki router i kompatybilność z środowiskiem Workers. Dokumentacja: [Hono](https://hono.dev/llms-full.txt).
-- Często używane funkcje: `app.route()`, `app.use()` (middleware), `c.json()`, `c.req.json()`, `c.req.query()`.
 
 Dalsza lektura
 - Przegląd platformy Workers i dodatków: [Cloudflare Developer Docs](https://developers.cloudflare.com/llms.txt)

@@ -10,6 +10,12 @@ export type SupportedLang = 'auto' | 'pl-PL' | 'en-US';
 export interface TtsSettings {
   /** Selected TTS provider identifier. */
   ttsProvider?: "azure";
+  /** Use backend proxy (Cloudflare Workers) instead of direct provider calls. */
+  useBackend?: boolean;
+  /** Backend base URL when useBackend is enabled. */
+  backendUrl?: string;
+  /** License key used to obtain short-lived JWT from backend. */
+  licenseKey?: string;
   /** Azure AI Speech API key stored in plugin data. */
   azureApiKey: string;
   /** Azure region, e.g., westeurope. */
