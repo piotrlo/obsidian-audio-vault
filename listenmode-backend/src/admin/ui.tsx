@@ -1,165 +1,10 @@
 import { Hono } from 'hono';
-import type { Bindings } from '../types';
+import type { Bindings, LicenseRecord } from '../types';
 import type { FC } from 'hono/jsx';
+import { ADMIN_CLIENT_JS } from './app';
 
-const CLIENT_JS = `
-(function(){
-  const S = {
-    token: document.getElementById('token'),
-    saveToken: document.getElementById('saveToken'),
-    tokenMsg: document.getElementById('tokenMsg'),
-    plan: document.getElementById('plan'),
-    status: document.getElementById('status'),
-    q: document.getElementById('q'),
-    pageSize: document.getElementById('pageSize'),
-    load: document.getElementById('load'),
-    msg: document.getElementById('msg'),
-    create: document.getElementById('create'),
-    createMsg: document.getElementById('createMsg'),
-    newKey: document.getElementById('newKey'),
-    newPlan: document.getElementById('newPlan'),
-    newStatus: document.getElementById('newStatus'),
-    newExpires: document.getElementById('newExpires'),
-    prev: document.getElementById('prev'),
-    next: document.getElementById('next'),
-    pageInfo: document.getElementById('pageInfo'),
-    tbody: document.querySelector('#tbl tbody')
-  };
 
-  let page = 1;
-
-  function getToken(){ return localStorage.getItem('LM_ADMIN_TOKEN') || ''; }
-  function setToken(v){ localStorage.setItem('LM_ADMIN_TOKEN', v || ''); }
-
-  function headers(){
-    const t = getToken();
-    const h = { 'Content-Type': 'application/json' };
-    if (t) h['X-Admin-Token'] = t;
-    return h;
-  }
-
-  async function load(){
-    try {
-      S.msg.textContent = 'Loading...';
-      const ps = Number(S.pageSize.value) || 25;
-      const params = new URLSearchParams({ page: String(page), pageSize: String(ps) });
-      if (S.plan.value) params.set('plan', S.plan.value);
-      if (S.status.value) params.set('status', S.status.value);
-      if (S.q.value) params.set('q', S.q.value.trim());
-      const res = await fetch('/v1/admin/licenses?' + params.toString(), { headers: headers() });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error || 'Request failed');
-      render(json.data);
-      S.msg.textContent = '';
-    } catch (e){
-      S.msg.textContent = 'Error: ' + (e && e.message ? e.message : e);
-    }
-  }
-
-  function render(data){
-    const items = Array.isArray(data.items) ? data.items : [];
-    S.tbody.innerHTML = '';
-    for (const lic of items){
-      const tr = document.createElement('tr');
-      var html = '';
-      html += '<td>' + lic.id + '</td>';
-      html += '<td class="small">' + lic.license_key_hash + '</td>';
-      html += '<td>';
-      html += '<div class="select is-small"><select data-id="' + lic.id + '" data-field="plan">';
-      html += '<option ' + (lic.plan==='free'?'selected':'') + '>free</option>';
-      html += '<option ' + (lic.plan==='basic'?'selected':'') + '>basic</option>';
-      html += '<option ' + (lic.plan==='pro'?'selected':'') + '>pro</option>';
-      html += '</select></div>';
-      html += '</td>';
-      html += '<td>';
-      html += '<div class="select is-small"><select data-id="' + lic.id + '" data-field="status">';
-      html += '<option ' + (lic.status==='active'?'selected':'') + '>active</option>';
-      html += '<option ' + (lic.status==='suspended'?'selected':'') + '>suspended</option>';
-      html += '<option ' + (lic.status==='expired'?'selected':'') + '>expired</option>';
-      html += '</select></div>';
-      html += '</td>';
-      html += '<td>';
-      html += '<input class="input is-small" type="date" data-id="' + lic.id + '" data-field="expires_at" value="' + (lic.expires_at ? lic.expires_at.slice(0,10) : '') + '" />';
-      html += '</td>';
-      html += '<td class="right">';
-      html += '<div class="controls">';
-      html += '<button class="button is-small is-link is-light save" data-id="' + lic.id + '">Save</button>';
-      html += '<span class="small muted" id="msg-' + lic.id + '"></span>';
-      html += '</div>';
-      html += '</td>';
-      tr.innerHTML = html;
-      S.tbody.appendChild(tr);
-    }
-    S.pageInfo.textContent = 'Page ' + data.page + ' • Total ' + data.total;
-  }
-
-  async function saveRow(id){
-    const plan = (document.querySelector('select[data-id="' + id + '"][data-field="plan"]')||{}).value;
-    const status = (document.querySelector('select[data-id="' + id + '"][data-field="status"]')||{}).value;
-    const expEl = (document.querySelector('input[data-id="' + id + '"][data-field="expires_at"]'));
-    const expires_at = expEl && expEl.value ? new Date(expEl.value).toISOString() : null;
-    const msg = document.getElementById('msg-'+id);
-    try {
-      msg.textContent = 'Saving...';
-      const res = await fetch('/v1/admin/licenses/'+id, { method: 'PATCH', headers: headers(), body: JSON.stringify({ plan, status, expires_at }) });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error || 'Failed');
-      msg.textContent = 'Saved'; msg.className = 'small success';
-      setTimeout(()=>{ msg.textContent=''; msg.className='small muted'; }, 1500);
-    } catch (e){
-      msg.textContent = 'Error'; msg.className = 'small error';
-    }
-  }
-
-  async function create(){
-    S.createMsg.textContent = 'Creating...'; S.createMsg.className = 'small muted';
-    try {
-      const license_key = S.newKey.value.trim();
-      const plan = S.newPlan.value; const status = S.newStatus.value;
-      const expires_at = S.newExpires.value ? new Date(S.newExpires.value).toISOString() : null;
-      const res = await fetch('/v1/admin/licenses', { method: 'POST', headers: headers(), body: JSON.stringify({ license_key, plan, status, expires_at }) });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error || 'Failed');
-      S.createMsg.textContent = 'Created id=' + json.data.id; S.createMsg.className = 'small success';
-      S.newKey.value = ''; S.newExpires.value = '';
-      load();
-    } catch (e){
-      S.createMsg.textContent = 'Error'; S.createMsg.className = 'small error';
-    }
-  }
-
-  const THEME_KEY = 'LM_ADMIN_THEME';
-  function applyTheme(t){ document.documentElement.setAttribute('data-theme', t); }
-  function initTheme(){
-    let t = localStorage.getItem(THEME_KEY);
-    if (!t) { t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light'; }
-    applyTheme(t);
-    const btn = document.getElementById('themeToggle');
-    if (btn) btn.textContent = t === 'dark' ? 'Light mode' : 'Dark mode';
-  }
-  document.getElementById('themeToggle')?.addEventListener('click', () => {
-    const current = document.documentElement.getAttribute('data-theme') || 'light';
-    const next = current === 'dark' ? 'light' : 'dark';
-    localStorage.setItem(THEME_KEY, next);
-    applyTheme(next);
-    const btn = document.getElementById('themeToggle');
-    if (btn) btn.textContent = next === 'dark' ? 'Light mode' : 'Dark mode';
-  });
-
-  S.saveToken.addEventListener('click', () => { setToken(S.token.value.trim()); S.tokenMsg.textContent = 'Saved'; setTimeout(()=> S.tokenMsg.textContent='', 1200); });
-  S.load.addEventListener('click', () => { page = 1; load(); });
-  S.prev.addEventListener('click', () => { if (page>1) { page--; load(); } });
-  S.next.addEventListener('click', () => { page++; load(); });
-  S.create.addEventListener('click', create);
-  S.tbody.addEventListener('click', (e) => { const t = e.target; if (t && t.classList && t.classList.contains('save')) { const id = t.getAttribute('data-id'); saveRow(id); } });
-
-  S.token.value = getToken();
-  initTheme();
-  load();
-})();
-`;
-
-const Page: FC = () => (
+const Page: FC<{ items?: LicenseRecord[]; page?: number; pageSize?: number; total?: number; plan?: string; status?: string; q?: string }> = (props) => (
   <html lang="en">
     <head>
       <meta charSet="utf-8" />
@@ -204,10 +49,10 @@ const Page: FC = () => (
               <label class="label is-small">Plan</label>
               <div class="select is-small">
                 <select id="plan">
-                  <option value="">any</option>
-                  <option value="free">free</option>
-                  <option value="basic">basic</option>
-                  <option value="pro">pro</option>
+                  <option value="" selected={!props.plan}>any</option>
+                  <option value="free" selected={props.plan==='free'}>free</option>
+                  <option value="basic" selected={props.plan==='basic'}>basic</option>
+                  <option value="pro" selected={props.plan==='pro'}>pro</option>
                 </select>
               </div>
             </div>
@@ -215,25 +60,25 @@ const Page: FC = () => (
               <label class="label is-small">Status</label>
               <div class="select is-small">
                 <select id="status">
-                  <option value="">any</option>
-                  <option value="active">active</option>
-                  <option value="suspended">suspended</option>
-                  <option value="expired">expired</option>
+                  <option value="" selected={!props.status}>any</option>
+                  <option value="active" selected={props.status==='active'}>active</option>
+                  <option value="suspended" selected={props.status==='suspended'}>suspended</option>
+                  <option value="expired" selected={props.status==='expired'}>expired</option>
                 </select>
               </div>
             </div>
             <div class="control">
               <label class="label is-small">Query (hash prefix)</label>
-              <input id="q" class="input is-small" type="search" placeholder="q" />
+              <input id="q" class="input is-small" type="search" placeholder="q" value={props.q || ''} />
             </div>
             <div class="control">
               <label class="label is-small">Page size</label>
               <div class="select is-small">
                 <select id="pageSize">
-                  <option>10</option>
-                  <option selected>25</option>
-                  <option>50</option>
-                  <option>100</option>
+                  <option selected={String(props.pageSize||25)==='10'}>10</option>
+                  <option selected={String(props.pageSize||25)==='25'}>25</option>
+                  <option selected={String(props.pageSize||25)==='50'}>50</option>
+                  <option selected={String(props.pageSize||25)==='100'}>100</option>
                 </select>
               </div>
             </div>
@@ -289,7 +134,7 @@ const Page: FC = () => (
               <button id="prev" class="button is-small">Prev</button>
             </div>
             <div class="control">
-              <span id="pageInfo" class="small"></span>
+              <span id="pageInfo" class="small">Page {props.page || 1} • Total {props.total || 0}</span>
             </div>
             <div class="control">
               <button id="next" class="button is-small">Next</button>
@@ -307,19 +152,279 @@ const Page: FC = () => (
                 <th class="has-text-right">Actions</th>
               </tr>
             </thead>
-            <tbody></tbody>
+            <tbody>
+              {(props.items || []).map((lic) => (
+                <tr>
+                  <td>{lic.id}</td>
+                  <td class="small">{lic.license_key_hash}</td>
+                  <td>
+                    <div class="select is-small">
+                      <select data-id={String(lic.id)} data-field="plan">
+                        <option selected={lic.plan==='free'}>free</option>
+                        <option selected={lic.plan==='basic'}>basic</option>
+                        <option selected={lic.plan==='pro'}>pro</option>
+                      </select>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="select is-small">
+                      <select data-id={String(lic.id)} data-field="status">
+                        <option selected={lic.status==='active'}>active</option>
+                        <option selected={lic.status==='suspended'}>suspended</option>
+                        <option selected={lic.status==='expired'}>expired</option>
+                      </select>
+                    </div>
+                  </td>
+                  <td>
+                    <input class="input is-small" type="date" data-id={String(lic.id)} data-field="expires_at" value={lic.expires_at ? lic.expires_at.slice(0,10) : ''} />
+                  </td>
+                  <td class="right">
+                    <div class="controls">
+                      <button class="button is-small is-link is-light save" data-id={String(lic.id)}>Save</button>
+                      <button class="button is-small is-light expire-today" data-id={String(lic.id)}>Expire today</button>
+                      <span class="small muted" id={`msg-${lic.id}`}></span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
           </table>
         </div>
       </section>
 
-      <script dangerouslySetInnerHTML={{ __html: CLIENT_JS }} />
+      <script src="/admin/app.js"></script>
     </body>
   </html>
 );
 
 const adminUi = new Hono<{ Bindings: Bindings }>();
 
-adminUi.get('/', (c) => c.html(<Page />));
+function parseCookie(cookieHeader: string | null | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!cookieHeader) return out;
+  cookieHeader.split(';').forEach((part) => {
+    const [k, ...rest] = part.trim().split('=');
+    if (!k) return;
+    out[k] = decodeURIComponent(rest.join('='));
+  });
+  return out;
+}
+
+function renderLogin(message?: string) {
+  return (
+    <html lang="en">
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>ListenMode Admin — Login</title>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css" />
+      </head>
+      <body>
+        <section class="section">
+          <div class="container" style="max-width:520px;">
+            <h1 class="title is-4">Admin login</h1>
+            {message ? <p class="notification is-danger is-light">{message}</p> : null}
+            <form method="get" action="/admin">
+              <div class="field">
+                <label class="label is-small">X-Admin-Token</label>
+                <div class="control">
+                  <input name="token" class="input" type="password" placeholder="Paste admin token" />
+                </div>
+              </div>
+              <div class="field is-grouped">
+                <div class="control"><button class="button is-primary" type="submit">Continue</button></div>
+              </div>
+            </form>
+          </div>
+        </section>
+      </body>
+    </html>
+  );
+}
+
+adminUi.get('/', async (c) => {
+  // Admin token guard for SSR
+  const queryToken = c.req.query('token');
+  if (queryToken) {
+    if (queryToken !== c.env.ADMIN_API_TOKEN) {
+      return c.html(renderLogin('Invalid admin token.'));
+    }
+    // Set a short-lived cookie for SSR guard and redirect to clean URL
+    c.header('Set-Cookie', `admin_token=${encodeURIComponent(queryToken)}; Path=/; Max-Age=1800; SameSite=Strict; Secure; HttpOnly`);
+    return c.redirect('/admin');
+  }
+
+  const cookies = parseCookie(c.req.header('Cookie'));
+  const cookieToken = cookies['admin_token'];
+  if (!cookieToken || cookieToken !== c.env.ADMIN_API_TOKEN) {
+    return c.html(renderLogin());
+  }
+
+  const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
+  const rawPageSize = parseInt(c.req.query('pageSize') || '25', 10);
+  const pageSize = Math.max(1, Math.min(200, isNaN(rawPageSize) ? 25 : rawPageSize));
+  const offset = (page - 1) * pageSize;
+  const plan = c.req.query('plan') || undefined;
+  const status = c.req.query('status') || undefined;
+  const q = c.req.query('q') || undefined;
+
+  const where: string[] = [];
+  const params: any[] = [];
+  const countParams: any[] = [];
+  if (plan) { where.push('plan = ?'); params.push(plan); countParams.push(plan); }
+  if (status) { where.push('status = ?'); params.push(status); countParams.push(status); }
+  if (q) { where.push('license_key_hash LIKE ?'); params.push(`${q}%`); countParams.push(`${q}%`); }
+  const whereSql = where.length ? ` WHERE ${where.join(' AND ')}` : '';
+
+  const listStmt = c.env.DB
+    .prepare(
+      `SELECT id, license_key_hash, stripe_customer_id, plan, status, created_at, expires_at, updated_at
+       FROM licenses${whereSql}
+       ORDER BY created_at DESC
+       LIMIT ? OFFSET ?`
+    )
+    .bind(...params, pageSize, offset);
+  const listRes = await listStmt.all<LicenseRecord>();
+  const items = listRes.results || [];
+
+  const countStmt = c.env.DB
+    .prepare(`SELECT COUNT(*) as cnt FROM licenses${whereSql}`)
+    .bind(...countParams);
+  const countRow = await countStmt.first<{ cnt: number }>();
+  const total = countRow?.cnt ?? 0;
+
+  return c.html(<Page items={items} page={page} pageSize={pageSize} total={total} plan={plan} status={status} q={q} />);
+});
+adminUi.get('/app.js', (c) => c.body(ADMIN_CLIENT_JS, 200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store' }));
+
+// Helper: check admin cookie
+function isAuthorized(c: any): boolean {
+  const cookies = parseCookie(c.req.header('Cookie'));
+  const cookieToken = cookies['admin_token'];
+  return !!cookieToken && cookieToken === c.env.ADMIN_API_TOKEN;
+}
+
+// Admin API under /admin/api/* guarded by cookie; used by client JS
+adminUi.get('/api/licenses', async (c) => {
+  if (!isAuthorized(c)) return c.json({ success: false, error: 'Unauthorized' }, 401);
+
+  const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
+  const rawPageSize = parseInt(c.req.query('pageSize') || '25', 10);
+  const pageSize = Math.max(1, Math.min(200, isNaN(rawPageSize) ? 25 : rawPageSize));
+  const offset = (page - 1) * pageSize;
+  const plan = c.req.query('plan') || undefined;
+  const status = c.req.query('status') || undefined;
+  const q = c.req.query('q') || undefined;
+
+  const where: string[] = [];
+  const params: any[] = [];
+  const countParams: any[] = [];
+  if (plan) { where.push('plan = ?'); params.push(plan); countParams.push(plan); }
+  if (status) { where.push('status = ?'); params.push(status); countParams.push(status); }
+  if (q) { where.push('license_key_hash LIKE ?'); params.push(`${q}%`); countParams.push(`${q}%`); }
+  const whereSql = where.length ? ` WHERE ${where.join(' AND ')}` : '';
+
+  const listStmt = c.env.DB
+    .prepare(
+      `SELECT id, license_key_hash, stripe_customer_id, plan, status, created_at, expires_at, updated_at
+       FROM licenses${whereSql}
+       ORDER BY created_at DESC
+       LIMIT ? OFFSET ?`
+    )
+    .bind(...params, pageSize, offset);
+  const listRes = await listStmt.all<LicenseRecord>();
+  const items = listRes.results || [];
+
+  const countStmt = c.env.DB
+    .prepare(`SELECT COUNT(*) as cnt FROM licenses${whereSql}`)
+    .bind(...countParams);
+  const countRow = await countStmt.first<{ cnt: number }>();
+  const total = countRow?.cnt ?? 0;
+
+  return c.json({ success: true, data: { items, page, pageSize, total } });
+});
+
+adminUi.post('/api/licenses', async (c) => {
+  if (!isAuthorized(c)) return c.json({ success: false, error: 'Unauthorized' }, 401);
+  const body = await c.req.json<{ license_key?: string; plan?: string; status?: string; expires_at?: string | null }>();
+  const licenseKey = (body.license_key || '').toString();
+  if (!licenseKey) return c.json({ success: false, error: 'license_key required' }, 400);
+  const plan = (body.plan || 'free').toString();
+  const status = (body.status || 'active').toString();
+  if (!['free','basic','pro'].includes(plan)) return c.json({ success: false, error: 'Invalid plan' }, 400);
+  if (!['active','suspended','expired'].includes(status)) return c.json({ success: false, error: 'Invalid status' }, 400);
+
+  let expires: string | null = null;
+  if (Object.prototype.hasOwnProperty.call(body, 'expires_at')) {
+    if (body.expires_at === null) {
+      expires = null;
+    } else if (typeof body.expires_at === 'string' && body.expires_at.trim().length > 0) {
+      const d = new Date(body.expires_at);
+      if (isNaN(d.getTime())) return c.json({ success: false, error: 'Invalid expires_at' }, 400);
+      expires = d.toISOString();
+    } else {
+      return c.json({ success: false, error: 'Invalid expires_at' }, 400);
+    }
+  }
+
+  // Use same hashing as auth/jwt
+  const enc = new TextEncoder();
+  const buf = await crypto.subtle.digest('SHA-256', enc.encode(licenseKey));
+  const hash = [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+
+  try {
+    await c.env.DB
+      .prepare('INSERT INTO licenses (license_key_hash, plan, status, expires_at) VALUES (?, ?, ?, ?)')
+      .bind(hash, plan, status, expires)
+      .run();
+  } catch {
+    return c.json({ success: false, error: 'License already exists' }, 400);
+  }
+
+  const row = await c.env.DB
+    .prepare('SELECT * FROM licenses WHERE license_key_hash = ?')
+    .bind(hash)
+    .first<LicenseRecord>();
+  return c.json({ success: true, data: row });
+});
+
+adminUi.patch('/api/licenses/:id', async (c) => {
+  if (!isAuthorized(c)) return c.json({ success: false, error: 'Unauthorized' }, 401);
+  const id = parseInt(c.req.param('id'), 10);
+  if (!Number.isFinite(id)) return c.json({ success: false, error: 'Invalid id' }, 400);
+  const body = await c.req.json<Partial<Pick<LicenseRecord, 'status' | 'plan' | 'expires_at'>>>();
+  const setClauses: string[] = [];
+  const values: any[] = [];
+
+  if (typeof body.plan !== 'undefined') {
+    if (!['free','basic','pro'].includes(body.plan as any)) return c.json({ success: false, error: 'Invalid plan' }, 400);
+    setClauses.push('plan = ?'); values.push(body.plan);
+  }
+  if (typeof body.status !== 'undefined') {
+    if (!['active','suspended','expired'].includes(body.status as any)) return c.json({ success: false, error: 'Invalid status' }, 400);
+    setClauses.push('status = ?'); values.push(body.status);
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'expires_at')) {
+    let expires: string | null = null;
+    if (body.expires_at === null) {
+      expires = null;
+    } else if (typeof body.expires_at === 'string' && body.expires_at.trim().length > 0) {
+      const d = new Date(body.expires_at);
+      if (isNaN(d.getTime())) return c.json({ success: false, error: 'Invalid expires_at' }, 400);
+      expires = d.toISOString();
+    } else {
+      return c.json({ success: false, error: 'Invalid expires_at' }, 400);
+    }
+    setClauses.push('expires_at = ?'); values.push(expires);
+  }
+  if (setClauses.length === 0) return c.json({ success: false, error: 'No fields to update' }, 400);
+
+  const sql = `UPDATE licenses SET ${setClauses.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
+  await c.env.DB.prepare(sql).bind(...values, id).run();
+  const row = await c.env.DB.prepare('SELECT * FROM licenses WHERE id = ?').bind(id).first<LicenseRecord>();
+  if (!row) return c.json({ success: false, error: 'Not found' }, 404);
+  return c.json({ success: true, data: row });
+});
 
 export { adminUi as adminUiRoutes };
 
