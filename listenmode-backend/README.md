@@ -116,3 +116,56 @@ Rozwiązywanie problemów
 - „Couldn't find a D1 DB …”: sprawdź `--config` i `database_id` w `wrangler.toml` vs `wrangler d1 list`.
 - 401 przy `/v1/auth/usage` lub `/v1/tts`: sprawdź poprawność Bearer JWT i ważność (15 min), oraz `JWT_SECRET` na Workerze.
 - 502 z `/v1/tts` lub `/v1/voices`: upewnij się, że `AZURE_TTS_API_KEY` i `AZURE_TTS_REGION` są ustawione.
+
+Jak działa Cloudflare Workers (w skrócie)
+- Każdy deploy tworzy nową wersję Workera, replikowaną globalnie. Ruch trafia do najbliższego węzła.
+- Bindings udostępniają zasoby w `c.env.*` (np. `DB`, `VOICES_CACHE`, `AZURE_TTS_API_KEY`).
+- Hono upraszcza routing i middleware (CORS/logowanie). Nasz entrypoint to `src/index.ts` i eksport domyślny `app`.
+- D1 to zarządzany SQLite. Zapytania wykonujemy przez `DB.prepare(...).bind(...).run()/first()`.
+- KV to rozproszony storage klucz→wartość (u nas cache głosów na 24h).
+
+Przydatne komendy (produkcja)
+```bash
+# Kto zalogowany
+bunx --bun wrangler whoami
+
+# Lista D1 i info o bazie
+bunx --bun wrangler d1 list
+bunx --bun wrangler d1 info listenmode-db
+
+# Zapytanie SQL (remote)
+bunx --bun wrangler d1 execute listenmode-db --remote \
+  --config="$(pwd)/listenmode-backend/wrangler.toml" \
+  --command "SELECT id, plan, status FROM licenses LIMIT 5;"
+
+# Odczyt/zapis sekretów (uwaga: write-only)
+bunx --bun wrangler secret list --config="$(pwd)/listenmode-backend/wrangler.toml"
+bunx --bun wrangler secret put ADMIN_API_TOKEN --config="$(pwd)/listenmode-backend/wrangler.toml"
+
+# Deploy aktualnej wersji
+bunx --bun wrangler deploy --config="$(pwd)/listenmode-backend/wrangler.toml"
+```
+
+Debugowanie i logi
+- Podgląd logów produkcyjnych Workera:
+```bash
+bunx --bun wrangler tail --config="$(pwd)/listenmode-backend/wrangler.toml"
+```
+- Diagnoza CORS: sprawdź, czy `Origin` klienta należy do dozwolonych; middleware jest w `src/index.ts`.
+- 401: brak/niepoprawny Bearer JWT lub niezgodność `JWT_SECRET`.
+- 402: plan/licznik przekroczony; backend zwróci komunikat z pozostałym limitem.
+- 502: błędy dostawcy TTS/Voices; sprawdź sekrety i region, oraz logi (`tts_azure_error`).
+
+Inspekcja KV i cache
+- Endpoint `GET /v1/voices` zapisuje wynik do KV pod kluczem `voices:{region}` na 24h.
+- Purge cache (admin):
+```bash
+curl -s -X DELETE "$BASE/v1/voices/cache?region=westeurope" -H 'X-Admin-Token: <TOKEN>' | jq .
+```
+
+Notatka o Hono
+- Hono zapewnia szybki router i kompatybilność z środowiskiem Workers. Dokumentacja: [Hono](https://hono.dev/llms-full.txt).
+- Często używane funkcje: `app.route()`, `app.use()` (middleware), `c.json()`, `c.req.json()`, `c.req.query()`.
+
+Dalsza lektura
+- Przegląd platformy Workers i dodatków: [Cloudflare Developer Docs](https://developers.cloudflare.com/llms.txt)
