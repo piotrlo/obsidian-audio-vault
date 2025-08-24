@@ -35,6 +35,7 @@ export async function tryPlayExistingParts(params: {
         const abort = new AbortController();
         const session: PlaybackSession = { abort, audioEl, mediaSource: null, sourceBuffer: null, lastBlob: blob, fileBase: base, objectUrl: url };
         setSession(session);
+        try { notifyUtil(settings, "Rozpoczynam odtwarzanie istniejącego pliku (scalony)", true); } catch {}
         try { await audioEl.play(); } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           try { notifyUtil(settings, `Audio play failed (existing merged): ${msg}`); } catch {}
@@ -59,6 +60,7 @@ export async function tryPlayExistingParts(params: {
   if (!existingPaths.length) return false;
 
   try {
+    try { notifyUtil(settings, `Rozpoczynam odtwarzanie istniejących plików (${existingPaths.length} części)...`, true); } catch {}
     for (let i = 0; i < existingPaths.length; i++) {
       if (stopRequested()) break;
       const p = existingPaths[i];
