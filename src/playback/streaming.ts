@@ -39,6 +39,8 @@ export async function playStreamedPartAndSave(params: {
   const audioEl = new Audio(objectUrl);
   audioEl.playbackRate = playbackRateFromRateSetting(settings.rate);
 
+  try { notifyUtil(settings, `Rozpoczynam odtwarzanie (streaming) — część ${part}`, true); } catch {}
+
   await new Promise<void>((res) => mediaSource.addEventListener("sourceopen", () => res(), { once: true }));
   const sourceBuffer = mediaSource.addSourceBuffer(streamMime);
 
