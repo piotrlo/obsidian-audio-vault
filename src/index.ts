@@ -366,8 +366,8 @@ notifyUtil(this.settings, `TTS failed on part ${part}: ${msg}` , true);
       if (!ctx) return;
 
       const totalParts = ctx.chunks.length;
-      notifyUtil(this.settings, `Zaczynam pobieranie bez odtwarzania (${totalParts} części)...`, true);
-      try { notifyUtil(this.settings, `Pobieranie uruchomione w tle`, true); } catch {}
+      notifyUtil(this.settings, `Starting download (no playback) — ${totalParts} parts...`, true);
+      try { notifyUtil(this.settings, `Download started in background`, true); } catch {}
 
       /** Ask to overwrite: if files exist and user wants fresh, reuse deleteExistingParts behavior */
       const ext = fileExtFromFormat(this.settings.outputFormat);
