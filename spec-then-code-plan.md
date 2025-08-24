@@ -116,6 +116,7 @@ Scope
 Tasks
 - Worker routes: POST /v1/tts (stream), GET /v1/voices; env secrets for Azure; basic logging.
 - Admin route: DELETE /v1/voices/cache (X-Admin-Token) to purge KV cache manually.
+- Admin routes v1: GET /v1/admin/licenses (list/paginate/filter), GET /v1/admin/licenses/:id, PATCH /v1/admin/licenses/:id (status/plan/expires_at), POST /v1/admin/licenses (optional). Wszystkie z guardem X-Admin-Token.
 - KV cache for voices 24h; D1 schema scaffolding (licenses, usage_monthly) without enforcing yet.
 - Client: switch to backend URLs with a “Use backend” toggle; default off in MVP channel.
 
@@ -137,6 +138,7 @@ Stage 3 status update (2025-08-24)
   - Docs updated in this plan; see spec for architecture recap.
   - CORS restricted to Obsidian/localhost; TTS relies on cors middleware (no wildcard header).
   - Admin purge cache secured by X-Admin-Token; added ADMIN_API_TOKEN binding and docs.
+  - Adminikacja licencji v1: dodano trasy /v1/admin/licenses (lista + filtry + paginacja), /v1/admin/licenses/:id (szczegóły), PATCH /v1/admin/licenses/:id (edycja status/plan/expires_at), POST /v1/admin/licenses (opcjonalne tworzenie z haszowaniem klucza). Wszystkie trasy wymagają X-Admin-Token i zwracają spójne ApiResponse.
   - Backend operated production-only; smoke tests run against workers.dev with test licenses.
 
 Stage 4 — Client licensing flow and limits UI
