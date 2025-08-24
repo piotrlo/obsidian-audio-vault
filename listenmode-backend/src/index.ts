@@ -26,6 +26,26 @@ app.use('/v1/*', cors({
 
 app.get('/health', (c) => c.json({ status: 'ok', ts: new Date().toISOString(), env: c.env.ENVIRONMENT || 'unknown' }));
 
+// Security headers + CSP for admin UI only
+function applyAdminSecurityHeaders(c: any) {
+  c.header('X-Frame-Options', 'DENY');
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('Referrer-Policy', 'no-referrer');
+  c.header('Permissions-Policy', 'accelerometer=(), autoplay=(), camera=(), document-domain=(), encrypted-media=(), fullscreen=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), usb=()');
+  c.header('Content-Security-Policy', [
+    "default-src 'none'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+    "img-src 'self' data:",
+    "connect-src 'self'",
+    "form-action 'self'",
+    "base-uri 'none'",
+  ].join('; '));
+}
+
+app.use('/admin', async (c, next) => { applyAdminSecurityHeaders(c); await next(); });
+app.use('/admin/*', async (c, next) => { applyAdminSecurityHeaders(c); await next(); });
+
 app.route('/v1/auth', authRoutes);
 app.route('/v1/tts', ttsRoutes);
 app.route('/v1/voices', voicesRoutes);

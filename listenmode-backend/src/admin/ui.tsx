@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Bindings, LicenseRecord } from '../types';
 import type { FC } from 'hono/jsx';
 import { ADMIN_CLIENT_JS } from './app';
+import jwt from '@tsndr/cloudflare-worker-jwt';
 
 
 const Page: FC<{ items?: LicenseRecord[]; page?: number; pageSize?: number; total?: number; plan?: string; status?: string; q?: string }> = (props) => (
@@ -243,21 +244,38 @@ function renderLogin(message?: string) {
 }
 
 adminUi.get('/', async (c) => {
-  // Admin token guard for SSR
+  // Admin login via query token -> issue short-lived JWT in HttpOnly cookie
   const queryToken = c.req.query('token');
   if (queryToken) {
     if (queryToken !== c.env.ADMIN_API_TOKEN) {
       return c.html(renderLogin('Invalid admin token.'));
     }
-    // Set a short-lived cookie for SSR guard and redirect to clean URL
-    c.header('Set-Cookie', `admin_token=${encodeURIComponent(queryToken)}; Path=/; Max-Age=1800; SameSite=Strict; Secure; HttpOnly`);
+    const now = Math.floor(Date.now() / 1000);
+    const token = await jwt.sign({ admin: true, iat: now, exp: now + 1800 }, c.env.JWT_SECRET);
+    c.header('Set-Cookie', `admin_session=${encodeURIComponent(token)}; Path=/; Max-Age=1800; SameSite=Strict; Secure; HttpOnly`);
     return c.redirect('/admin');
   }
 
+  // Verify admin_session JWT
   const cookies = parseCookie(c.req.header('Cookie'));
-  const cookieToken = cookies['admin_token'];
-  if (!cookieToken || cookieToken !== c.env.ADMIN_API_TOKEN) {
+  const sessionJwt = cookies['admin_session'];
+  if (!sessionJwt) {
     return c.html(renderLogin());
+  }
+  const ok = await jwt.verify(sessionJwt, c.env.JWT_SECRET).catch(() => false);
+  if (!ok) {
+    return c.html(renderLogin());
+  }
+  const { payload } = jwt.decode(sessionJwt);
+  const p: any = payload || {};
+  if (!p.admin || !p.exp || typeof p.exp !== 'number') {
+    return c.html(renderLogin());
+  }
+  // Sliding renewal: refresh if < 15 min left
+  const now = Math.floor(Date.now() / 1000);
+  if (p.exp - now < 900) {
+    const refreshed = await jwt.sign({ admin: true, iat: now, exp: now + 1800 }, c.env.JWT_SECRET);
+    c.header('Set-Cookie', `admin_session=${encodeURIComponent(refreshed)}; Path=/; Max-Age=1800; SameSite=Strict; Secure; HttpOnly`);
   }
 
   const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
@@ -297,16 +315,47 @@ adminUi.get('/', async (c) => {
 });
 adminUi.get('/app.js', (c) => c.body(ADMIN_CLIENT_JS, 200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store' }));
 
-// Helper: check admin cookie
-function isAuthorized(c: any): boolean {
+// Helper: verify admin session JWT, optionally refresh cookie (sliding renewal)
+async function verifyAdminSession(c: any): Promise<boolean> {
   const cookies = parseCookie(c.req.header('Cookie'));
-  const cookieToken = cookies['admin_token'];
-  return !!cookieToken && cookieToken === c.env.ADMIN_API_TOKEN;
+  const sessionJwt = cookies['admin_session'];
+  if (!sessionJwt) return false;
+  try {
+    const ok = await jwt.verify(sessionJwt, c.env.JWT_SECRET);
+    if (!ok) return false;
+    const { payload } = jwt.decode(sessionJwt);
+    const p: any = payload || {};
+    if (!p.admin || !p.exp || typeof p.exp !== 'number') return false;
+    const now = Math.floor(Date.now() / 1000);
+    if (p.exp - now < 900) {
+      const refreshed = await jwt.sign({ admin: true, iat: now, exp: now + 1800 }, c.env.JWT_SECRET);
+      c.header('Set-Cookie', `admin_session=${encodeURIComponent(refreshed)}; Path=/; Max-Age=1800; SameSite=Strict; Secure; HttpOnly`);
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
+
+// Simple rate limiter for /admin/api/* (per IP, 60 req/min)
+adminUi.use('/api/*', async (c, next) => {
+  const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For') || 'unknown';
+  const bucket = Math.floor(Date.now() / 60000);
+  const key = `adminrl:${ip}:${bucket}`;
+  try {
+    const current = await c.env.VOICES_CACHE.get(key);
+    const count = current ? parseInt(current, 10) || 0 : 0;
+    if (count >= 60) {
+      return c.json({ success: false, error: 'Too Many Requests' }, 429);
+    }
+    await c.env.VOICES_CACHE.put(key, String(count + 1), { expirationTtl: 70 });
+  } catch {}
+  await next();
+});
 
 // Admin API under /admin/api/* guarded by cookie; used by client JS
 adminUi.get('/api/licenses', async (c) => {
-  if (!isAuthorized(c)) return c.json({ success: false, error: 'Unauthorized' }, 401);
+  if (!(await verifyAdminSession(c))) return c.json({ success: false, error: 'Unauthorized' }, 401);
 
   const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
   const rawPageSize = parseInt(c.req.query('pageSize') || '25', 10);
@@ -345,7 +394,7 @@ adminUi.get('/api/licenses', async (c) => {
 });
 
 adminUi.post('/api/licenses', async (c) => {
-  if (!isAuthorized(c)) return c.json({ success: false, error: 'Unauthorized' }, 401);
+  if (!(await verifyAdminSession(c))) return c.json({ success: false, error: 'Unauthorized' }, 401);
   const body = await c.req.json<{ license_key?: string; plan?: string; status?: string; expires_at?: string | null }>();
   const licenseKey = (body.license_key || '').toString();
   if (!licenseKey) return c.json({ success: false, error: 'license_key required' }, 400);
@@ -389,7 +438,7 @@ adminUi.post('/api/licenses', async (c) => {
 });
 
 adminUi.patch('/api/licenses/:id', async (c) => {
-  if (!isAuthorized(c)) return c.json({ success: false, error: 'Unauthorized' }, 401);
+  if (!(await verifyAdminSession(c))) return c.json({ success: false, error: 'Unauthorized' }, 401);
   const id = parseInt(c.req.param('id'), 10);
   if (!Number.isFinite(id)) return c.json({ success: false, error: 'Invalid id' }, 400);
   const body = await c.req.json<Partial<Pick<LicenseRecord, 'status' | 'plan' | 'expires_at'>>>();
