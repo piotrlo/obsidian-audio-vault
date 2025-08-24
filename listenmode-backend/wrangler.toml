@@ -1,0 +1,20 @@
+name = "listenmode-backend"
+main = "src/index.ts"
+compatibility_date = "2024-08-21"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "listenmode-db"
+database_id = "e6dc4370-187b-465a-a3af-07fb8dc2e60b"
+
+[[kv_namespaces]]
+binding = "VOICES_CACHE"
+id = "abb4132622d54d239bd1c275774dd419"
+preview_id = "b8fb1626e0194e0385da5bc4bc806c4c"
+
+[vars]
+ENVIRONMENT = "development"
+
+[env.production.vars]
+ENVIRONMENT = "production"
+
