@@ -1,16 +1,20 @@
 import { Hono } from 'hono';
+import type { Context, Next } from 'hono';
 import { stream } from 'hono/streaming';
 import type { Bindings, ApiResponse, JWTPayload, TtsRequest } from '../types';
 import { verifyJWT } from '../auth/jwt';
 import { checkQuotaLimit, incrementUsage, logEvent } from '../db/queries';
 import { PLAN_LIMITS } from '../types';
 
-const tts = new Hono<{ Bindings: Bindings }>();
+const tts = new Hono<{ Bindings: Bindings; Variables: { jwtPayload: JWTPayload } }>();
 
 /**
  * Middleware to validate Authorization: Bearer <token>
  */
-const authMiddleware = async (c: any, next: any) => {
+const authMiddleware = async (
+  c: Context<{ Bindings: Bindings; Variables: { jwtPayload: JWTPayload } }>,
+  next: Next
+) => {
   const authHeader = c.req.header('Authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return c.json<ApiResponse>({ success: false, error: 'Unauthorized' }, 401);
@@ -27,7 +31,7 @@ const authMiddleware = async (c: any, next: any) => {
  */
 tts.post('/', authMiddleware, async (c) => {
   try {
-    const payload = c.get('jwtPayload') as JWTPayload;
+    const payload = c.get('jwtPayload');
     const { ssml, outputFormat, language } = await c.req.json<TtsRequest>();
     if (!ssml || !outputFormat || !language) {
       return c.json<ApiResponse>({ success: false, error: 'Missing required fields' }, 400);

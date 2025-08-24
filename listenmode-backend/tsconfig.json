@@ -5,6 +5,8 @@
     "moduleResolution": "Bundler",
     "strict": true,
     "noEmit": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "hono/jsx",
     "types": [
       "@cloudflare/workers-types"
     ],

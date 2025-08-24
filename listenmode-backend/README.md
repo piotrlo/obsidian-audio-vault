@@ -16,6 +16,11 @@ Endpointy
 - POST /v1/tts → strumieniowe proxy do Azure TTS (Bearer JWT)
 - GET  /v1/voices → lista głosów (cache 24h w KV)
 - DELETE /v1/voices/cache → czyszczenie cache (wymaga X-Admin-Token)
+ - GET  /v1/admin/licenses → lista licencji (paginacja, filtry plan/status/q; wymaga X-Admin-Token)
+ - GET  /v1/admin/licenses/:id → szczegóły licencji (wymaga X-Admin-Token)
+ - PATCH /v1/admin/licenses/:id → edycja pól: status/plan/expires_at (wymaga X-Admin-Token)
+ - POST /v1/admin/licenses → utworzenie licencji (opcjonalne; licencja hashowana na backendzie; wymaga X-Admin-Token)
+ - GET  /admin → prosty panel HTML do zarządzania licencjami (wpisz X-Admin-Token w polu „Admin Token”)
 
 Bindings
 - D1: listenmode-db (tabele: licenses, usage_monthly, events)
@@ -144,6 +149,15 @@ bunx --bun wrangler secret put ADMIN_API_TOKEN --config="$(pwd)/listenmode-backe
 
 # Deploy aktualnej wersji
 bunx --bun wrangler deploy --config="$(pwd)/listenmode-backend/wrangler.toml"
+
+# Admin — smoke test (licenses)
+BASE="https://listenmode-backend.<twoj-subdomain>.workers.dev"
+TOKEN="<ADMIN_API_TOKEN>"
+curl -s "$BASE/v1/admin/licenses?page=1&pageSize=10" -H "X-Admin-Token: $TOKEN" | jq .
+curl -s "$BASE/v1/admin/licenses/1" -H "X-Admin-Token: $TOKEN" | jq .
+curl -s -X PATCH "$BASE/v1/admin/licenses/1" -H "X-Admin-Token: $TOKEN" -H 'Content-Type: application/json' -d '{"status":"suspended"}' | jq .
+curl -s -X POST "$BASE/v1/admin/licenses" -H "X-Admin-Token: $TOKEN" -H 'Content-Type: application/json' -d '{"license_key":"LM-NEW-123","plan":"basic","status":"active"}' | jq .
+open "$BASE/admin"
 ```
 
 Debugowanie i logi
