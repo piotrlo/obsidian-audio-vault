@@ -1,7 +1,7 @@
 import { Plugin, Platform, TFile } from "obsidian";
 import { toSafeBase } from "./utils/safe-name";
 import { buildSsml } from "./utils/ssml";
-import { ensureFolder, writeBinary, deleteExistingParts, upsertAudioReferenceSorted } from "./utils/fs";
+import { ensureFolder, writeBinary, deleteExistingParts, upsertAudioReferenceSorted, replaceAudioReferencesWithSingle } from "./utils/fs";
 import { fetchTtsAudio } from "./tts/azure";
 import { log, warn, setDebugLogging } from "./utils/logger";
 import { ListenModeSettingsTab } from "./obsidian/settings";
@@ -14,6 +14,7 @@ import { playBufferedPrefetch as playBufferedPrefetchHelper } from "./playback/b
 import { DEFAULT_SETTINGS } from "./core/settings";
 import { playStreamedPartAndSave } from "./playback/streaming";
 import { notify as notifyUtil } from "./core/notify";
+import { Mp3Assembler } from "./utils/mp3";
 
 
 /**
@@ -80,7 +81,32 @@ destroyPanel(): void {}
       const isIos = Platform.isIosApp;
       if (isIos) {
         notifyUtil(this.settings, "Using buffered prefetch mode (iOS)");
-        await this.playBufferedPrefetch(ctx.chunks, 0, ctx.base, ctx.lang, ctx.folder, ctx.file);
+        const mergingEnabled = !!this.settings.mergeParts && /mp3/i.test(this.settings.outputFormat);
+        const assembler = mergingEnabled ? new Mp3Assembler() : null;
+        await this.playBufferedPrefetch(
+          ctx.chunks,
+          0,
+          ctx.base,
+          ctx.lang,
+          ctx.folder,
+          ctx.file,
+          assembler ? (u8) => assembler.append(u8) : undefined,
+          assembler ? false : true
+        );
+        if (assembler && !this.stopRequested) {
+          try {
+            const merged = assembler.build();
+            const audioPath = `${ctx.folder}/${ctx.base}.mp3`;
+            const ab = new ArrayBuffer(merged.byteLength);
+            new Uint8Array(ab).set(merged);
+            await writeBinary(this.app, audioPath, ab);
+            await replaceAudioReferencesWithSingle(this.app, ctx.file, audioPath);
+            notifyUtil(this.settings, `Zapisano scalony plik: [[${audioPath}]]`);
+          } catch (e: unknown) {
+            const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
+            notifyUtil(this.settings, `Nie udało się zapisać pliku scalonego: ${msg}`, true);
+          }
+        }
         return;
       }
 
@@ -154,6 +180,8 @@ destroyPanel(): void {}
     file: TFile
   ): Promise<void> {
     let part = 1;
+    const mergingEnabled = !!this.settings.mergeParts && /mp3/i.test(this.settings.outputFormat);
+    const assembler = mergingEnabled ? new Mp3Assembler() : null;
     for (const chunk of chunks) {
       if (this.stopRequested) break;
       try {
@@ -167,7 +195,21 @@ destroyPanel(): void {}
 
         if (!(this.settings.enableStreaming && streamSupported)) {
 notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
-          await this.playBufferedPrefetch(chunks, part - 1, base, lang, folder, file);
+          await this.playBufferedPrefetch(chunks, part - 1, base, lang, folder, file, assembler ? (u8) => assembler.append(u8) : undefined, assembler ? false : true);
+          if (assembler && !this.stopRequested) {
+            try {
+              const merged = assembler.build();
+              const audioPath = `${folder}/${base}.mp3`;
+              const ab = new ArrayBuffer(merged.byteLength);
+              new Uint8Array(ab).set(merged);
+              await writeBinary(this.app, audioPath, ab);
+              await replaceAudioReferencesWithSingle(this.app, file, audioPath);
+              notifyUtil(this.settings, `Zapisano scalony plik: [[${audioPath}]]`);
+            } catch (e: unknown) {
+              const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
+              notifyUtil(this.settings, `Nie udało się zapisać pliku scalonego: ${msg}`, true);
+            }
+          }
           return;
         }
 
@@ -181,7 +223,9 @@ notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
             folder,
             file,
             abort,
-            setSession: (s) => { this.currentSession = s; }
+            setSession: (s) => { this.currentSession = s; },
+            appendToMerged: assembler ? (u8) => assembler.append(u8) : undefined,
+            savePerPart: assembler ? false : true
           });
           this.currentSession = await cleanupSessionResourcesHelper(this.currentSession);
           this.currentSession = null;
@@ -191,7 +235,21 @@ notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
           const detail = (err && (err as any).message) ? (err as any).message : String(err);
           warn("Streaming failed; falling back to buffered", { detail, part });
           this.currentSession = await cleanupSessionResourcesHelper(this.currentSession, true);
-          await this.playBufferedPrefetch(chunks, part - 1, base, lang, folder, file);
+          await this.playBufferedPrefetch(chunks, part - 1, base, lang, folder, file, assembler ? (u8) => assembler.append(u8) : undefined, assembler ? false : true);
+          if (assembler && !this.stopRequested) {
+            try {
+              const merged = assembler.build();
+              const audioPath = `${folder}/${base}.mp3`;
+              const ab = new ArrayBuffer(merged.byteLength);
+              new Uint8Array(ab).set(merged);
+              await writeBinary(this.app, audioPath, ab);
+              await replaceAudioReferencesWithSingle(this.app, file, audioPath);
+              notifyUtil(this.settings, `Zapisano scalony plik: [[${audioPath}]]`);
+            } catch (e: unknown) {
+              const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
+              notifyUtil(this.settings, `Nie udało się zapisać pliku scalonego: ${msg}`, true);
+            }
+          }
           return;
         }
       } catch (e: unknown) {
@@ -201,6 +259,21 @@ notifyUtil(this.settings, `TTS failed on part ${part}: ${msg}` , true);
       }
     }
     log("streaming-or-fallback finished", { requestedParts: chunks.length, stopped: this.stopRequested });
+
+    if (assembler && !this.stopRequested) {
+      try {
+        const merged = assembler.build();
+        const audioPath = `${folder}/${base}.mp3`;
+        const ab = new ArrayBuffer(merged.byteLength);
+        new Uint8Array(ab).set(merged);
+        await writeBinary(this.app, audioPath, ab);
+        await replaceAudioReferencesWithSingle(this.app, file, audioPath);
+        notifyUtil(this.settings, `Zapisano scalony plik: [[${audioPath}]]`);
+      } catch (e: unknown) {
+        const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
+        notifyUtil(this.settings, `Nie udało się zapisać pliku scalonego: ${msg}`, true);
+      }
+    }
   }
 
   /**
@@ -242,7 +315,9 @@ notifyUtil(this.settings, `TTS failed on part ${part}: ${msg}` , true);
     base: string,
     lang: string,
     folder: string,
-    file: TFile
+    file: TFile,
+    appendToMerged?: (u8: Uint8Array) => void,
+    savePerPart: boolean = true
   ): Promise<void> {
     await playBufferedPrefetchHelper({
       app: this.app,
@@ -256,7 +331,9 @@ notifyUtil(this.settings, `TTS failed on part ${part}: ${msg}` , true);
       stopRequested: () => this.stopRequested,
       setSession: (s) => { this.currentSession = s; },
       writeBinary: writeBinary,
-      upsertAudioReferenceSorted: upsertAudioReferenceSorted
+      upsertAudioReferenceSorted: upsertAudioReferenceSorted,
+      appendToMerged,
+      savePerPart
     });
   }
 
@@ -281,6 +358,7 @@ notifyUtil(this.settings, `TTS failed on part ${part}: ${msg}` , true);
 
       const totalParts = ctx.chunks.length;
       notifyUtil(this.settings, `Starting download (${totalParts} part(s))...`, true);
+      try { notifyUtil(this.settings, `Download started in background`, true); } catch {}
 
       /** Ask to overwrite: if files exist and user wants fresh, reuse deleteExistingParts behavior */
       const ext = fileExtFromFormat(this.settings.outputFormat);
@@ -289,6 +367,8 @@ notifyUtil(this.settings, `Could not remove old parts (continuing): ${((e as any
       });
 
       let part = 1;
+      const mergingEnabled = !!this.settings.mergeParts && /mp3/i.test(this.settings.outputFormat);
+      const assembler = mergingEnabled ? new Mp3Assembler() : null;
       for (const chunk of ctx.chunks) {
         if (this.stopRequested) break;
         try {
@@ -303,9 +383,13 @@ notifyUtil(this.settings, `Could not remove old parts (continuing): ${((e as any
             abort.signal
           );
           if (!buffer || buffer.byteLength === 0) { throw new Error("Empty audio buffer"); }
-          const audioPath = `${ctx.folder}/${ctx.base}_part_${part}.${ext}`;
-          await writeBinary(this.app, audioPath, buffer);
-          await upsertAudioReferenceSorted(this.app, ctx.file, audioPath);
+          if (assembler) {
+            assembler.append(new Uint8Array(buffer));
+          } else {
+            const audioPath = `${ctx.folder}/${ctx.base}_part_${part}.${ext}`;
+            await writeBinary(this.app, audioPath, buffer);
+            await upsertAudioReferenceSorted(this.app, ctx.file, audioPath);
+          }
 log("downloaded part", { part, total: totalParts });
         } catch (e: unknown) {
           const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
@@ -316,6 +400,20 @@ notifyUtil(this.settings, `Download failed on part ${part}: ${msg}`, true);
       }
       this.currentSession = await cleanupSessionResourcesHelper(this.currentSession, true);
       this.currentSession = null;
+      if (assembler && !this.stopRequested) {
+        try {
+          const merged = assembler.build();
+          const audioPath = `${ctx.folder}/${ctx.base}.mp3`;
+          const ab = new ArrayBuffer(merged.byteLength);
+          new Uint8Array(ab).set(merged);
+          await writeBinary(this.app, audioPath, ab);
+          await replaceAudioReferencesWithSingle(this.app, ctx.file, audioPath);
+          notifyUtil(this.settings, `Zapisano scalony plik: [[${audioPath}]]`);
+        } catch (e: unknown) {
+          const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
+          notifyUtil(this.settings, `Nie udało się zapisać pliku scalonego: ${msg}`, true);
+        }
+      }
       if (this.stopRequested) {
 notifyUtil(this.settings, `Download stopped after ${part - 1} of ${totalParts} part(s)`, true);
       } else {

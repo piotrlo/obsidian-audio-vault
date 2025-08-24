@@ -20,8 +20,12 @@ export async function playStreamedPartAndSave(params: {
   file: TFile;
   abort: AbortController;
   setSession: (s: PlaybackSession | null) => void;
+  /** Optional merger append hook for MP3 bytes; when set, per-part save can be skipped. */
+  appendToMerged?: (bytes: Uint8Array) => void;
+  /** If false, the function will not persist per-part files/links. */
+  savePerPart?: boolean;
 }): Promise<void> {
-  const { app, settings, ssml, base, part, folder, file, abort, setSession } = params;
+  const { app, settings, ssml, base, part, folder, file, abort, setSession, appendToMerged, savePerPart } = params;
 
   const streamFormat = settings.outputFormat;
   const streamMime = mimeFromFormat(streamFormat);
@@ -62,14 +66,16 @@ export async function playStreamedPartAndSave(params: {
     draining = false;
     if (!startedPlayback) {
       startedPlayback = true;
-      audioEl.play().catch((err) => {
+      audioEl.play().then(() => {
+        try { notifyUtil(settings, "Playback started", true); } catch {}
+      }).catch((err) => {
         const msg = err instanceof Error ? err.message : String(err);
         try { notifyUtil(settings, `Audio play failed (stream): ${msg}`); } catch {}
       });
     }
     drain();
   });
-  const onChunk = (u8: Uint8Array) => { queue.push(u8); drain(); };
+  const onChunk = (u8: Uint8Array) => { queue.push(u8); drain(); try { appendToMerged?.(u8); } catch {} };
 
   const session: PlaybackSession = { abort, audioEl, mediaSource, sourceBuffer, lastBlob: null, fileBase: base, objectUrl };
   setSession(session);
@@ -80,11 +86,13 @@ export async function playStreamedPartAndSave(params: {
 
   const wait = waitForEndOrAbort(audioEl, abort.signal);
 
-  const arrayBuf = await blob.arrayBuffer();
-  const ext = fileExtFromFormat(settings.outputFormat);
-  const audioPath = `${folder}/${base}_part_${part}.${ext}`;
-  await writeBinary(app, audioPath, arrayBuf);
-  await upsertAudioReferenceSorted(app, file, audioPath);
+  if (savePerPart !== false) {
+    const arrayBuf = await blob.arrayBuffer();
+    const ext = fileExtFromFormat(settings.outputFormat);
+    const audioPath = `${folder}/${base}_part_${part}.${ext}`;
+    await writeBinary(app, audioPath, arrayBuf);
+    await upsertAudioReferenceSorted(app, file, audioPath);
+  }
 
   await wait.catch(() => undefined);
 }

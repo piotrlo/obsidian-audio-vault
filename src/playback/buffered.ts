@@ -24,8 +24,12 @@ export async function playBufferedPrefetch(params: {
   setSession: (s: PlaybackSession | null) => void;
   writeBinary: (app: App, path: string, buffer: ArrayBuffer) => Promise<void>;
   upsertAudioReferenceSorted: (app: App, file: TFile, audioPath: string) => Promise<void>;
+  /** Optional merger append hook for MP3 bytes; when set, per-part save can be skipped. */
+  appendToMerged?: (bytes: Uint8Array) => void;
+  /** If false, the function will not persist per-part files/links. */
+  savePerPart?: boolean;
 }): Promise<void> {
-  const { app, settings, chunks, startIndex, base, lang, folder, file, stopRequested, setSession, writeBinary, upsertAudioReferenceSorted } = params;
+  const { app, settings, chunks, startIndex, base, lang, folder, file, stopRequested, setSession, writeBinary, upsertAudioReferenceSorted, appendToMerged, savePerPart } = params;
 
   const abortAll = new AbortController();
   setSession({ abort: abortAll, audioEl: null, mediaSource: null, sourceBuffer: null, lastBlob: null, fileBase: base });
@@ -66,14 +70,22 @@ export async function playBufferedPrefetch(params: {
       const session: PlaybackSession = { abort: abortAll, audioEl, mediaSource: null, sourceBuffer: null, lastBlob: blob, fileBase: base, objectUrl: url };
       setSession(session);
 
-      try { await audioEl.play(); } catch (err) {
+      try {
+        await audioEl.play();
+        try { notifyUtil(settings, "Playback started", true); } catch {}
+      } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         try { notifyUtil(settings, `Audio play failed (buffered): ${msg}`); } catch {}
       }
 
-      const audioPath = `${folder}/${base}_part_${partIdx + 1}.${ext}`;
-      await writeBinary(app, audioPath, buffer);
-      await upsertAudioReferenceSorted(app, file, audioPath);
+      if (appendToMerged) {
+        try { appendToMerged(new Uint8Array(buffer)); } catch {}
+      }
+      if (savePerPart !== false) {
+        const audioPath = `${folder}/${base}_part_${partIdx + 1}.${ext}`;
+        await writeBinary(app, audioPath, buffer);
+        await upsertAudioReferenceSorted(app, file, audioPath);
+      }
 
       try { await waitForEndOrAbort(audioEl, abortAll.signal); } catch {}
       await cleanupSessionResourcesHelper(session);

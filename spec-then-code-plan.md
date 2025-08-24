@@ -59,7 +59,7 @@ Key capabilities
 - Text processing: split into <= chunkSize (default 5,000; max 9,000) preferring sentence boundaries; if a sentence exceeds limit, split by words; language selection default to pl-PL (configurable later).
 - Synthesis: build SSML, call POST https://{region}.tts.speech.microsoft.com/cognitiveservices/v1 with X-Microsoft-OutputFormat.
 - Streaming: attempt MSE for mp3/wav; fallback to capture entire response then play.
-- Storage: write to Audio/ as {safe-basename}_part_{n}.{mp3|wav}; append [[relPath]] at note end.
+- Storage: write to Audio/ as {safe-basename}_part_{n}.{mp3|wav}; append [[relPath]] at note end. Optional MP3 merge into a single file when the setting is enabled.
 
 Tasks
 - src/types.ts: define TtsSettings, PlaybackSession types.
@@ -87,6 +87,7 @@ Tests (bun test)
 - utils/chunk.test.ts: chunk size and sentence-boundary behavior.
 - utils/safe-name.test.ts: path-safe outputs.
 - utils/ssml.test.ts: escaping &, <, > and rate insertion.
+- utils/mp3.test.ts: ID3v2 stripping from chunk beginning.
 - tts/azure.test.ts: MIME detection for formats; stream-to-blob assembly with fake reader.
 
 Stage 2 — Provider abstraction and settings hardening
@@ -153,6 +154,7 @@ Tasks
 - iOS default: Buffered (Prefetch) mode with chunkSize forced to 500 and prefetch of 2–3 parts to ensure gapless playback.
 - Desktop fallback: when MSE is unavailable or streaming fails, switch to Buffered Prefetch (window=3) and surface a Notice informing about the fallback.
 - If file exists in Audio/, play without generating unless user clicks Refresh.
+- If merged file exists (Audio/<base>.mp3), prefer it over part files when playing existing audio.
 - Add collapsed/expanded panel header toggle and showControls setting persistence.
 
 Acceptance criteria mapping
@@ -234,7 +236,7 @@ MVP module responsibilities (Stage 1)
 - src/utils/safe-name.ts
   - toSafeBase(input): string.
 - src/utils/fs.ts
-  - ensureFolder(app, path), writeBinary(app, path, ArrayBuffer), appendAudioReference(app, file, relPath).
+  - ensureFolder(app, path), writeBinary(app, path, ArrayBuffer), appendAudioReference(app, file, relPath), replaceAudioReferencesWithSingle(app, file, relPath).
 - src/types.ts
   - TtsSettings, PlaybackSession, Voice types.
 
@@ -295,7 +297,7 @@ Operational checklist per stage
 - Verify vault copy to test plugin in Obsidian.
 
 Definition of Done per stage
- - Stage 1 MVP is done when: you can install the plugin, set Azure key/region/voice, run Play/Pause current note from Ribbon/Commands, get audio in \u003c5s for small notes, Audio/ has files, link appended to note.
+ - Stage 1 MVP is done when: you can install the plugin, set Azure key/region/voice, run Play/Pause current note from Ribbon/Commands, get audio in <5s for small notes, Audio/ has files, link appended to note.
 - Later stages: DoD mirrors acceptance criteria listed under each stage above.
 
 
@@ -326,7 +328,7 @@ Stage 1 status update (2025-08-19)
   - Audio output folder default is "Audio" (capital A) per spec.
   - Voice picker: added "Fetch voices for region" button (Azure voices/list) and a toggle "Only HD neural voices" to filter results to Neural + HD (e.g., DragonHD). Dropdown is populated from the filtered list and persists selection.
   - Legacy experimental code moved to docs/legacy/experimental-main.ts and excluded from typecheck.
-  - MVP orchestration implemented: chunking (\u003c=10k), SSML building, Azure REST fetch (temporary non-streaming for reliability) saving under Audio/{safe}_part_{n}.mp3|wav, and auto-append link at note bottom (no duplicates).
+  - MVP orchestration implemented: chunking (<=10k), SSML building, Azure REST fetch (temporary non-streaming for reliability) saving under Audio/{safe}_part_{n}.mp3|wav, and auto-append link at note bottom (no duplicates).
   - Minimal floating control panel with play/pause, stop, restart, speed slider. Download control removed.
 - Next steps
   - Manual validation in Obsidian (desktop + mobile): playback, saving, links, controls.
@@ -353,4 +355,22 @@ Stage 1 status update (2025-08-22)
   - Removed showControls and panelPosition from TtsSettings and settings UI.
 - Docs updated
   - spec-then-code.md and spec-then-code-plan.md updated to reflect Ribbon/Commands-only control model.
+
+
+// Optional MP3 merge of parts into a single file
+// Scope
+// - Provide a settings toggle: “Łącz części w jeden plik audio (MP3)”. When enabled and output format is MP3, assemble all parts into one file Audio/<base>.mp3 instead of saving _part_N files.
+// Tasks
+// - types: add mergeParts: boolean to TtsSettings and DEFAULT_SETTINGS.
+// - obsidian/settings.ts: add toggle; show small notice when non-MP3 format is selected (merge ignored).
+// - utils/mp3.ts: implement stripId3v2(u8) and a simple assembler collecting Uint8Array chunks and producing one Uint8Array.
+// - playback/streaming.ts: accept optional appendToMerged callback while streaming; skip per-part writes when merge enabled.
+// - playback/buffered.ts: append fetched buffers to merged assembler; skip per-part writes when merge enabled.
+// - index.ts: wire assembler for both paths and for download command; after completion write Audio/<base>.mp3 and insert a single link via fs helper.
+// - utils/fs.ts: implement replaceAudioReferencesWithSingle(app, file, relPath) to remove part links and keep a single merged link.
+// - playback/existing.ts: prefer playing Audio/<base>.mp3 when present if merge enabled.
+// Acceptance criteria
+// - spec: optional merge; single link; prefer merged file when present.
+// Tests
+// - utils/mp3.test.ts (stripId3v2), existing.test.ts preference.
 

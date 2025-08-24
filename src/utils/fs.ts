@@ -91,3 +91,23 @@ export async function upsertAudioReferenceSorted(app: App, file: TFile, relPath:
   const updated = trimmedOthers + (needsNewline ? "\n" : "") + (sorted.length ? sorted.join("\n") + "\n" : "");
   await app.vault.modify(file, updated);
 }
+
+/**
+ * Replace all Generated audio lines with a single link to the merged file.
+ * Removes any lines pointing to *_part_N.(mp3|wav) and ensures one line for relPath.
+ */
+export async function replaceAudioReferencesWithSingle(app: App, file: TFile, relPath: string): Promise<void> {
+  const original = await app.vault.read(file);
+  const lines = original.split("\n");
+  const prefix = "Generated audio: [[";
+  const kept: string[] = [];
+  for (const l of lines) {
+    if (!l.startsWith(prefix)) kept.push(l);
+  }
+  const needsNewline = kept.length > 0 && !kept[kept.length - 1].endsWith("\n");
+  const body = kept.join("\n");
+  const maybeNl = body.endsWith("\n") || body.length === 0 ? "" : "\n";
+  const single = `${prefix}${relPath}]]`;
+  const updated = body + maybeNl + single + "\n";
+  await app.vault.modify(file, updated);
+}

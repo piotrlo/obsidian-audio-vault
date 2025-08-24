@@ -154,6 +154,14 @@ dd.onChange(async (v) => { this.plugin.settings.language = (v as SupportedLang);
 /** Panel removed – control via ribbon/commands only */
 
     new Setting(containerEl)
+      .setName("Merge parts into a single audio file (MP3)")
+      .setDesc("When enabled and format is MP3: save a single file instead of parts")
+      .addToggle((tg) => tg
+        .setValue(!!this.plugin.settings.mergeParts)
+        .onChange(async (v) => { this.plugin.settings.mergeParts = v; await this.plugin.saveSettings(); })
+      );
+
+    new Setting(containerEl)
       .setName("Audio folder")
       .setDesc("Target folder for generated audio files")
       .addText((t) =>
