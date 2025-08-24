@@ -115,6 +115,7 @@ Scope
 
 Tasks
 - Worker routes: POST /v1/tts (stream), GET /v1/voices; env secrets for Azure; basic logging.
+- Admin route: DELETE /v1/voices/cache (X-Admin-Token) to purge KV cache manually.
 - KV cache for voices 24h; D1 schema scaffolding (licenses, usage_monthly) without enforcing yet.
 - Client: switch to backend URLs with a “Use backend” toggle; default off in MVP channel.
 
@@ -126,6 +127,17 @@ Risks
 
 Tests
 - Worker integration tests with wrangler dev; client fetch mocked.
+
+Stage 3 status update (2025-08-24)
+- Implemented
+  - Added listenmode-backend/ (Cloudflare Workers + Hono) with routes: /v1/auth/validate, /v1/auth/usage, /v1/tts (proxy stream), /v1/voices (KV cached).
+  - D1 schema migrations (licenses, usage_monthly, events) under migrations/0001_initial.sql.
+  - KV namespace binding VOICES_CACHE; Wrangler config with DB binding; secrets expected: AZURE_TTS_API_KEY, AZURE_TTS_REGION, JWT_SECRET.
+  - Plugin wired with Use backend toggle, Backend URL, License key; BackendTtsProvider added and provider switch implemented; voice fetch uses backend when enabled.
+  - Docs updated in this plan; see spec for architecture recap.
+  - CORS restricted to Obsidian/localhost; TTS relies on cors middleware (no wildcard header).
+  - Admin purge cache secured by X-Admin-Token; added ADMIN_API_TOKEN binding and docs.
+  - Backend operated production-only; smoke tests run against workers.dev with test licenses.
 
 Stage 4 — Client licensing flow and limits UI
 Scope
