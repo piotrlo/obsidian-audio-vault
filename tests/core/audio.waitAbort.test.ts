@@ -27,7 +27,7 @@ test("waitForEndOrAbort resolves on ended event", async () => {
   const a = new FakeAudio() as any as HTMLAudioElement;
   const ac = new AbortController();
   const p = waitForEndOrAbort(a, ac.signal);
-  a.emit("ended");
+  (a as unknown as { emit: (evt: string) => void }).emit("ended");
   await expect(p).resolves.toBeUndefined();
 });
 
