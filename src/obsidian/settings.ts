@@ -49,7 +49,7 @@ export class ListenModeSettingsTab extends PluginSettingTab {
      */
     const voiceRow = new Setting(containerEl)
       .setName("Voice")
-      .setDesc("Azure voice; use the button to fetch voices for your region");
+      .setDesc("Choose voice; fetch via Azure or backend depending on settings");
 
     let voiceDropdown: import("obsidian").DropdownComponent | null = null;
     voiceRow.addDropdown((dd) => {
@@ -60,17 +60,28 @@ export class ListenModeSettingsTab extends PluginSettingTab {
     });
     voiceRow.addButton((btn) =>
       btn.setButtonText("Fetch voices for region").setCta().onClick(async () => {
-        if (!this.plugin.settings.azureApiKey?.trim() || !this.plugin.settings.azureRegion?.trim()) {
-          new Notice("Set Azure API Key and Region first");
-          return;
-        }
         try {
-          const url = `https://${this.plugin.settings.azureRegion}.tts.speech.microsoft.com/cognitiveservices/voices/list`;
-          const res = await fetch(url, { headers: { "Ocp-Apim-Subscription-Key": this.plugin.settings.azureApiKey } });
-          if (!res.ok) { let t = ""; try { t = await res.text(); } catch {} ; new Notice(`Voice list failed: ${res.status}${t?` - ${t}`:""}`); return; }
-          const data = await res.json();
-          const voices: Array<{ ShortName?: string; Name?: string }> = Array.isArray(data) ? data : [];
-          const filtered = voices.filter(v => {
+          let list: Array<{ ShortName?: string; Name?: string }> = [];
+          if (this.plugin.settings.useBackend && this.plugin.settings.backendUrl) {
+            const url = `${this.plugin.settings.backendUrl.replace(/\/$/, '')}/v1/voices?region=${encodeURIComponent(this.plugin.settings.azureRegion)}`;
+            const res = await fetch(url);
+            if (!res.ok) { let t = ""; try { t = await res.text(); } catch {} ; new Notice(`Voice list failed: ${res.status}${t?` - ${t}`:""}`); return; }
+            const payload = await res.json();
+            const items = Array.isArray(payload?.data) ? payload.data : [];
+            list = items.map((v: any) => ({ ShortName: v?.shortName, Name: v?.name }));
+          } else {
+            if (!this.plugin.settings.azureApiKey?.trim() || !this.plugin.settings.azureRegion?.trim()) {
+              new Notice("Set Azure API Key and Region first");
+              return;
+            }
+            const url = `https://${this.plugin.settings.azureRegion}.tts.speech.microsoft.com/cognitiveservices/voices/list`;
+            const res = await fetch(url, { headers: { "Ocp-Apim-Subscription-Key": this.plugin.settings.azureApiKey } });
+            if (!res.ok) { let t = ""; try { t = await res.text(); } catch {} ; new Notice(`Voice list failed: ${res.status}${t?` - ${t}`:""}`); return; }
+            const data = await res.json();
+            list = Array.isArray(data) ? data : [];
+          }
+
+          const filtered = list.filter(v => {
             const key = (v.ShortName || v.Name || "").toString();
             if (!this.plugin.settings.onlyHdVoices) return !!key;
             const isNeural = /Neural/i.test(key);
@@ -97,6 +108,32 @@ export class ListenModeSettingsTab extends PluginSettingTab {
         }
       })
     );
+    new Setting(containerEl)
+      .setName("Use backend (Cloudflare Workers)")
+      .setDesc("Proxy via Hono API; hides Azure key and enforces limits")
+      .addToggle((tg) => tg
+        .setValue(!!this.plugin.settings.useBackend)
+        .onChange(async (v) => { this.plugin.settings.useBackend = v; await this.plugin.saveSettings(); })
+      );
+
+    new Setting(containerEl)
+      .setName("Backend URL")
+      .setDesc("Base URL to your Worker, e.g., https://listenmode-backend.<subdomain>.workers.dev")
+      .addText((t) => t
+        .setPlaceholder("https://listenmode-backend...workers.dev")
+        .setValue(this.plugin.settings.backendUrl || "")
+        .onChange(async (v) => { this.plugin.settings.backendUrl = v.trim(); await this.plugin.saveSettings(); })
+      );
+
+    new Setting(containerEl)
+      .setName("License key")
+      .setDesc("Used to obtain a short-lived JWT from backend")
+      .addText((t) => t
+        .setPlaceholder("LM-...-...")
+        .setValue(this.plugin.settings.licenseKey || "")
+        .onChange(async (v) => { this.plugin.settings.licenseKey = v.trim(); await this.plugin.saveSettings(); })
+      );
+
     new Setting(containerEl)
       .setName("TTS Provider")
       .setDesc("For now only Azure is available; OpenAI later")

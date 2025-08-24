@@ -2,6 +2,9 @@ import type { TtsSettings } from "../types";
 
 export const DEFAULT_SETTINGS: TtsSettings = {
   ttsProvider: "azure",
+  useBackend: false,
+  backendUrl: "https://listenmode-backend.loch-piotr.workers.dev",
+  licenseKey: "",
   azureApiKey: "",
   azureRegion: "westeurope",
   voiceName: "en-US-Ava:DragonHDLatestNeural",

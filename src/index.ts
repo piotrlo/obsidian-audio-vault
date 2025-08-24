@@ -3,6 +3,7 @@ import { toSafeBase } from "./utils/safe-name";
 import { buildSsml } from "./utils/ssml";
 import { ensureFolder, writeBinary, deleteExistingParts, upsertAudioReferenceSorted, replaceAudioReferencesWithSingle } from "./utils/fs";
 import { AzureTtsProvider } from "./tts/azure-provider";
+import { BackendTtsProvider } from "./tts/backend-provider";
 import { log, warn, setDebugLogging } from "./utils/logger";
 import { ListenModeSettingsTab } from "./obsidian/settings";
 import { fileExtFromFormat, missingSettings, resolveLang, buildChunks } from "./core/helpers";
@@ -454,7 +455,9 @@ notifyUtil(this.settings, `Failed to ensure folder "${folder}": ${((e as any)?.m
   }
 
   private buildProviderFromSettings(): TtsProvider {
-    // Only Azure for now
+    if (this.settings.useBackend && this.settings.backendUrl && this.settings.licenseKey) {
+      return new BackendTtsProvider({ backendUrl: this.settings.backendUrl, licenseKey: this.settings.licenseKey, region: this.settings.azureRegion });
+    }
     return new AzureTtsProvider({ apiKey: this.settings.azureApiKey, region: this.settings.azureRegion });
   }
 }
