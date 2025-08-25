@@ -42,7 +42,17 @@ export async function incrementUsage(db: D1Database, licenseId: number, chars: n
  */
 export async function checkQuotaLimit(db: D1Database, licenseId: number, plan: 'free'|'basic'|'pro', additionalChars: number, limits: Record<string, number>): Promise<{ allowed: boolean; remaining: number; limit: number }>{
   const used = await getCurrentUsage(db, licenseId);
-  const limit = limits[plan] ?? 0;
+  const period = new Date().toISOString().slice(0, 7);
+  let limit = limits[plan] ?? 0;
+  try {
+    const limitRow = await db
+      .prepare('SELECT chars_limit FROM usage_limit_overrides WHERE license_id = ? AND period = ?')
+      .bind(licenseId, period)
+      .first<{ chars_limit: number }>();
+    if (limitRow && Number.isFinite((limitRow as any).chars_limit)) {
+      limit = (limitRow as any).chars_limit;
+    }
+  } catch {}
   const remaining = Math.max(0, limit - used);
   const allowed = used + additionalChars <= limit;
   return { allowed, remaining, limit };
