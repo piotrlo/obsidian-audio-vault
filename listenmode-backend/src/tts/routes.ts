@@ -82,6 +82,9 @@ tts.post('/', authMiddleware, async (c) => {
       return jsonError(c, 400, 'VALIDATION_FAILED', 'Invalid request body', result.error.flatten());
     }
     const { ssml, outputFormat, language } = result.data;
+    if (!/mp3/i.test(outputFormat)) {
+      return jsonError(c, 400, 'UNSUPPORTED_FORMAT', 'Only MP3 outputFormat is allowed');
+    }
 
     const charCount = ssml.replace(/<[^>]*>/g, '').trim().length;
     if (charCount <= 0) return jsonError(c, 400, 'EMPTY_TEXT', 'Empty text');

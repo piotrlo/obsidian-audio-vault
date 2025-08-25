@@ -140,6 +140,13 @@ Stage 3 status update (2025-08-24)
   - Admin purge cache secured by X-Admin-Token; added ADMIN_API_TOKEN binding and docs.
   - Adminikacja licencji v1: dodano trasy /v1/admin/licenses (lista + filtry + paginacja), /v1/admin/licenses/:id (szczegóły), PATCH /v1/admin/licenses/:id (edycja status/plan/expires_at), POST /v1/admin/licenses (opcjonalne tworzenie z haszowaniem klucza). Wszystkie trasy wymagają X-Admin-Token i zwracają spójne ApiResponse.
   - Backend operated production-only; smoke tests run against workers.dev with test licenses.
+  - Hardening (now):
+    - X-Request-Id middleware (UUID/echo) + logi wejście/wyjście z czasem trwania.
+    - Jednolity format błędów JSON: { error_code, message, details? } i testy 400/401/402/502.
+    - Limity ciała + Zod: /v1/tts (1 MiB, ENV MAX_TTS_BODY_BYTES), /v1/auth/validate (64 KiB, ENV AUTH_VALIDATE_BODY_LIMIT_BYTES) → 413 na oversize, 400 na złą walidację.
+    - Timeout i retry TTS: 15 s (ENV AZURE_TTS_TIMEOUT_MS), 2 retry na 5xx z prostym backoffem; 504 dla timeoutu, 502 dla trwałego 5xx.
+    - Wymuszony MP3: /v1/tts odrzuca nie-MP3 (400 UNSUPPORTED_FORMAT).
+    - Admin session via hono/cookie z „sliding renewal” < 15 min.
 
 Stage 4 — Client licensing flow and limits UI
 Scope
@@ -180,6 +187,9 @@ Risks
 Tests
 - E2E manual checklist on macOS, Windows, Android, iOS; unit tests for file-exists branch.
 - Verify desktop fallback: force a streaming error/unavailable MSE and confirm automatic switch to Buffered Prefetch (window=3) and that a Notice is shown to the user.
+ - Abort/timeout tests (done): streaming and buffered paths resolve on abort; notify surfaces messages only when important or debugLogs.
+
+Stage 8 — Docs, onboarding, and pre-release hardening
 
 Stage 6 — Observability and error reporting
 Scope
@@ -221,6 +231,7 @@ Tasks
 - README sections: installation, dev build via Bun, VAULT_PATH copy, first audio in 3 clicks, settings explained, troubleshooting.
 - “First run” tips notice in plugin: set keys/region; link to docs.
 - Final acceptance criterion sweep; remove “dev-only” feature flags for release channel.
+ - Keep spec updated (this file + spec-then-code.md) on all hardening knobs: request-id, error format, body limits, TTS retry/timeout, MP3-only enforcement.
 
 Acceptance criteria mapping
 - spec §3.7 documentation and onboarding; §5 DoD final checks.
