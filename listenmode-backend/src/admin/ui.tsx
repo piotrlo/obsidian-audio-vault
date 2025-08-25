@@ -525,17 +525,28 @@ adminUi.get('/api/stats', async (c) => {
     used = row?.used ?? 0;
   } catch {}
 
-  // sum of plan limits for filtered licenses (ignoring overrides for simplicity)
+  // sum of EFFECTIVE limits for filtered licenses (override if exists for period, else plan limit)
   let limitSum = 0;
   try {
-    const rows2 = await c.env.DB
-      .prepare(`SELECT l.plan as plan, COUNT(*) as cnt FROM licenses l${whereSql} GROUP BY l.plan`)
-      .bind(...params)
-      .all<{ plan: string; cnt: number }>();
-    for (const r of rows2.results || []) {
-      const perPlan = (PLAN_LIMITS as any)[(r as any).plan] ?? 0;
-      limitSum += perPlan * Number((r as any).cnt || 0);
-    }
+    const row = await c.env.DB
+      .prepare(`
+        SELECT SUM(
+          CASE
+            WHEN o.chars_limit IS NOT NULL THEN o.chars_limit
+            WHEN l.plan = 'free' THEN ?
+            WHEN l.plan = 'basic' THEN ?
+            WHEN l.plan = 'pro' THEN ?
+            ELSE 0
+          END
+        ) as total_limit
+        FROM licenses l
+        LEFT JOIN usage_limit_overrides o
+          ON o.license_id = l.id AND o.period = ?
+        ${whereSql}
+      `)
+      .bind((PLAN_LIMITS as any).free, (PLAN_LIMITS as any).basic, (PLAN_LIMITS as any).pro, period, ...params)
+      .first<{ total_limit: number }>();
+    limitSum = row?.total_limit ?? 0;
   } catch {}
 
   return c.json({ success: true, data: { plans: planCounts, usageCurrent: { used, limit: limitSum } } });

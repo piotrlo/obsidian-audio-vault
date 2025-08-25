@@ -54,7 +54,11 @@ export const ADMIN_CLIENT_JS = `
 
   async function refreshStats(){
     try {
-      const res = await fetch('/admin/api/stats', { headers: headers() });
+      const params = new URLSearchParams();
+      if (S.plan && S.plan.value) params.set('plan', S.plan.value);
+      if (S.status && S.status.value) params.set('status', S.status.value);
+      if (S.q && S.q.value) params.set('q', S.q.value.trim());
+      const res = await fetch('/admin/api/stats' + (params.toString() ? ('?' + params.toString()) : ''), { headers: headers() });
       const json = await res.json();
       if (!json.success) return;
       const { plans, usageCurrent } = json.data || {};
