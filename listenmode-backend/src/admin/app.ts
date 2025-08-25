@@ -40,10 +40,48 @@ export const ADMIN_CLIENT_JS = `
       const json = await res.json();
       if (!json.success) throw new Error(json.error || 'Request failed');
       render(json.data);
+      refreshStats();
       S.msg.textContent = '';
     } catch (e){
       S.msg.textContent = 'Error: ' + (e && e.message ? e.message : e);
     }
+  }
+
+  function mountChart(containerId, html){
+    const el = document.getElementById(containerId);
+    if (el) el.innerHTML = html;
+  }
+
+  async function refreshStats(){
+    try {
+      const res = await fetch('/admin/api/stats', { headers: headers() });
+      const json = await res.json();
+      if (!json.success) return;
+      const { plans, usageCurrent } = json.data || {};
+      const totalPlans = ((plans && plans.free) || 0) + ((plans && plans.basic) || 0) + ((plans && plans.pro) || 0) || 1;
+      var plansHtml = ''
+        + '<table class="charts-css column show-labels data-spacing-5">'
+        + '<caption>Licencje wg planów</caption>'
+        + '<tbody>'
+        + '<tr><th scope="row">free</th><td style="--size:' + ((((plans && plans.free) || 0) / totalPlans)) + '"></td></tr>'
+        + '<tr><th scope="row">basic</th><td style="--size:' + ((((plans && plans.basic) || 0) / totalPlans)) + '"></td></tr>'
+        + '<tr><th scope="row">pro</th><td style="--size:' + ((((plans && plans.pro) || 0) / totalPlans)) + '"></td></tr>'
+        + '</tbody>'
+        + '</table>';
+      mountChart('chartPlans', plansHtml);
+
+      const used = Number((usageCurrent && usageCurrent.used) || 0);
+      const limit = Number((usageCurrent && usageCurrent.limit) || 0) || 1;
+      const usedPct = Math.max(0, Math.min(1, used/limit));
+      var usageHtml = ''
+        + '<table class="charts-css bar show-primary-axis show-data-axes data-spacing-5">'
+        + '<caption>Zużycie w tym miesiącu</caption>'
+        + '<tbody>'
+        + '<tr><th scope="row">Ogólne</th><td style="--size:' + usedPct + '"><span class="data">' + Math.round(usedPct*100) + '%</span></td></tr>'
+        + '</tbody>'
+        + '</table>';
+      mountChart('chartUsageCurrent', usageHtml);
+    } catch {}
   }
 
   function render(data){
@@ -88,8 +126,8 @@ export const ADMIN_CLIENT_JS = `
       html += '</td>';
       html += '<td class="right">';
       html += '<div class="controls">';
-      html += '<button class="button is-small is-link is-light save" data-id="' + lic.id + '">Save</button>';
-      html += '<button class="button is-small is-warning is-light save-limit" data-id="' + lic.id + '">Save limit</button>';
+      html += '<button class="button is-small is-link is-dark save" data-id="' + lic.id + '">Save</button>';
+      html += '<button class="button is-small is-danger is-dark lm-delete" data-id="' + lic.id + '">Delete</button>';
       html += '<span class="small muted" id="msg-' + lic.id + '"></span>';
       html += '</div>';
       html += '</td>';
@@ -174,11 +212,25 @@ export const ADMIN_CLIENT_JS = `
   S.prev.addEventListener('click', () => { if (page>1) { page--; load(); } });
   S.next.addEventListener('click', () => { page++; load(); });
   S.create.addEventListener('click', create);
-  S.tbody.addEventListener('click', (e) => {
+  S.tbody.addEventListener('click', async (e) => {
     const t = e.target;
     if (!t) return;
-    if (t.classList && t.classList.contains('save')) { const id = t.getAttribute('data-id'); saveRow(id); return; }
-    if (t.classList && t.classList.contains('save-limit')) { const id = t.getAttribute('data-id'); saveLimit(id); return; }
+    if (t.classList && t.classList.contains('save')) {
+      const id = t.getAttribute('data-id');
+      // zapis plan/status/expiry
+      await saveRow(id);
+      // zapis limitu jeśli pole istnieje
+      const limitEl = document.querySelector('input[data-id="' + id + '"][data-field="limit_override"]');
+      if (limitEl) { await saveLimit(id); }
+      return;
+    }
+    if (t.classList && t.classList.contains('lm-delete')) {
+      const id = t.getAttribute('data-id');
+      if (confirm('Delete license #' + id + '? This cannot be undone.')) {
+        deleteRow(id);
+      }
+      return;
+    }
     if (t.classList && t.classList.contains('expire-today')) {
       const id = t.getAttribute('data-id');
       const expEl = document.querySelector('input[data-id="' + id + '"][data-field="expires_at"]');
@@ -191,6 +243,20 @@ export const ADMIN_CLIENT_JS = `
       saveRow(id);
     }
   });
+  async function deleteRow(id){
+    const msg = document.getElementById('msg-'+id);
+    try {
+      msg.textContent = 'Deleting...';
+      const res = await fetch('/admin/api/licenses/'+id, { method: 'DELETE', headers: headers() });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Failed');
+      msg.textContent = 'Deleted'; msg.className = 'small success';
+      setTimeout(()=>{ msg.textContent=''; msg.className='small muted'; }, 1000);
+      load();
+    } catch (e){
+      msg.textContent = 'Error'; msg.className = 'small error';
+    }
+  }
 
   initTheme();
   load();

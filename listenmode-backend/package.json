@@ -11,7 +11,7 @@
     "test": "vitest --run tests/**/*.test.ts src/**/*.test.ts",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage tests/**/*.test.ts src/**/*.test.ts",
-    "migrations": "wrangler d1 migrations apply listenmode-db"
+    "migrations": "wrangler d1 migrations apply listenmode-db --remote"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8.66",
