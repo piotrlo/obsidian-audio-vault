@@ -86,13 +86,21 @@ export async function playStreamedPartAndSave(params: {
 
   if (savePerPart !== false) {
     const arrayBuf = await blob.arrayBuffer();
-    const ext = fileExtFromFormat(settings.outputFormat);
-    const audioPath = `${folder}/${base}_part_${part}.${ext}`;
-    await writeBinary(app, audioPath, arrayBuf);
-    await upsertAudioReferenceSorted(app, file, audioPath);
+    if (arrayBuf && arrayBuf.byteLength > 0) {
+      const ext = fileExtFromFormat(settings.outputFormat);
+      const audioPath = `${folder}/${base}_part_${part}.${ext}`;
+      await writeBinary(app, audioPath, arrayBuf);
+      await upsertAudioReferenceSorted(app, file, audioPath);
+    } else {
+      try { notifyUtil(settings, `Pominięto zapis części ${part} (brak danych)`, true); } catch {}
+    }
   }
 
-  await wait.catch(() => undefined);
+  const timeoutMs = 15000;
+  await Promise.race([
+    wait.catch(() => undefined),
+    new Promise((res) => setTimeout(res, timeoutMs))
+  ]);
 }
 
 

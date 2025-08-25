@@ -40,6 +40,16 @@ export interface TtsSettings {
   chunkSize?: number;
   /** If true and output format is MP3, merge parts into a single file. */
   mergeParts: boolean;
+  /** Cached license plan from backend validation. */
+  licensePlan?: string;
+  /** Cached remaining quota (characters) from backend validation/usage. */
+  licenseQuotaRemaining?: number;
+  /** Cached quota limit (characters) from backend validation/usage. */
+  licenseQuotaLimit?: number;
+  /** JWT token expiry timestamp (ms since epoch) from last validation. */
+  licenseTokenExpiresAt?: number;
+  /** Usage period string (YYYY-MM) from backend usage endpoint. */
+  licenseUsagePeriod?: string;
   // Panel removed
 }
 
