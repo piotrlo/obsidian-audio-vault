@@ -72,14 +72,24 @@ export const ADMIN_CLIENT_JS = `
       html += '<input class="input is-small" type="date" data-id="' + lic.id + '" data-field="expires_at" value="' + (lic.expires_at ? lic.expires_at.slice(0,10) : '') + '" />';
       html += '</td>';
       html += '<td>';
-      html += '<input class="input is-small" type="number" min="0" step="1" data-id="' + lic.id + '" data-field="chars_used" value="' + String(lic.chars_used || 0) + '" />';
+      const used = Number(lic.chars_used || 0);
+      const limit = Number(lic.quota_limit || 0);
+      const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+      const src = lic.limit_override != null ? 'override' : 'plan';
+      const period = new Date().toISOString().slice(0,7);
+      const title = 'Period: ' + period + ' • Used: ' + used + '/' + limit + ' (' + pct + '%) • Source: ' + src + ' • Plan: ' + lic.plan;
+      html += '<div style="min-width:140px;" title="' + title.replace(/"/g, '&quot;') + '">';
+      html += '<progress class="progress is-small is-info" value="' + pct + '" max="100">' + pct + '%</progress>';
+      html += '<div class="small muted">' + used + ' / ' + limit + ' (' + pct + '%)</div>';
+      html += '</div>';
       html += '</td>';
-      html += '<td>' + (lic.quota_remaining ?? '—') + '</td>';
-      html += '<td>' + (lic.quota_limit ?? '—') + '</td>';
+      html += '<td>';
+      html += '<input class="input is-small" type="number" min="0" step="1" data-id="' + lic.id + '" data-field="limit_override" value="' + (lic.limit_override ?? '') + '" placeholder="' + (lic.quota_limit ?? '') + '" title="Override miesiczny. Puste = limit planu." />';
+      html += '</td>';
       html += '<td class="right">';
       html += '<div class="controls">';
       html += '<button class="button is-small is-link is-light save" data-id="' + lic.id + '">Save</button>';
-      html += '<button class="button is-small is-warning is-light save-usage" data-id="' + lic.id + '">Save usage</button>';
+      html += '<button class="button is-small is-warning is-light save-limit" data-id="' + lic.id + '">Save limit</button>';
       html += '<span class="small muted" id="msg-' + lic.id + '"></span>';
       html += '</div>';
       html += '</td>';
@@ -107,16 +117,17 @@ export const ADMIN_CLIENT_JS = `
     }
   }
 
-  async function saveUsage(id){
-    const usageEl = (document.querySelector('input[data-id="' + id + '"][data-field="chars_used"]'));
-    const chars_used = usageEl && usageEl.value ? Number(usageEl.value) : 0;
+  async function saveLimit(id){
+    const el = (document.querySelector('input[data-id="' + id + '"][data-field="limit_override"]'));
+    const valRaw = el ? el.value : '';
+    const payload = valRaw === '' ? { chars_limit: null } : { chars_limit: Number(valRaw) };
     const msg = document.getElementById('msg-'+id);
     try {
-      msg.textContent = 'Saving usage...';
-      const res = await fetch('/admin/api/licenses/'+id+'/usage', { method: 'PATCH', headers: headers(), body: JSON.stringify({ chars_used }) });
+      msg.textContent = 'Saving limit...';
+      const res = await fetch('/admin/api/licenses/'+id+'/limit', { method: 'PATCH', headers: headers(), body: JSON.stringify(payload) });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || 'Failed');
-      msg.textContent = 'Usage saved'; msg.className = 'small success';
+      msg.textContent = 'Limit saved'; msg.className = 'small success';
       setTimeout(()=>{ msg.textContent=''; msg.className='small muted'; }, 1500);
       load();
     } catch (e){
@@ -167,7 +178,7 @@ export const ADMIN_CLIENT_JS = `
     const t = e.target;
     if (!t) return;
     if (t.classList && t.classList.contains('save')) { const id = t.getAttribute('data-id'); saveRow(id); return; }
-    if (t.classList && t.classList.contains('save-usage')) { const id = t.getAttribute('data-id'); saveUsage(id); return; }
+    if (t.classList && t.classList.contains('save-limit')) { const id = t.getAttribute('data-id'); saveLimit(id); return; }
     if (t.classList && t.classList.contains('expire-today')) {
       const id = t.getAttribute('data-id');
       const expEl = document.querySelector('input[data-id="' + id + '"][data-field="expires_at"]');

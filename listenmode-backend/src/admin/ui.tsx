@@ -155,9 +155,8 @@ const Page: FC<{ items?: LicenseWithUsage[]; page?: number; pageSize?: number; t
                 <th>Plan</th>
                 <th>Status</th>
                 <th>Expires</th>
-                <th>Used (month)</th>
-                <th>Remaining</th>
-                <th>Limit</th>
+                <th>Usage</th>
+                <th>Override limit</th>
                 <th class="has-text-right">Actions</th>
               </tr>
             </thead>
@@ -188,14 +187,28 @@ const Page: FC<{ items?: LicenseWithUsage[]; page?: number; pageSize?: number; t
                     <input class="input is-small" type="date" data-id={String(lic.id)} data-field="expires_at" value={lic.expires_at ? lic.expires_at.slice(0,10) : ''} />
                   </td>
                   <td>
-                    <input class="input is-small" type="number" min="0" step="1" data-id={String(lic.id)} data-field="chars_used" value={String((lic as any).chars_used ?? 0)} />
+                    {(() => {
+                      const used = (lic as any).chars_used ?? 0;
+                      const limit = (lic as any).quota_limit ?? 0;
+                      const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+                      const src = (lic as any).limit_override != null ? 'override' : 'plan';
+                      const period = new Date().toISOString().slice(0,7);
+                      const title = `Period: ${period} • Used: ${used}/${limit} (${pct}%) • Source: ${src} • Plan: ${lic.plan}`;
+                      return (
+                        <div style="min-width:140px;" title={title}>
+                          <progress class="progress is-small is-info" value={pct} max="100">{pct}%</progress>
+                          <div class="small muted">{used} / {limit} ({pct}%)</div>
+                        </div>
+                      );
+                    })()}
                   </td>
-                  <td>{(lic as any).quota_remaining ?? '—'}</td>
-                  <td>{(lic as any).quota_limit ?? '—'}</td>
+                  <td>
+                    <input class="input is-small" type="number" min="0" step="1" data-id={String(lic.id)} data-field="limit_override" value={String((lic as any).limit_override ?? '')} placeholder={String((lic as any).quota_limit ?? '')} title="Override miesi9czny. Puste = limit planu." />
+                  </td>
                   <td class="right">
                     <div class="controls">
                       <button class="button is-small is-link is-light save" data-id={String(lic.id)}>Save</button>
-                      <button class="button is-small is-warning is-light save-usage" data-id={String(lic.id)}>Save usage</button>
+                      <button class="button is-small is-warning is-light save-limit" data-id={String(lic.id)}>Save limit</button>
                       <button class="button is-small is-light expire-today" data-id={String(lic.id)}>Expire today</button>
                       <span class="small muted" id={`msg-${lic.id}`}></span>
                     </div>
@@ -390,18 +403,34 @@ adminUi.get('/api/licenses', async (c) => {
   // enrich with monthly usage and quota
   const period = new Date().toISOString().slice(0, 7);
   for (const it of items) {
+    // used
+    let used = 0;
     try {
       const row = await c.env.DB
         .prepare('SELECT chars_used FROM usage_monthly WHERE license_id = ? AND period = ?')
         .bind(it.id, period)
         .first<{ chars_used: number }>();
-      const used = row?.chars_used ?? 0;
-      const limit = (PLAN_LIMITS as any)[it.plan] ?? 0;
-      const remaining = Math.max(0, limit - used);
-      (it as any).chars_used = used;
-      (it as any).quota_limit = limit;
-      (it as any).quota_remaining = remaining;
+      used = row?.chars_used ?? 0;
     } catch {}
+    // base limit from plan
+    let limit = (PLAN_LIMITS as any)[it.plan] ?? 0;
+    let override: number | null = null;
+    // try override; if table missing, keep plan limit
+    try {
+      const o = await c.env.DB
+        .prepare('SELECT chars_limit FROM usage_limit_overrides WHERE license_id = ? AND period = ?')
+        .bind(it.id, period)
+        .first<{ chars_limit: number }>();
+      if (o && Number.isFinite(o.chars_limit as any)) {
+        limit = o.chars_limit;
+        override = o.chars_limit;
+      }
+    } catch {}
+    const remaining = Math.max(0, limit - used);
+    (it as any).chars_used = used;
+    (it as any).quota_limit = limit;
+    (it as any).quota_remaining = remaining;
+    (it as any).limit_override = override;
   }
 
   const countStmt = c.env.DB
@@ -495,33 +524,40 @@ adminUi.patch('/api/licenses/:id', async (c) => {
   return c.json({ success: true, data: row });
 });
 
-// Update current month usage (absolute set) for a license
-adminUi.patch('/api/licenses/:id/usage', async (c) => {
+// Upsert per-period limit override for a license
+adminUi.patch('/api/licenses/:id/limit', async (c) => {
   if (!(await verifyAdminSession(c))) return c.json({ success: false, error: 'Unauthorized' }, 401);
   const id = parseInt(c.req.param('id'), 10);
   if (!Number.isFinite(id)) return c.json({ success: false, error: 'Invalid id' }, 400);
   let body: any = {};
-  try {
-    body = await c.req.json();
-  } catch {}
-  const valueRaw = body?.chars_used;
-  const valueNum = Number.parseInt(String(valueRaw), 10);
-  if (!Number.isFinite(valueNum) || valueNum < 0) {
-    return c.json({ success: false, error: 'Invalid chars_used' }, 400);
+  try { body = await c.req.json(); } catch {}
+  const raw = body?.chars_limit;
+  if (raw === '' || raw === null || typeof raw === 'undefined') {
+    // interpret as remove override
+    const period = new Date().toISOString().slice(0, 7);
+    await c.env.DB.prepare('DELETE FROM usage_limit_overrides WHERE license_id = ? AND period = ?').bind(id, period).run();
+  } else {
+    const val = Number.parseInt(String(raw), 10);
+    if (!Number.isFinite(val) || val < 0) return c.json({ success: false, error: 'Invalid chars_limit' }, 400);
+    const period = new Date().toISOString().slice(0, 7);
+    await c.env.DB.prepare(`
+      INSERT INTO usage_limit_overrides (license_id, period, chars_limit, updated_at)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(license_id, period) DO UPDATE SET
+        chars_limit = excluded.chars_limit,
+        updated_at = CURRENT_TIMESTAMP
+    `).bind(id, period, val).run();
   }
+  // respond with recomputed summary
   const period = new Date().toISOString().slice(0, 7);
-  await c.env.DB.prepare(`
-    INSERT INTO usage_monthly (license_id, period, chars_used, updated_at)
-    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(license_id, period) DO UPDATE SET
-      chars_used = excluded.chars_used,
-      updated_at = CURRENT_TIMESTAMP
-  `).bind(id, period, valueNum).run();
-
+  const usedRow = await c.env.DB.prepare('SELECT chars_used FROM usage_monthly WHERE license_id = ? AND period = ?').bind(id, period).first<{ chars_used: number }>();
   const lic = await c.env.DB.prepare('SELECT * FROM licenses WHERE id = ?').bind(id).first<LicenseRecord>();
-  const limit = lic ? (PLAN_LIMITS as any)[lic.plan] ?? 0 : 0;
-  const remaining = Math.max(0, limit - valueNum);
-  return c.json({ success: true, data: { id, chars_used: valueNum, quota_limit: limit, quota_remaining: remaining } });
+  const o = await c.env.DB.prepare('SELECT chars_limit FROM usage_limit_overrides WHERE license_id = ? AND period = ?').bind(id, period).first<{ chars_limit: number }>();
+  const planLimit = lic ? (PLAN_LIMITS as any)[lic.plan] ?? 0 : 0;
+  const limit = o?.chars_limit ?? planLimit;
+  const used = usedRow?.chars_used ?? 0;
+  const remaining = Math.max(0, limit - used);
+  return c.json({ success: true, data: { id, chars_used: used, quota_limit: limit, quota_remaining: remaining, limit_override: o?.chars_limit ?? null } });
 });
 
 export { adminUi as adminUiRoutes };
