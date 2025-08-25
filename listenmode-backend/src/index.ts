@@ -7,8 +7,24 @@ import { ttsRoutes } from './tts/routes';
 import { voicesRoutes } from './voices/routes';
 import { adminRoutes } from './admin/routes';
 import { adminUiRoutes } from './admin/ui';
+import { jsonError } from './types';
 
 const app = new Hono<{ Bindings: Bindings }>();
+
+// X-Request-Id middleware: generate/echo, log entry/exit
+app.use('*', async (c, next) => {
+  const headerId = c.req.header('x-request-id');
+  const reqId = headerId && headerId.trim() ? headerId : (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`);
+  c.header('X-Request-Id', reqId);
+  const start = Date.now();
+  try {
+    console.log(`[req:${reqId}] → ${c.req.method} ${c.req.path}`);
+  } catch {}
+  await next();
+  try {
+    console.log(`[req:${reqId}] ← ${c.req.method} ${c.req.path} ${c.res.status} (${Date.now() - start}ms)`);
+  } catch {}
+});
 
 app.use('*', logger());
 app.use('/v1/*', cors({
@@ -52,8 +68,8 @@ app.route('/v1/voices', voicesRoutes);
 app.route('/v1/admin', adminRoutes);
 app.route('/admin', adminUiRoutes);
 
-app.notFound((c) => c.json({ success: false, error: 'Not found' }, 404));
-app.onError((e, c) => c.json({ success: false, error: 'Internal error' }, 500));
+app.notFound((c) => jsonError(c, 404, 'NOT_FOUND', 'Not found'));
+app.onError((e, c) => jsonError(c, 500, 'INTERNAL_ERROR', 'Internal error'));
 
 export default app;
 

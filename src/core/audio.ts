@@ -9,6 +9,10 @@ import { mimeFromFormat } from "../core/helpers";
  */
 export function waitForEndOrAbort(audioEl: HTMLAudioElement, abortSignal: AbortSignal): Promise<void> {
   return new Promise<void>((resolve) => {
+    if (abortSignal.aborted) {
+      try { audioEl.pause(); } catch {}
+      return resolve();
+    }
     const onEnded = () => {
       cleanup();
       resolve();

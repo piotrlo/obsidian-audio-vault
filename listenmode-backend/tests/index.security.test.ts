@@ -15,7 +15,22 @@ describe('Security headers for admin UI', () => {
     expect(res.headers.get('x-content-type-options')).toBe('nosniff');
     expect(res.headers.get('referrer-policy')).toBe('no-referrer');
     const pp = res.headers.get('permissions-policy') || '';
-    expect(pp).toContain('autoplay=()');
+    const expectedPP = [
+      "accelerometer=()",
+      "autoplay=()",
+      "camera=()",
+      "document-domain=()",
+      "encrypted-media=()",
+      "fullscreen=()",
+      "geolocation=()",
+      "gyroscope=()",
+      "magnetometer=()",
+      "microphone=()",
+      "midi=()",
+      "payment=()",
+      "usb=()",
+    ].join(', ');
+    expect(pp).toBe(expectedPP);
     const csp = res.headers.get('content-security-policy') || '';
     expect(csp).toContain("default-src 'none'");
     expect(csp).toContain("script-src 'self'");

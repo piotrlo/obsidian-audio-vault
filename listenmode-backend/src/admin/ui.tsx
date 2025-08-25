@@ -4,6 +4,7 @@ import type { Bindings, LicenseRecord } from '../types';
 import type { FC } from 'hono/jsx';
 import { ADMIN_CLIENT_JS } from './app';
 import jwt from '@tsndr/cloudflare-worker-jwt';
+import { getCookie, setCookie } from 'hono/cookie';
 
 
 const Page: FC<{ items?: LicenseRecord[]; page?: number; pageSize?: number; total?: number; plan?: string; status?: string; q?: string }> = (props) => (
@@ -201,16 +202,7 @@ const Page: FC<{ items?: LicenseRecord[]; page?: number; pageSize?: number; tota
 
 const adminUi = new Hono<{ Bindings: Bindings }>();
 
-function parseCookie(cookieHeader: string | null | undefined): Record<string, string> {
-  const out: Record<string, string> = {};
-  if (!cookieHeader) return out;
-  cookieHeader.split(';').forEach((part) => {
-    const [k, ...rest] = part.trim().split('=');
-    if (!k) return;
-    out[k] = decodeURIComponent(rest.join('='));
-  });
-  return out;
-}
+function parseCookie(_cookieHeader: string | null | undefined): Record<string, string> { return {}; }
 
 function renderLogin(message?: string) {
   return (
@@ -253,13 +245,12 @@ adminUi.get('/', async (c) => {
     }
     const now = Math.floor(Date.now() / 1000);
     const token = await jwt.sign({ admin: true, iat: now, exp: now + 1800 }, c.env.JWT_SECRET);
-    c.header('Set-Cookie', `admin_session=${encodeURIComponent(token)}; Path=/; Max-Age=1800; SameSite=Strict; Secure; HttpOnly`);
+    setCookie(c, 'admin_session', token, { path: '/', maxAge: 1800, sameSite: 'Strict', secure: true, httpOnly: true });
     return c.redirect('/admin');
   }
 
   // Verify admin_session JWT
-  const cookies = parseCookie(c.req.header('Cookie'));
-  const sessionJwt = cookies['admin_session'];
+  const sessionJwt = getCookie(c, 'admin_session');
   if (!sessionJwt) {
     return c.html(renderLogin());
   }
@@ -276,7 +267,7 @@ adminUi.get('/', async (c) => {
   const now = Math.floor(Date.now() / 1000);
   if (p.exp - now < 900) {
     const refreshed = await jwt.sign({ admin: true, iat: now, exp: now + 1800 }, c.env.JWT_SECRET);
-    c.header('Set-Cookie', `admin_session=${encodeURIComponent(refreshed)}; Path=/; Max-Age=1800; SameSite=Strict; Secure; HttpOnly`);
+    setCookie(c, 'admin_session', refreshed, { path: '/', maxAge: 1800, sameSite: 'Strict', secure: true, httpOnly: true });
   }
 
   const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
@@ -318,8 +309,7 @@ adminUi.get('/app.js', (c) => c.body(ADMIN_CLIENT_JS, 200, { 'Content-Type': 'ap
 
 // Helper: verify admin session JWT, optionally refresh cookie (sliding renewal)
 async function verifyAdminSession(c: any): Promise<boolean> {
-  const cookies = parseCookie(c.req.header('Cookie'));
-  const sessionJwt = cookies['admin_session'];
+  const sessionJwt = getCookie(c, 'admin_session');
   if (!sessionJwt) return false;
   try {
     const ok = await jwt.verify(sessionJwt, c.env.JWT_SECRET);
@@ -330,7 +320,7 @@ async function verifyAdminSession(c: any): Promise<boolean> {
     const now = Math.floor(Date.now() / 1000);
     if (p.exp - now < 900) {
       const refreshed = await jwt.sign({ admin: true, iat: now, exp: now + 1800 }, c.env.JWT_SECRET);
-      c.header('Set-Cookie', `admin_session=${encodeURIComponent(refreshed)}; Path=/; Max-Age=1800; SameSite=Strict; Secure; HttpOnly`);
+      setCookie(c, 'admin_session', refreshed, { path: '/', maxAge: 1800, sameSite: 'Strict', secure: true, httpOnly: true });
     }
     return true;
   } catch {
