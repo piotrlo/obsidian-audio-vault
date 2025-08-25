@@ -8,9 +8,9 @@
     "deploy": "wrangler deploy",
     "typecheck": "bunx tsc --noEmit",
     "format": "bunx prettier -w .",
-    "test": "vitest --run",
+    "test": "vitest --run tests/**/*.test.ts src/**/*.test.ts",
     "test:watch": "vitest",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage tests/**/*.test.ts src/**/*.test.ts"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8.66",

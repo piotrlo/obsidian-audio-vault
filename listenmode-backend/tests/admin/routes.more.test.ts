@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import app from '../index';
+import app from '../../src/index';
 
 function dbStub(opts: { notFound?: boolean; throwOnList?: boolean; throwOnDetails?: boolean; throwOnCreate?: boolean } = {}){
   const licenseRow = { id: 1, license_key_hash: 'h', plan: 'basic', status: 'active', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), expires_at: null } as any;
@@ -102,5 +102,4 @@ describe('Admin routes validations', () => {
     expect(res.status).toBe(400);
   });
 });
-
 

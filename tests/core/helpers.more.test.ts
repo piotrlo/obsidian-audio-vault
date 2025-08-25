@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { fileExtFromFormat, mimeFromFormat, missingSettings, resolveLang, buildChunks, playbackRateFromRateSetting, sortGeneratedAudioLines } from "./helpers";
+import { fileExtFromFormat, mimeFromFormat, missingSettings, resolveLang, buildChunks, playbackRateFromRateSetting, sortGeneratedAudioLines } from "../../src/core/helpers";
 
 describe("core/helpers", () => {
   it("fileExtFromFormat maps wav vs mp3", () => {
