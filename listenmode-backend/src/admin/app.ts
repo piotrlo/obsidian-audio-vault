@@ -71,9 +71,15 @@ export const ADMIN_CLIENT_JS = `
       html += '<td>';
       html += '<input class="input is-small" type="date" data-id="' + lic.id + '" data-field="expires_at" value="' + (lic.expires_at ? lic.expires_at.slice(0,10) : '') + '" />';
       html += '</td>';
+      html += '<td>';
+      html += '<input class="input is-small" type="number" min="0" step="1" data-id="' + lic.id + '" data-field="chars_used" value="' + String(lic.chars_used || 0) + '" />';
+      html += '</td>';
+      html += '<td>' + (lic.quota_remaining ?? '—') + '</td>';
+      html += '<td>' + (lic.quota_limit ?? '—') + '</td>';
       html += '<td class="right">';
       html += '<div class="controls">';
       html += '<button class="button is-small is-link is-light save" data-id="' + lic.id + '">Save</button>';
+      html += '<button class="button is-small is-warning is-light save-usage" data-id="' + lic.id + '">Save usage</button>';
       html += '<span class="small muted" id="msg-' + lic.id + '"></span>';
       html += '</div>';
       html += '</td>';
@@ -96,6 +102,23 @@ export const ADMIN_CLIENT_JS = `
       if (!json.success) throw new Error(json.error || 'Failed');
       msg.textContent = 'Saved'; msg.className = 'small success';
       setTimeout(()=>{ msg.textContent=''; msg.className='small muted'; }, 1500);
+    } catch (e){
+      msg.textContent = 'Error'; msg.className = 'small error';
+    }
+  }
+
+  async function saveUsage(id){
+    const usageEl = (document.querySelector('input[data-id="' + id + '"][data-field="chars_used"]'));
+    const chars_used = usageEl && usageEl.value ? Number(usageEl.value) : 0;
+    const msg = document.getElementById('msg-'+id);
+    try {
+      msg.textContent = 'Saving usage...';
+      const res = await fetch('/admin/api/licenses/'+id+'/usage', { method: 'PATCH', headers: headers(), body: JSON.stringify({ chars_used }) });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Failed');
+      msg.textContent = 'Usage saved'; msg.className = 'small success';
+      setTimeout(()=>{ msg.textContent=''; msg.className='small muted'; }, 1500);
+      load();
     } catch (e){
       msg.textContent = 'Error'; msg.className = 'small error';
     }
@@ -144,6 +167,7 @@ export const ADMIN_CLIENT_JS = `
     const t = e.target;
     if (!t) return;
     if (t.classList && t.classList.contains('save')) { const id = t.getAttribute('data-id'); saveRow(id); return; }
+    if (t.classList && t.classList.contains('save-usage')) { const id = t.getAttribute('data-id'); saveUsage(id); return; }
     if (t.classList && t.classList.contains('expire-today')) {
       const id = t.getAttribute('data-id');
       const expEl = document.querySelector('input[data-id="' + id + '"][data-field="expires_at"]');
