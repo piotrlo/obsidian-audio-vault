@@ -26,6 +26,32 @@ export class ListenModeSettingsTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
+    // Auto-refresh license status on opening the tab (with basic caching)
+    void (async () => {
+      try {
+        const s = this.plugin.settings;
+        const hasBackend = !!s.useBackend && !!s.backendUrl && !!s.licenseKey;
+        const tokenFresh = !!s.licenseTokenExpiresAt && Date.now() < (s.licenseTokenExpiresAt - 120_000);
+        if (hasBackend && !tokenFresh) {
+          const provider = (await import("../tts/backend-provider")).BackendTtsProvider;
+          const p = new provider({ backendUrl: s.backendUrl!, licenseKey: s.licenseKey!, region: s.azureRegion });
+          const v = await p.validateLicense();
+          this.plugin.settings.licensePlan = v.plan;
+          this.plugin.settings.licenseQuotaRemaining = v.quota_remaining;
+          this.plugin.settings.licenseQuotaLimit = v.quota_limit;
+          this.plugin.settings.licenseTokenExpiresAt = v.expiresAtMs;
+          try {
+            const u = await p.fetchUsage();
+            this.plugin.settings.licenseUsagePeriod = u.period || this.plugin.settings.licenseUsagePeriod;
+          } catch {}
+          await this.plugin.saveSettings();
+          // Re-render with updated info
+          this.display();
+          return;
+        }
+      } catch {}
+    })();
+
     new Setting(containerEl)
       .setName("Azure API Key")
       .setDesc("Stored locally in plugin data")
@@ -115,6 +141,95 @@ export class ListenModeSettingsTab extends PluginSettingTab {
         .setValue(!!this.plugin.settings.useBackend)
         .onChange(async (v) => { this.plugin.settings.useBackend = v; await this.plugin.saveSettings(); })
       );
+
+    // License status row (plan/quota/expiry)
+    const licenseStatus = new Setting(containerEl)
+      .setName("License status")
+      .setDesc("Plan, pozostałe tokeny i ważność")
+      .addText((t) => {
+        const s = this.plugin.settings;
+        const parts: string[] = [];
+        if (s.licensePlan) parts.push(`Plan: ${s.licensePlan}`);
+        if (typeof s.licenseQuotaRemaining === 'number' && typeof s.licenseQuotaLimit === 'number') parts.push(`Pozostało: ${s.licenseQuotaRemaining}/${s.licenseQuotaLimit}`);
+        if (s.licenseTokenExpiresAt) parts.push(`Ważny do: ${new Date(s.licenseTokenExpiresAt).toLocaleString()}`);
+        const statusText = parts.join(' | ') || 'Niezweryfikowana';
+        t.setDisabled(true);
+        t.setValue(statusText);
+        return t;
+      });
+    // Colored badge appended to the setting name
+    try {
+      const s = this.plugin.settings;
+      const span = licenseStatus.nameEl.createEl('span');
+      span.style.marginLeft = '8px';
+      span.style.padding = '2px 6px';
+      span.style.borderRadius = '6px';
+      span.style.fontSize = '0.9em';
+      span.style.color = '#fff';
+      const hasCfg = !!s.useBackend && !!s.backendUrl && !!s.licenseKey;
+      if (!hasCfg) {
+        span.textContent = 'Brak konfiguracji';
+        span.style.backgroundColor = '#b00020';
+      } else if (typeof s.licenseQuotaRemaining === 'number' && typeof s.licenseQuotaLimit === 'number' && s.licenseQuotaLimit > 0) {
+        const pct = s.licenseQuotaRemaining / s.licenseQuotaLimit;
+        span.textContent = pct <= 0 ? '0%' : `${Math.round(pct * 100)}%`;
+        if (pct <= 0.05) span.style.backgroundColor = '#b00020';
+        else if (pct <= 0.15) span.style.backgroundColor = '#f57c00';
+        else span.style.backgroundColor = '#388e3c';
+      } else {
+        span.textContent = 'N/D';
+        span.style.backgroundColor = '#616161';
+      }
+    } catch {}
+
+    // License actions (validate + usage)
+    const licenseActions = new Setting(containerEl)
+      .setName("Weryfikacja licencji")
+      .setDesc("Sprawdź licencję i pobierz limit/pozostałe tokeny")
+    licenseActions.addButton((btn) =>
+      btn.setButtonText("Zweryfikuj licencję").setCta().onClick(async () => {
+        try {
+          if (!this.plugin.settings.useBackend || !this.plugin.settings.backendUrl || !this.plugin.settings.licenseKey) {
+            new Notice("Włącz backend, ustaw URL i klucz licencyjny");
+            return;
+          }
+          const provider = (await import("../tts/backend-provider")).BackendTtsProvider;
+          const p = new provider({ backendUrl: this.plugin.settings.backendUrl!, licenseKey: this.plugin.settings.licenseKey!, region: this.plugin.settings.azureRegion });
+          const v = await p.validateLicense();
+          this.plugin.settings.licensePlan = v.plan;
+          this.plugin.settings.licenseQuotaRemaining = v.quota_remaining;
+          this.plugin.settings.licenseQuotaLimit = v.quota_limit;
+          this.plugin.settings.licenseTokenExpiresAt = v.expiresAtMs;
+          await this.plugin.saveSettings();
+          new Notice("Licencja zweryfikowana");
+          this.display();
+        } catch (e: any) {
+          new Notice(`Błąd weryfikacji: ${e?.message || String(e)}`);
+        }
+      })
+    );
+    licenseActions.addButton((btn) =>
+      btn.setButtonText("Odśwież użycie").onClick(async () => {
+        try {
+          if (!this.plugin.settings.useBackend || !this.plugin.settings.backendUrl || !this.plugin.settings.licenseKey) {
+            new Notice("Włącz backend, ustaw URL i klucz licencyjny");
+            return;
+          }
+          const provider = (await import("../tts/backend-provider")).BackendTtsProvider;
+          const p = new provider({ backendUrl: this.plugin.settings.backendUrl!, licenseKey: this.plugin.settings.licenseKey!, region: this.plugin.settings.azureRegion });
+          const u = await p.fetchUsage();
+          this.plugin.settings.licensePlan = u.plan || this.plugin.settings.licensePlan;
+          this.plugin.settings.licenseQuotaRemaining = typeof u.quota_remaining === 'number' ? u.quota_remaining : this.plugin.settings.licenseQuotaRemaining;
+          this.plugin.settings.licenseQuotaLimit = typeof u.quota_limit === 'number' ? u.quota_limit : this.plugin.settings.licenseQuotaLimit;
+          this.plugin.settings.licenseUsagePeriod = u.period || this.plugin.settings.licenseUsagePeriod;
+          await this.plugin.saveSettings();
+          new Notice("Użycie odświeżone");
+          this.display();
+        } catch (e: any) {
+          new Notice(`Błąd pobierania użycia: ${e?.message || String(e)}`);
+        }
+      })
+    );
 
     new Setting(containerEl)
       .setName("Backend URL")

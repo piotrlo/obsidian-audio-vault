@@ -2,7 +2,7 @@ import type { TtsSettings } from "../types";
 
 export const DEFAULT_SETTINGS: TtsSettings = {
   ttsProvider: "azure",
-  useBackend: false,
+  useBackend: true,
   backendUrl: "https://listenmode-backend.loch-piotr.workers.dev",
   licenseKey: "",
   azureApiKey: "",
@@ -17,6 +17,12 @@ export const DEFAULT_SETTINGS: TtsSettings = {
   debugLogs: false,
   chunkSize: 5000,
   mergeParts: false
+  ,
+  licensePlan: undefined,
+  licenseQuotaRemaining: undefined,
+  licenseQuotaLimit: undefined,
+  licenseTokenExpiresAt: undefined,
+  licenseUsagePeriod: undefined
 };
 
 

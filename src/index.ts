@@ -101,12 +101,16 @@ destroyPanel(): void {}
         if (assembler && !this.stopRequested) {
           try {
             const merged = assembler.build();
-            const audioPath = `${ctx.folder}/${ctx.base}.mp3`;
-            const ab = new ArrayBuffer(merged.byteLength);
-            new Uint8Array(ab).set(merged);
-            await writeBinary(this.app, audioPath, ab);
-            await replaceAudioReferencesWithSingle(this.app, ctx.file, audioPath);
-            notifyUtil(this.settings, `Zapisano scalony plik: [[${audioPath}]]`);
+            if (merged && merged.byteLength > 0) {
+              const audioPath = `${ctx.folder}/${ctx.base}.mp3`;
+              const ab = new ArrayBuffer(merged.byteLength);
+              new Uint8Array(ab).set(merged);
+              await writeBinary(this.app, audioPath, ab);
+              await replaceAudioReferencesWithSingle(this.app, ctx.file, audioPath);
+              notifyUtil(this.settings, `Zapisano scalony plik: [[${audioPath}]]`);
+            } else {
+              notifyUtil(this.settings, `Pominięto zapis scalonego pliku (brak danych)`, true);
+            }
           } catch (e: unknown) {
             const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
             notifyUtil(this.settings, `Nie udało się zapisać pliku scalonego: ${msg}`, true);
@@ -206,12 +210,16 @@ notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
           if (assembler && !this.stopRequested) {
             try {
               const merged = assembler.build();
-              const audioPath = `${folder}/${base}.mp3`;
-              const ab = new ArrayBuffer(merged.byteLength);
-              new Uint8Array(ab).set(merged);
-              await writeBinary(this.app, audioPath, ab);
-              await replaceAudioReferencesWithSingle(this.app, file, audioPath);
-              notifyUtil(this.settings, `Zapisano scalony plik: [[${audioPath}]]`);
+              if (merged && merged.byteLength > 0) {
+                const audioPath = `${folder}/${base}.mp3`;
+                const ab = new ArrayBuffer(merged.byteLength);
+                new Uint8Array(ab).set(merged);
+                await writeBinary(this.app, audioPath, ab);
+                await replaceAudioReferencesWithSingle(this.app, file, audioPath);
+                notifyUtil(this.settings, `Zapisano scalony plik: [[${audioPath}]]`);
+              } else {
+                notifyUtil(this.settings, `Pominięto zapis scalonego pliku (brak danych)`, true);
+              }
             } catch (e: unknown) {
               const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
               notifyUtil(this.settings, `Nie udało się zapisać pliku scalonego: ${msg}`, true);
@@ -247,12 +255,16 @@ notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
           if (assembler && !this.stopRequested) {
             try {
               const merged = assembler.build();
-              const audioPath = `${folder}/${base}.mp3`;
-              const ab = new ArrayBuffer(merged.byteLength);
-              new Uint8Array(ab).set(merged);
-              await writeBinary(this.app, audioPath, ab);
-              await replaceAudioReferencesWithSingle(this.app, file, audioPath);
-              notifyUtil(this.settings, `Zapisano scalony plik: [[${audioPath}]]`);
+              if (merged && merged.byteLength > 0) {
+                const audioPath = `${folder}/${base}.mp3`;
+                const ab = new ArrayBuffer(merged.byteLength);
+                new Uint8Array(ab).set(merged);
+                await writeBinary(this.app, audioPath, ab);
+                await replaceAudioReferencesWithSingle(this.app, file, audioPath);
+                notifyUtil(this.settings, `Zapisano scalony plik: [[${audioPath}]]`);
+              } else {
+                notifyUtil(this.settings, `Pominięto zapis scalonego pliku (brak danych)`, true);
+              }
             } catch (e: unknown) {
               const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
               notifyUtil(this.settings, `Nie udało się zapisać pliku scalonego: ${msg}`, true);
@@ -271,12 +283,16 @@ notifyUtil(this.settings, `TTS failed on part ${part}: ${msg}` , true);
     if (assembler && !this.stopRequested) {
       try {
         const merged = assembler.build();
-        const audioPath = `${folder}/${base}.mp3`;
-        const ab = new ArrayBuffer(merged.byteLength);
-        new Uint8Array(ab).set(merged);
-        await writeBinary(this.app, audioPath, ab);
-        await replaceAudioReferencesWithSingle(this.app, file, audioPath);
-        notifyUtil(this.settings, `Zapisano scalony plik: [[${audioPath}]]`);
+        if (merged && merged.byteLength > 0) {
+          const audioPath = `${folder}/${base}.mp3`;
+          const ab = new ArrayBuffer(merged.byteLength);
+          new Uint8Array(ab).set(merged);
+          await writeBinary(this.app, audioPath, ab);
+          await replaceAudioReferencesWithSingle(this.app, file, audioPath);
+          notifyUtil(this.settings, `Zapisano scalony plik: [[${audioPath}]]`);
+        } else {
+          notifyUtil(this.settings, `Pominięto zapis scalonego pliku (brak danych)`, true);
+        }
       } catch (e: unknown) {
         const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
         notifyUtil(this.settings, `Nie udało się zapisać pliku scalonego: ${msg}`, true);
@@ -411,12 +427,16 @@ notifyUtil(this.settings, `Download failed on part ${part}: ${msg}`, true);
       if (assembler && !this.stopRequested) {
         try {
           const merged = assembler.build();
-          const audioPath = `${ctx.folder}/${ctx.base}.mp3`;
-          const ab = new ArrayBuffer(merged.byteLength);
-          new Uint8Array(ab).set(merged);
-          await writeBinary(this.app, audioPath, ab);
-          await replaceAudioReferencesWithSingle(this.app, ctx.file, audioPath);
-          notifyUtil(this.settings, `Zapisano scalony plik: [[${audioPath}]]`);
+          if (merged && merged.byteLength > 0) {
+            const audioPath = `${ctx.folder}/${ctx.base}.mp3`;
+            const ab = new ArrayBuffer(merged.byteLength);
+            new Uint8Array(ab).set(merged);
+            await writeBinary(this.app, audioPath, ab);
+            await replaceAudioReferencesWithSingle(this.app, ctx.file, audioPath);
+            notifyUtil(this.settings, `Zapisano scalony plik: [[${audioPath}]]`);
+          } else {
+            notifyUtil(this.settings, `Pominięto zapis scalonego pliku (brak danych)`, true);
+          }
         } catch (e: unknown) {
           const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
           notifyUtil(this.settings, `Nie udało się zapisać pliku scalonego: ${msg}`, true);
