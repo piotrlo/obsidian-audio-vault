@@ -96,11 +96,7 @@ export async function playStreamedPartAndSave(params: {
     }
   }
 
-  const timeoutMs = 15000;
-  await Promise.race([
-    wait.catch(() => undefined),
-    new Promise((res) => setTimeout(res, timeoutMs))
-  ]);
+  await wait.catch(() => undefined);
 }
 
 
