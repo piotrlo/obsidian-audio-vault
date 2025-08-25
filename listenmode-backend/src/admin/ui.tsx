@@ -486,41 +486,56 @@ adminUi.get('/api/licenses', async (c) => {
 // Aggregated stats for charts
 adminUi.get('/api/stats', async (c) => {
   if (!(await verifyAdminSession(c))) return c.json({ success: false, error: 'Unauthorized' }, 401);
-  // counts per plan
+  // Optional filters from query; default status to active
+  const planQ = c.req.query('plan') || undefined;
+  const statusQ = c.req.query('status') || 'active';
+  const q = c.req.query('q') || undefined;
+
+  const where: string[] = [];
+  const params: any[] = [];
+  if (planQ) { where.push('l.plan = ?'); params.push(planQ); }
+  if (statusQ) { where.push('l.status = ?'); params.push(statusQ); }
+  if (q) { where.push('l.license_key_hash LIKE ?'); params.push(`${q}%`); }
+  const whereSql = where.length ? ` WHERE ${where.join(' AND ')}` : '';
+
+  // counts per plan for filtered licenses
   const planCounts: Record<string, number> = { free: 0, basic: 0, pro: 0 };
   try {
     const rows = await c.env.DB
-      .prepare("SELECT plan, COUNT(*) as cnt FROM licenses GROUP BY plan")
+      .prepare(`SELECT l.plan as plan, COUNT(*) as cnt FROM licenses l${whereSql} GROUP BY l.plan`)
+      .bind(...params)
       .all<{ plan: string; cnt: number }>();
     for (const r of rows.results || []) {
-      if (r.plan in planCounts) planCounts[r.plan] = r.cnt as any as number;
+      if (r.plan in planCounts) planCounts[r.plan] = (r as any).cnt as number;
     }
   } catch {}
-  // usage current month (sum) vs approximate total limit (sum of plan limits ignoring overrides)
+
+  // usage current month (sum) for filtered licenses
   const period = new Date().toISOString().slice(0, 7);
   let used = 0;
   try {
+    const uparams = [period, ...params];
     const row = await c.env.DB
-      .prepare('SELECT SUM(chars_used) as used FROM usage_monthly WHERE period = ?')
-      .bind(period)
+      .prepare(`SELECT SUM(um.chars_used) as used
+                FROM usage_monthly um
+                JOIN licenses l ON l.id = um.license_id
+                ${whereSql ? whereSql.replaceAll('l.', 'l.') + ' AND ' : ' WHERE '} um.period = ?`)
+      .bind(...(params.length ? [...params, period] : [period]))
       .first<{ used: number }>();
     used = row?.used ?? 0;
   } catch {}
+
+  // sum of plan limits for filtered licenses (ignoring overrides for simplicity)
   let limitSum = 0;
   try {
-    const rows = await c.env.DB
-      .prepare('SELECT plan, COUNT(*) as cnt FROM licenses GROUP BY plan')
+    const rows2 = await c.env.DB
+      .prepare(`SELECT l.plan as plan, COUNT(*) as cnt FROM licenses l${whereSql} GROUP BY l.plan`)
+      .bind(...params)
       .all<{ plan: string; cnt: number }>();
-    for (const r of rows.results || []) {
-      const perPlan = (PLAN_LIMITS as any)[r.plan] ?? 0;
-      limitSum += perPlan * Number(r.cnt || 0);
+    for (const r of rows2.results || []) {
+      const perPlan = (PLAN_LIMITS as any)[(r as any).plan] ?? 0;
+      limitSum += perPlan * Number((r as any).cnt || 0);
     }
-    // add overrides for current period (simplified: replace plan limit with override per license)
-    const orows = await c.env.DB
-      .prepare('SELECT chars_limit FROM usage_limit_overrides WHERE period = ?')
-      .bind(period)
-      .all<{ chars_limit: number }>();
-    // this double-counts: to be precise we would need per-license diff; keep simple aggregate for now
   } catch {}
 
   return c.json({ success: true, data: { plans: planCounts, usageCurrent: { used, limit: limitSum } } });
