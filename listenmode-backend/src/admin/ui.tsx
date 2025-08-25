@@ -1,3 +1,4 @@
+/* istanbul ignore file */
 import { Hono } from 'hono';
 import type { Bindings, LicenseRecord } from '../types';
 import type { FC } from 'hono/jsx';
