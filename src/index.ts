@@ -241,7 +241,26 @@ notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
             abort,
             setSession: (s) => { this.currentSession = s; },
             appendToMerged: assembler ? (u8) => assembler.append(u8) : undefined,
-            savePerPart: assembler ? false : true
+            savePerPart: assembler ? false : true,
+            onCaptured: async (blob) => {
+              // If merging is enabled and this is the last part, write merged file immediately.
+              if (assembler && part === chunks.length) {
+                try {
+                  const merged = assembler.build();
+                  if (merged && merged.byteLength > 0) {
+                    const audioPath = `${folder}/${base}.mp3`;
+                    const ab = new ArrayBuffer(merged.byteLength);
+                    new Uint8Array(ab).set(merged);
+                    await writeBinary(this.app, audioPath, ab);
+                    await replaceAudioReferencesWithSingle(this.app, file, audioPath);
+                    notifyUtil(this.settings, `Zapisano scalony plik: [[${audioPath}]]`);
+                  }
+                } catch (e: unknown) {
+                  const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
+                  notifyUtil(this.settings, `Nie udało się zapisać pliku scalonego: ${msg}`, true);
+                }
+              }
+            }
           });
           this.currentSession = await cleanupSessionResourcesHelper(this.currentSession);
           this.currentSession = null;
