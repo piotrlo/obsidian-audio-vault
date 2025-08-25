@@ -17,10 +17,32 @@ const Page: FC<{ items?: LicenseWithUsage[]; page?: number; pageSize?: number; t
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <title>ListenMode Admin</title>
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css" />
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/charts.css/dist/charts.min.css" />
       <style>{`
+        :root {
+          --accent-start: #10b981; /* emerald */
+          --accent-end: #8b5cf6;   /* violet */
+          --card-bg: color-mix(in oklab, var(--accent-start) 6%, transparent);
+        }
+        body { background:
+          radial-gradient(1200px 600px at 10% -10%, color-mix(in oklab, var(--accent-start) 18%, transparent), transparent),
+          radial-gradient(1000px 500px at 110% 10%, color-mix(in oklab, var(--accent-end) 16%, transparent), transparent);
+        }
         .muted { color: var(--bulma-text-weak, #666); }
         .controls { display: flex; gap: .5rem; align-items: center; justify-content: flex-end; }
         .small { font-size: .875rem; }
+        .progress { margin-bottom: 3px; }
+        .panel-card { background: var(--card-bg); border-radius: 12px; padding: 1rem; backdrop-filter: saturate(120%) blur(4px); }
+        .gradient-text { background: linear-gradient(90deg, var(--accent-start), var(--accent-end)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .table-container { overflow-x: auto; overscroll-behavior-x: contain; }
+        td.small { word-break: break-all; max-width: 320px; }
+        tbody tr { transition: background-color .2s ease; }
+        tbody tr:hover { background-color: color-mix(in oklab, var(--accent-end) 8%, transparent); }
+        /* Charts animations */
+        .chart-animate { animation: chart-pop 600ms ease-out both; }
+        @keyframes chart-pop { 0% { transform: scale(.98); opacity: 0; } 60% { transform: scale(1.02); opacity: .85; } 100% { transform: scale(1); opacity: 1; } }
+        .bar td, .column td { background-image: linear-gradient(90deg, var(--accent-start), var(--accent-end)); background-size: 200% 100%; animation: gradient-move 3s ease-in-out infinite; }
+        @keyframes gradient-move { 0%{background-position:0%} 50%{background-position:100%} 100%{background-position:0%} }
       `}</style>
     </head>
     <body>
@@ -28,29 +50,23 @@ const Page: FC<{ items?: LicenseWithUsage[]; page?: number; pageSize?: number; t
         <div class="container">
           <div class="level">
             <div class="level-left">
-              <h1 class="title is-4">ListenMode — Admin</h1>
+              <h1 class="title is-4 gradient-text">ListenMode — Admin</h1>
             </div>
             <div class="level-right">
               <div class="level-item">
                 <button id="themeToggle" class="button is-small">Toggle theme</button>
               </div>
+              <div class="level-item">
+                <form method="post" action="/admin/logout">
+                  <button class="button is-small is-light" type="submit">Wyloguj</button>
+                </form>
+              </div>
             </div>
           </div>
 
-          <div class="field is-grouped is-grouped-multiline">
-            <div class="control">
-              <label class="label is-small">Admin Token</label>
-              <input id="token" class="input is-small" type="text" placeholder="X-Admin-Token" />
-            </div>
-            <div class="control">
-              <button id="saveToken" class="button is-small is-link">Save</button>
-            </div>
-            <div class="control">
-              <span id="tokenMsg" class="small muted"></span>
-            </div>
-          </div>
+          
 
-          <div class="field is-grouped is-grouped-multiline">
+          <div class="panel-card field is-grouped is-grouped-multiline">
             <div class="control">
               <label class="label is-small">Plan</label>
               <div class="select is-small">
@@ -97,7 +113,7 @@ const Page: FC<{ items?: LicenseWithUsage[]; page?: number; pageSize?: number; t
             </div>
           </div>
 
-          <div class="field is-grouped is-grouped-multiline">
+          <div class="panel-card field is-grouped is-grouped-multiline">
             <div class="control">
               <label class="label is-small">License key</label>
               <input id="newKey" class="input is-small" type="text" placeholder="License key (raw)" />
@@ -135,18 +151,25 @@ const Page: FC<{ items?: LicenseWithUsage[]; page?: number; pageSize?: number; t
             </div>
           </div>
 
-          <div class="field is-grouped is-grouped-multiline">
-            <div class="control">
-              <button id="prev" class="button is-small">Prev</button>
-            </div>
-            <div class="control">
-              <span id="pageInfo" class="small">Page {props.page || 1} • Total {props.total || 0}</span>
-            </div>
-            <div class="control">
-              <button id="next" class="button is-small">Next</button>
+          <div class="panel-card" style="margin-bottom:1rem;">
+            <h2 class="title is-6 gradient-text" style="margin-bottom:.75rem;">Statystyki</h2>
+            <div class="columns is-multiline">
+              <div class="column is-full-touch is-half-desktop">
+                <div class="panel-card">
+                  <h3 class="subtitle is-6">Liczba licencji wg planów</h3>
+                  <div id="chartPlans" class="chart-animate"></div>
+                </div>
+              </div>
+              <div class="column is-full-touch is-half-desktop">
+                <div class="panel-card">
+                  <h3 class="subtitle is-6">Zużycie znaków — ten miesiąc</h3>
+                  <div id="chartUsageCurrent" class="chart-animate"></div>
+                </div>
+              </div>
             </div>
           </div>
 
+          <div class="table-container">
           <table id="tbl" class="table is-striped is-hoverable is-fullwidth is-narrow">
             <thead>
               <tr>
@@ -207,8 +230,8 @@ const Page: FC<{ items?: LicenseWithUsage[]; page?: number; pageSize?: number; t
                   </td>
                   <td class="right">
                     <div class="controls">
-                      <button class="button is-small is-link is-light save" data-id={String(lic.id)}>Save</button>
-                      <button class="button is-small is-warning is-light save-limit" data-id={String(lic.id)}>Save limit</button>
+                      <button class="button is-small is-link is-dark save" data-id={String(lic.id)}>Save</button>
+                      <button class="button is-small is-danger is-dark lm-delete" data-id={String(lic.id)}>Delete</button>
                       <button class="button is-small is-light expire-today" data-id={String(lic.id)}>Expire today</button>
                       <span class="small muted" id={`msg-${lic.id}`}></span>
                     </div>
@@ -217,6 +240,19 @@ const Page: FC<{ items?: LicenseWithUsage[]; page?: number; pageSize?: number; t
               ))}
             </tbody>
           </table>
+          </div>
+
+          <div class="panel-card field is-grouped is-grouped-multiline" style="margin-top:.75rem;">
+            <div class="control">
+              <button id="prev" class="button is-small">Prev</button>
+            </div>
+            <div class="control">
+              <span id="pageInfo" class="small">Page {props.page || 1} • Total {props.total || 0}</span>
+            </div>
+            <div class="control">
+              <button id="next" class="button is-small">Next</button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -330,6 +366,11 @@ adminUi.get('/', async (c) => {
 
   return c.html(<Page items={items} page={page} pageSize={pageSize} total={total} plan={plan} status={status} q={q} />);
 });
+// logout: clear cookie and redirect to login
+adminUi.post('/logout', (c) => {
+  setCookie(c, 'admin_session', '', { path: '/', maxAge: 0, sameSite: 'Strict', secure: true, httpOnly: true });
+  return c.redirect('/admin');
+});
 adminUi.get('/app.js', (c) => c.body(ADMIN_CLIENT_JS, 200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store' }));
 
 // Helper: verify admin session JWT, optionally refresh cookie (sliding renewal)
@@ -442,6 +483,49 @@ adminUi.get('/api/licenses', async (c) => {
   return c.json({ success: true, data: { items, page, pageSize, total } });
 });
 
+// Aggregated stats for charts
+adminUi.get('/api/stats', async (c) => {
+  if (!(await verifyAdminSession(c))) return c.json({ success: false, error: 'Unauthorized' }, 401);
+  // counts per plan
+  const planCounts: Record<string, number> = { free: 0, basic: 0, pro: 0 };
+  try {
+    const rows = await c.env.DB
+      .prepare("SELECT plan, COUNT(*) as cnt FROM licenses GROUP BY plan")
+      .all<{ plan: string; cnt: number }>();
+    for (const r of rows.results || []) {
+      if (r.plan in planCounts) planCounts[r.plan] = r.cnt as any as number;
+    }
+  } catch {}
+  // usage current month (sum) vs approximate total limit (sum of plan limits ignoring overrides)
+  const period = new Date().toISOString().slice(0, 7);
+  let used = 0;
+  try {
+    const row = await c.env.DB
+      .prepare('SELECT SUM(chars_used) as used FROM usage_monthly WHERE period = ?')
+      .bind(period)
+      .first<{ used: number }>();
+    used = row?.used ?? 0;
+  } catch {}
+  let limitSum = 0;
+  try {
+    const rows = await c.env.DB
+      .prepare('SELECT plan, COUNT(*) as cnt FROM licenses GROUP BY plan')
+      .all<{ plan: string; cnt: number }>();
+    for (const r of rows.results || []) {
+      const perPlan = (PLAN_LIMITS as any)[r.plan] ?? 0;
+      limitSum += perPlan * Number(r.cnt || 0);
+    }
+    // add overrides for current period (simplified: replace plan limit with override per license)
+    const orows = await c.env.DB
+      .prepare('SELECT chars_limit FROM usage_limit_overrides WHERE period = ?')
+      .bind(period)
+      .all<{ chars_limit: number }>();
+    // this double-counts: to be precise we would need per-license diff; keep simple aggregate for now
+  } catch {}
+
+  return c.json({ success: true, data: { plans: planCounts, usageCurrent: { used, limit: limitSum } } });
+});
+
 adminUi.post('/api/licenses', async (c) => {
   if (!(await verifyAdminSession(c))) return c.json({ success: false, error: 'Unauthorized' }, 401);
   const body = await c.req.json<{ license_key?: string; plan?: string; status?: string; expires_at?: string | null }>();
@@ -524,6 +608,24 @@ adminUi.patch('/api/licenses/:id', async (c) => {
   return c.json({ success: true, data: row });
 });
 
+// Delete license
+adminUi.delete('/api/licenses/:id', async (c) => {
+  if (!(await verifyAdminSession(c))) return c.json({ success: false, error: 'Unauthorized' }, 401);
+  const id = parseInt(c.req.param('id'), 10);
+  if (!Number.isFinite(id)) return c.json({ success: false, error: 'Invalid id' }, 400);
+  try {
+    // Best-effort cleanup of related rows
+    try { await c.env.DB.prepare('DELETE FROM usage_limit_overrides WHERE license_id = ?').bind(id).run(); } catch {}
+    try { await c.env.DB.prepare('DELETE FROM usage_monthly WHERE license_id = ?').bind(id).run(); } catch {}
+    try { await c.env.DB.prepare('DELETE FROM events WHERE license_id = ?').bind(id).run(); } catch {}
+    const res = await c.env.DB.prepare('DELETE FROM licenses WHERE id = ?').bind(id).run();
+    // D1 returns changes via meta if available; we'll assume success if no error thrown
+    return c.json({ success: true });
+  } catch (e: any) {
+    return c.json({ success: false, error: 'Delete failed' }, 500);
+  }
+});
+
 // Upsert per-period limit override for a license
 adminUi.patch('/api/licenses/:id/limit', async (c) => {
   if (!(await verifyAdminSession(c))) return c.json({ success: false, error: 'Unauthorized' }, 401);
@@ -535,18 +637,26 @@ adminUi.patch('/api/licenses/:id/limit', async (c) => {
   if (raw === '' || raw === null || typeof raw === 'undefined') {
     // interpret as remove override
     const period = new Date().toISOString().slice(0, 7);
-    await c.env.DB.prepare('DELETE FROM usage_limit_overrides WHERE license_id = ? AND period = ?').bind(id, period).run();
+    try {
+      await c.env.DB.prepare('DELETE FROM usage_limit_overrides WHERE license_id = ? AND period = ?').bind(id, period).run();
+    } catch (e: any) {
+      return c.json({ success: false, error: 'MIGRATION_REQUIRED' }, 400);
+    }
   } else {
     const val = Number.parseInt(String(raw), 10);
     if (!Number.isFinite(val) || val < 0) return c.json({ success: false, error: 'Invalid chars_limit' }, 400);
     const period = new Date().toISOString().slice(0, 7);
-    await c.env.DB.prepare(`
+    try {
+      await c.env.DB.prepare(`
       INSERT INTO usage_limit_overrides (license_id, period, chars_limit, updated_at)
       VALUES (?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(license_id, period) DO UPDATE SET
         chars_limit = excluded.chars_limit,
         updated_at = CURRENT_TIMESTAMP
     `).bind(id, period, val).run();
+    } catch (e: any) {
+      return c.json({ success: false, error: 'MIGRATION_REQUIRED' }, 400);
+    }
   }
   // respond with recomputed summary
   const period = new Date().toISOString().slice(0, 7);
