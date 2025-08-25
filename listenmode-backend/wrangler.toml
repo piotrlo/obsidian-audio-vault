@@ -18,3 +18,10 @@ ENVIRONMENT = "development"
 [env.production.vars]
 ENVIRONMENT = "production"
 
+[observability.logs]
+enabled = true
+
+
+
+
+
