@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import app from '../index';
+import app from '../../src/index';
 
 function createDB(){
-  // naive stub sufficient for route flows
   const licenseRow = { id: 1, license_key_hash: 'hash1', plan: 'basic', status: 'active', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), expires_at: null } as any;
   return {
     prepare: (sql: string) => ({

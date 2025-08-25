@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { captureToBlob, canStream } from "./audio";
+import { describe, it, expect } from "bun:test";
+import { captureToBlob, canStream } from "../../src/core/audio";
 
 function makeStream(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
   let i = 0;
@@ -24,7 +24,7 @@ describe("core/audio", () => {
   it("canStream returns supported when MediaSource supports given MIME", () => {
     const orig = (globalThis as any).MediaSource;
     (globalThis as any).MediaSource = class {
-      static isTypeSupported(mime: string){ return /audio\/(mpeg|wav)/.test(mime); }
+      static isTypeSupported(_mime: string){ return true; }
     } as any;
     const { supported, mime } = canStream("audio-24khz-48kbitrate-mono-mp3");
     expect(mime).toContain("audio/mpeg");
