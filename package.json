@@ -10,7 +10,9 @@
     "copy:once": "bash -lc 'set -euo pipefail; : ${VAULT_PATH:?Set VAULT_PATH to your vault path}; plugin=obsidian-listen-mode; DEST=\"$VAULT_PATH/.obsidian/plugins/$plugin\"; mkdir -p \"$DEST\"; rsync -a --delete --include \"manifest.json\" --include \"main.js\" --include \"styles.css\" --exclude \"*\" ./ \"$DEST/\"; echo Copied to \"$DEST\"'",
     "deploy": "bun run build && bun run copy:once",
     "typecheck": "bunx tsc --noEmit",
-    "test": "bun test",
+    "test": "bun run test:plugin && bun run test:backend",
+    "test:plugin": "bun test --preload=./tests/setup.ts ./src/**/*.test.ts ./tests/**/*.test.ts",
+    "test:backend": "bash -lc 'cd listenmode-backend && bun run test'",
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "prepare": "husky install"
