@@ -25,8 +25,10 @@ export async function playStreamedPartAndSave(params: {
   appendToMerged?: (bytes: Uint8Array) => void;
   /** If false, the function will not persist per-part files/links. */
   savePerPart?: boolean;
+  /** Optional hook invoked immediately after network capture completes (before playback finishes). */
+  onCaptured?: (blob: Blob) => Promise<void> | void;
 }): Promise<void> {
-  const { app, settings, provider, ssml, base, part, folder, file, abort, setSession, appendToMerged, savePerPart } = params;
+  const { app, settings, provider, ssml, base, part, folder, file, abort, setSession, appendToMerged, savePerPart, onCaptured } = params;
 
   const streamFormat = settings.outputFormat;
   const streamMime = mimeFromFormat(streamFormat);
@@ -39,6 +41,15 @@ export async function playStreamedPartAndSave(params: {
     const blob = await captureToBlob(stream, undefined, streamFormat);
     const session: PlaybackSession = { abort, audioEl: null, mediaSource: null, sourceBuffer: null, lastBlob: blob, fileBase: base } as any;
     setSession(session);
+    // When merging is enabled, append entire blob bytes to the assembler.
+    if (appendToMerged) {
+      try {
+        const ab = await blob.arrayBuffer();
+        if (ab && ab.byteLength > 0) appendToMerged(new Uint8Array(ab));
+      } catch {}
+    }
+    // Invoke onCaptured hook early (e.g., to write merged file) without waiting for playback end.
+    try { await onCaptured?.(blob); } catch {}
     if (savePerPart !== false) {
       const arrayBuf = await blob.arrayBuffer();
       if (arrayBuf && arrayBuf.byteLength > 0) {
@@ -110,6 +121,9 @@ export async function playStreamedPartAndSave(params: {
   }
 
   const wait = waitForEndOrAbort(audioEl, abort.signal);
+
+  // Invoke onCaptured hook early (e.g., to write merged file) without waiting for playback end.
+  try { await onCaptured?.(blob); } catch {}
 
   if (savePerPart !== false) {
     const arrayBuf = await blob.arrayBuffer();
