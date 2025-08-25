@@ -31,6 +31,7 @@ app.use('/v1/*', cors({
   origin: (origin) => {
     if (!origin) return null;
     if (origin === 'https://obsidian.md') return origin;
+    if (origin === 'app://obsidian.md') return origin;
     if (origin === 'obsidian://') return origin;
     if (origin === 'capacitor://localhost') return origin;
     if (/^http:\/\/localhost:\d+$/.test(origin)) return origin;
