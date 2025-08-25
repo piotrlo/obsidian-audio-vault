@@ -174,7 +174,7 @@ Inspekcja KV i cache
 - Endpoint `GET /v1/voices` zapisuje wynik do KV pod kluczem `voices:{region}` na 24h.
 - Purge cache (admin):
 ```bash
-curl -s -X DELETE "$BASE/v1/voices/cache?region=westeurope" -H 'X-Admin-Token: <TOKEN>' | jq .
+f4!FR6J53$zPeZFaP3C6k^Fpy
 ```
 
 Hono
