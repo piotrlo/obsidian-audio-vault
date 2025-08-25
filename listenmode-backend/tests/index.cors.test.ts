@@ -13,6 +13,7 @@ const BASE_ENV = {
 describe('CORS allow/block matrix', () => {
   const allows = [
     'https://obsidian.md',
+    'app://obsidian.md',
     'obsidian://',
     'capacitor://localhost',
     'http://localhost:3000',
