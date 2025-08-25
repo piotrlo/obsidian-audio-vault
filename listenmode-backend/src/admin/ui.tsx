@@ -1,13 +1,16 @@
 /* istanbul ignore file */
 import { Hono } from 'hono';
 import type { Bindings, LicenseRecord } from '../types';
+import { PLAN_LIMITS } from '../types';
 import type { FC } from 'hono/jsx';
 import { ADMIN_CLIENT_JS } from './app';
 import jwt from '@tsndr/cloudflare-worker-jwt';
 import { getCookie, setCookie } from 'hono/cookie';
 
 
-const Page: FC<{ items?: LicenseRecord[]; page?: number; pageSize?: number; total?: number; plan?: string; status?: string; q?: string }> = (props) => (
+type LicenseWithUsage = LicenseRecord & { chars_used?: number; quota_remaining?: number; quota_limit?: number };
+
+const Page: FC<{ items?: LicenseWithUsage[]; page?: number; pageSize?: number; total?: number; plan?: string; status?: string; q?: string }> = (props) => (
   <html lang="en">
     <head>
       <meta charSet="utf-8" />
@@ -152,6 +155,9 @@ const Page: FC<{ items?: LicenseRecord[]; page?: number; pageSize?: number; tota
                 <th>Plan</th>
                 <th>Status</th>
                 <th>Expires</th>
+                <th>Used (month)</th>
+                <th>Remaining</th>
+                <th>Limit</th>
                 <th class="has-text-right">Actions</th>
               </tr>
             </thead>
@@ -181,9 +187,15 @@ const Page: FC<{ items?: LicenseRecord[]; page?: number; pageSize?: number; tota
                   <td>
                     <input class="input is-small" type="date" data-id={String(lic.id)} data-field="expires_at" value={lic.expires_at ? lic.expires_at.slice(0,10) : ''} />
                   </td>
+                  <td>
+                    <input class="input is-small" type="number" min="0" step="1" data-id={String(lic.id)} data-field="chars_used" value={String((lic as any).chars_used ?? 0)} />
+                  </td>
+                  <td>{(lic as any).quota_remaining ?? '—'}</td>
+                  <td>{(lic as any).quota_limit ?? '—'}</td>
                   <td class="right">
                     <div class="controls">
                       <button class="button is-small is-link is-light save" data-id={String(lic.id)}>Save</button>
+                      <button class="button is-small is-warning is-light save-usage" data-id={String(lic.id)}>Save usage</button>
                       <button class="button is-small is-light expire-today" data-id={String(lic.id)}>Expire today</button>
                       <span class="small muted" id={`msg-${lic.id}`}></span>
                     </div>
@@ -373,7 +385,24 @@ adminUi.get('/api/licenses', async (c) => {
     )
     .bind(...params, pageSize, offset);
   const listRes = await listStmt.all<LicenseRecord>();
-  const items = listRes.results || [];
+  const items = (listRes.results || []) as LicenseWithUsage[];
+
+  // enrich with monthly usage and quota
+  const period = new Date().toISOString().slice(0, 7);
+  for (const it of items) {
+    try {
+      const row = await c.env.DB
+        .prepare('SELECT chars_used FROM usage_monthly WHERE license_id = ? AND period = ?')
+        .bind(it.id, period)
+        .first<{ chars_used: number }>();
+      const used = row?.chars_used ?? 0;
+      const limit = (PLAN_LIMITS as any)[it.plan] ?? 0;
+      const remaining = Math.max(0, limit - used);
+      (it as any).chars_used = used;
+      (it as any).quota_limit = limit;
+      (it as any).quota_remaining = remaining;
+    } catch {}
+  }
 
   const countStmt = c.env.DB
     .prepare(`SELECT COUNT(*) as cnt FROM licenses${whereSql}`)
@@ -464,6 +493,35 @@ adminUi.patch('/api/licenses/:id', async (c) => {
   const row = await c.env.DB.prepare('SELECT * FROM licenses WHERE id = ?').bind(id).first<LicenseRecord>();
   if (!row) return c.json({ success: false, error: 'Not found' }, 404);
   return c.json({ success: true, data: row });
+});
+
+// Update current month usage (absolute set) for a license
+adminUi.patch('/api/licenses/:id/usage', async (c) => {
+  if (!(await verifyAdminSession(c))) return c.json({ success: false, error: 'Unauthorized' }, 401);
+  const id = parseInt(c.req.param('id'), 10);
+  if (!Number.isFinite(id)) return c.json({ success: false, error: 'Invalid id' }, 400);
+  let body: any = {};
+  try {
+    body = await c.req.json();
+  } catch {}
+  const valueRaw = body?.chars_used;
+  const valueNum = Number.parseInt(String(valueRaw), 10);
+  if (!Number.isFinite(valueNum) || valueNum < 0) {
+    return c.json({ success: false, error: 'Invalid chars_used' }, 400);
+  }
+  const period = new Date().toISOString().slice(0, 7);
+  await c.env.DB.prepare(`
+    INSERT INTO usage_monthly (license_id, period, chars_used, updated_at)
+    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(license_id, period) DO UPDATE SET
+      chars_used = excluded.chars_used,
+      updated_at = CURRENT_TIMESTAMP
+  `).bind(id, period, valueNum).run();
+
+  const lic = await c.env.DB.prepare('SELECT * FROM licenses WHERE id = ?').bind(id).first<LicenseRecord>();
+  const limit = lic ? (PLAN_LIMITS as any)[lic.plan] ?? 0 : 0;
+  const remaining = Math.max(0, limit - valueNum);
+  return c.json({ success: true, data: { id, chars_used: valueNum, quota_limit: limit, quota_remaining: remaining } });
 });
 
 export { adminUi as adminUiRoutes };
