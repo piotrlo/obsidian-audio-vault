@@ -140,6 +140,8 @@ Stage 3 status update (2025-08-24)
   - Admin purge cache secured by X-Admin-Token; added ADMIN_API_TOKEN binding and docs.
   - Adminikacja licencji v1: dodano trasy /v1/admin/licenses (lista + filtry + paginacja), /v1/admin/licenses/:id (szczegóły), PATCH /v1/admin/licenses/:id (edycja status/plan/expires_at), POST /v1/admin/licenses (opcjonalne tworzenie z haszowaniem klucza). Wszystkie trasy wymagają X-Admin-Token i zwracają spójne ApiResponse.
   - Backend operated production-only; smoke tests run against workers.dev with test licenses.
+  - Admin UI (panel): dodano panel `/admin` z sesją admin (JWT w cookie, sliding renewal), funkcje: lista licencji z filtrami, edycja status/plan/expires_at, tworzenie licencji, podgląd statystyk planów i wykorzystania.
+  - CORS: dodano `app://obsidian.md` do listy dozwolonych originów.
   - Hardening (now):
     - X-Request-Id middleware (UUID/echo) + logi wejście/wyjście z czasem trwania.
     - Jednolity format błędów JSON: { error_code, message, details? } i testy 400/401/402/502.
@@ -153,18 +155,20 @@ Scope
 - License-key input and validation, token handling, monthly char limits UI, and error surfaces.
 
 Tasks
-- Settings: licenseKey input; Validate -> backend /v1/license/validate to short-lived JWT stored in memory and persisted only as license key.
-- Add remaining quota indicator in panel or settings.
-- Handle 402 from /v1/tts with a Notice linking to Stripe portal.
+- Settings: licenseKey input; Validate -> backend /v1/auth/validate to short-lived JWT stored transientnie (expiry), persistujemy wyłącznie licenseKey.
+- Settings: sekcja statusu licencji (plan, quota remaining/limit, expiry) + przyciski „Zweryfikuj licencję” i „Odśwież użycie” (GET `/v1/auth/usage`) — zaimplementowane.
+- Auto-refresh statusu po otwarciu zakładki ustawień w oparciu o cache ważności JWT — zaimplementowane.
+- Handle 402 z `/v1/tts` z Notice i linkiem do Stripe Customer Portal — DO ZROBIENIA.
 
 Acceptance criteria mapping
 - spec §4.2 API, §4b Stripe models, §5 DoD backend/licensing bullets.
 
 Risks
-- Token refresh cadence; ensure silent refresh or clear messaging.
+- Token refresh cadence; cichy refresh w tle przed wygasaniem.
 
 Tests
-- License happy-path and expired token handling (mock backend).
+- License happy-path i expired token handling (mock backend) — częściowo.
+- Dodać test obsługi 402 (Payment Required) i komunikatów w UI.
 
 Stage 5 — Streaming robustness, mobile polish, offline playback
 Scope
