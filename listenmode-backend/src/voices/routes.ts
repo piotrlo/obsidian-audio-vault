@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { Bindings, ApiResponse, VoiceInfo } from '../types';
+import { jsonError } from '../types';
 
 const voices = new Hono<{ Bindings: Bindings }>();
 
@@ -19,7 +20,7 @@ voices.get('/', async (c) => {
     const res = await fetch(url, { headers: { 'Ocp-Apim-Subscription-Key': c.env.AZURE_TTS_API_KEY } });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      return c.json<ApiResponse>({ success: false, error: `Failed to fetch voices: ${res.status} ${text}` }, 502);
+      return jsonError(c, 502, 'VOICES_UPSTREAM_ERROR', `Failed to fetch voices: ${res.status}`, text);
     }
 
     const raw = await res.json<any[]>();
@@ -31,7 +32,7 @@ voices.get('/', async (c) => {
     await c.env.VOICES_CACHE.put(cacheKey, JSON.stringify(mapped), { expirationTtl: 86400 });
     return c.json<ApiResponse<VoiceInfo[]>>({ success: true, data: mapped });
   } catch (e) {
-    return c.json<ApiResponse>({ success: false, error: 'Internal error' }, 500);
+    return jsonError(c, 500, 'INTERNAL_ERROR', 'Internal error');
   }
 });
 
@@ -42,13 +43,13 @@ voices.delete('/cache', async (c) => {
   try {
     const adminHeader = c.req.header('X-Admin-Token') || '';
     if (!adminHeader || adminHeader !== c.env.ADMIN_API_TOKEN) {
-      return c.json<ApiResponse>({ success: false, error: 'Unauthorized' }, 401);
+      return jsonError(c, 401, 'UNAUTHORIZED', 'Unauthorized');
     }
     const region = c.req.query('region') || c.env.AZURE_TTS_REGION;
     await c.env.VOICES_CACHE.delete(`voices:${region}`);
     return c.json<ApiResponse>({ success: true, message: `Cache cleared for region ${region}` });
   } catch (e) {
-    return c.json<ApiResponse>({ success: false, error: 'Internal error' }, 500);
+    return jsonError(c, 500, 'INTERNAL_ERROR', 'Internal error');
   }
 });
 

@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { Bindings, ApiResponse, LicenseRecord } from '../types';
+import { jsonError } from '../types';
 import { hashLicenseKey } from '../auth/jwt';
 
 const admin = new Hono<{ Bindings: Bindings }>();
@@ -11,7 +12,7 @@ const ADMIN_PLAN = new Set(['free', 'basic', 'pro']);
 admin.use('*', async (c, next) => {
   const token = c.req.header('X-Admin-Token') || '';
   if (!token || token !== c.env.ADMIN_API_TOKEN) {
-    return c.json<ApiResponse>({ success: false, error: 'Unauthorized' }, 401);
+    return jsonError(c, 401, 'UNAUTHORIZED', 'Unauthorized');
   }
   await next();
 });
@@ -33,13 +34,13 @@ admin.get('/licenses', async (c) => {
     const countParams: any[] = [];
 
     if (plan) {
-      if (!ADMIN_PLAN.has(plan)) return c.json<ApiResponse>({ success: false, error: 'Invalid plan' }, 400);
+      if (!ADMIN_PLAN.has(plan)) return jsonError(c, 400, 'INVALID_PLAN', 'Invalid plan');
       where.push('plan = ?');
       params.push(plan);
       countParams.push(plan);
     }
     if (status) {
-      if (!ADMIN_STATUS.has(status)) return c.json<ApiResponse>({ success: false, error: 'Invalid status' }, 400);
+      if (!ADMIN_STATUS.has(status)) return jsonError(c, 400, 'INVALID_STATUS', 'Invalid status');
       where.push('status = ?');
       params.push(status);
       countParams.push(status);
@@ -74,7 +75,7 @@ admin.get('/licenses', async (c) => {
       data: { items, page, pageSize, total }
     });
   } catch (e) {
-    return c.json<ApiResponse>({ success: false, error: 'Internal error' }, 500);
+    return jsonError(c, 500, 'INTERNAL_ERROR', 'Internal error');
   }
 });
 
@@ -82,15 +83,15 @@ admin.get('/licenses', async (c) => {
 admin.get('/licenses/:id', async (c) => {
   try {
     const id = parseInt(c.req.param('id'), 10);
-    if (!Number.isFinite(id)) return c.json<ApiResponse>({ success: false, error: 'Invalid id' }, 400);
+    if (!Number.isFinite(id)) return jsonError(c, 400, 'INVALID_ID', 'Invalid id');
     const row = await c.env.DB
       .prepare('SELECT * FROM licenses WHERE id = ?')
       .bind(id)
       .first<LicenseRecord>();
-    if (!row) return c.json<ApiResponse>({ success: false, error: 'Not found' }, 404);
+    if (!row) return jsonError(c, 404, 'NOT_FOUND', 'Not found');
     return c.json<ApiResponse<LicenseRecord>>({ success: true, data: row });
   } catch (e) {
-    return c.json<ApiResponse>({ success: false, error: 'Internal error' }, 500);
+    return jsonError(c, 500, 'INTERNAL_ERROR', 'Internal error');
   }
 });
 
@@ -98,19 +99,19 @@ admin.get('/licenses/:id', async (c) => {
 admin.patch('/licenses/:id', async (c) => {
   try {
     const id = parseInt(c.req.param('id'), 10);
-    if (!Number.isFinite(id)) return c.json<ApiResponse>({ success: false, error: 'Invalid id' }, 400);
+    if (!Number.isFinite(id)) return jsonError(c, 400, 'INVALID_ID', 'Invalid id');
 
     const body = await c.req.json<Partial<Pick<LicenseRecord, 'status' | 'plan' | 'expires_at'>>>();
     const setClauses: string[] = [];
     const values: any[] = [];
 
     if (typeof body.plan !== 'undefined') {
-      if (!ADMIN_PLAN.has(body.plan as string)) return c.json<ApiResponse>({ success: false, error: 'Invalid plan' }, 400);
+      if (!ADMIN_PLAN.has(body.plan as string)) return jsonError(c, 400, 'INVALID_PLAN', 'Invalid plan');
       setClauses.push('plan = ?');
       values.push(body.plan);
     }
     if (typeof body.status !== 'undefined') {
-      if (!ADMIN_STATUS.has(body.status as string)) return c.json<ApiResponse>({ success: false, error: 'Invalid status' }, 400);
+      if (!ADMIN_STATUS.has(body.status as string)) return jsonError(c, 400, 'INVALID_STATUS', 'Invalid status');
       setClauses.push('status = ?');
       values.push(body.status);
     }
@@ -120,17 +121,17 @@ admin.patch('/licenses/:id', async (c) => {
         expires = null;
       } else if (typeof body.expires_at === 'string' && body.expires_at.trim().length > 0) {
         const d = new Date(body.expires_at);
-        if (isNaN(d.getTime())) return c.json<ApiResponse>({ success: false, error: 'Invalid expires_at' }, 400);
+        if (isNaN(d.getTime())) return jsonError(c, 400, 'INVALID_EXPIRES_AT', 'Invalid expires_at');
         expires = d.toISOString();
       } else {
-        return c.json<ApiResponse>({ success: false, error: 'Invalid expires_at' }, 400);
+        return jsonError(c, 400, 'INVALID_EXPIRES_AT', 'Invalid expires_at');
       }
       setClauses.push('expires_at = ?');
       values.push(expires);
     }
 
     if (setClauses.length === 0) {
-      return c.json<ApiResponse>({ success: false, error: 'No fields to update' }, 400);
+      return jsonError(c, 400, 'NO_FIELDS', 'No fields to update');
     }
 
     const sql = `UPDATE licenses SET ${setClauses.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
@@ -140,10 +141,10 @@ admin.patch('/licenses/:id', async (c) => {
       .prepare('SELECT * FROM licenses WHERE id = ?')
       .bind(id)
       .first<LicenseRecord>();
-    if (!row) return c.json<ApiResponse>({ success: false, error: 'Not found' }, 404);
+    if (!row) return jsonError(c, 404, 'NOT_FOUND', 'Not found');
     return c.json<ApiResponse<LicenseRecord>>({ success: true, data: row });
   } catch (e: any) {
-    return c.json<ApiResponse>({ success: false, error: 'Internal error' }, 500);
+    return jsonError(c, 500, 'INTERNAL_ERROR', 'Internal error');
   }
 });
 
@@ -152,11 +153,11 @@ admin.post('/licenses', async (c) => {
   try {
     const body = await c.req.json<{ license_key?: string; plan?: string; status?: string; expires_at?: string | null }>();
     const licenseKey = (body.license_key || '').toString();
-    if (!licenseKey) return c.json<ApiResponse>({ success: false, error: 'license_key required' }, 400);
+    if (!licenseKey) return jsonError(c, 400, 'LICENSE_KEY_REQUIRED', 'license_key required');
     const plan = (body.plan || 'free').toString();
     const status = (body.status || 'active').toString();
-    if (!ADMIN_PLAN.has(plan)) return c.json<ApiResponse>({ success: false, error: 'Invalid plan' }, 400);
-    if (!ADMIN_STATUS.has(status)) return c.json<ApiResponse>({ success: false, error: 'Invalid status' }, 400);
+    if (!ADMIN_PLAN.has(plan)) return jsonError(c, 400, 'INVALID_PLAN', 'Invalid plan');
+    if (!ADMIN_STATUS.has(status)) return jsonError(c, 400, 'INVALID_STATUS', 'Invalid status');
 
     let expires: string | null = null;
     if (Object.prototype.hasOwnProperty.call(body, 'expires_at')) {
@@ -164,10 +165,10 @@ admin.post('/licenses', async (c) => {
         expires = null;
       } else if (typeof body.expires_at === 'string' && body.expires_at.trim().length > 0) {
         const d = new Date(body.expires_at);
-        if (isNaN(d.getTime())) return c.json<ApiResponse>({ success: false, error: 'Invalid expires_at' }, 400);
+        if (isNaN(d.getTime())) return jsonError(c, 400, 'INVALID_EXPIRES_AT', 'Invalid expires_at');
         expires = d.toISOString();
       } else {
-        return c.json<ApiResponse>({ success: false, error: 'Invalid expires_at' }, 400);
+        return jsonError(c, 400, 'INVALID_EXPIRES_AT', 'Invalid expires_at');
       }
     }
 
@@ -179,7 +180,7 @@ admin.post('/licenses', async (c) => {
         .run();
     } catch (e: any) {
       // likely unique constraint
-      return c.json<ApiResponse>({ success: false, error: 'License already exists' }, 400);
+      return jsonError(c, 400, 'LICENSE_EXISTS', 'License already exists');
     }
 
     const row = await c.env.DB
@@ -188,7 +189,7 @@ admin.post('/licenses', async (c) => {
       .first<LicenseRecord>();
     return c.json<ApiResponse<LicenseRecord>>({ success: true, data: row! });
   } catch (e) {
-    return c.json<ApiResponse>({ success: false, error: 'Internal error' }, 500);
+    return jsonError(c, 500, 'INTERNAL_ERROR', 'Internal error');
   }
 });
 

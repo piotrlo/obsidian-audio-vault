@@ -54,6 +54,10 @@ export interface Bindings {
   JWT_SECRET: string;
   ENVIRONMENT: string;
   ADMIN_API_TOKEN: string;
+  // optional tuning knobs
+  MAX_TTS_BODY_BYTES?: string;
+  AUTH_VALIDATE_BODY_LIMIT_BYTES?: string;
+  AZURE_TTS_TIMEOUT_MS?: string;
 }
 
 export const PLAN_LIMITS = {
@@ -61,4 +65,19 @@ export const PLAN_LIMITS = {
   basic: 100_000,
   pro: 300_000,
 } as const;
+
+export type ErrorBody = {
+  error_code: string;
+  message: string;
+  details?: unknown;
+};
+
+export function jsonError(c: any, status: number, error_code: string, message: string, details?: unknown) {
+  c.header('X-Error-Code', error_code);
+  return c.json({ error_code, message, details } as ErrorBody, status);
+}
+
+export function ok<T>(c: any, data: T) {
+  return c.json({ success: true, data } satisfies ApiResponse<T>);
+}
 
