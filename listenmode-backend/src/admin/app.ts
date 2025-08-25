@@ -58,26 +58,29 @@ export const ADMIN_CLIENT_JS = `
       const json = await res.json();
       if (!json.success) return;
       const { plans, usageCurrent } = json.data || {};
-      const totalPlans = ((plans && plans.free) || 0) + ((plans && plans.basic) || 0) + ((plans && plans.pro) || 0) || 1;
+      const free = ((plans && plans.free) || 0);
+      const basic = ((plans && plans.basic) || 0);
+      const pro = ((plans && plans.pro) || 0);
+      const maxPlan = Math.max(1, free, basic, pro);
       var plansHtml = ''
         + '<table class="charts-css column show-labels data-spacing-5">'
-        + '<caption>Licencje wg planów</caption>'
+        + '<caption>Aktywne licencje wg planów</caption>'
         + '<tbody>'
-        + '<tr><th scope="row">free</th><td style="--size:' + ((((plans && plans.free) || 0) / totalPlans)) + '"></td></tr>'
-        + '<tr><th scope="row">basic</th><td style="--size:' + ((((plans && plans.basic) || 0) / totalPlans)) + '"></td></tr>'
-        + '<tr><th scope="row">pro</th><td style="--size:' + ((((plans && plans.pro) || 0) / totalPlans)) + '"></td></tr>'
+        + '<tr><th scope="row">free</th><td style="--size:' + (free/maxPlan) + '" title="free: ' + free + '" aria-label="free: ' + free + '"><span class="data">' + free + '</span></td></tr>'
+        + '<tr><th scope="row">basic</th><td style="--size:' + (basic/maxPlan) + '" title="basic: ' + basic + '" aria-label="basic: ' + basic + '"><span class="data">' + basic + '</span></td></tr>'
+        + '<tr><th scope="row">pro</th><td style="--size:' + (pro/maxPlan) + '" title="pro: ' + pro + '" aria-label="pro: ' + pro + '"><span class="data">' + pro + '</span></td></tr>'
         + '</tbody>'
         + '</table>';
       mountChart('chartPlans', plansHtml);
 
       const used = Number((usageCurrent && usageCurrent.used) || 0);
       const limit = Number((usageCurrent && usageCurrent.limit) || 0) || 1;
-      const usedPct = Math.max(0, Math.min(1, used/limit));
+      const ratio = Math.max(0, Math.min(1, used/limit));
       var usageHtml = ''
         + '<table class="charts-css bar show-primary-axis show-data-axes data-spacing-5">'
         + '<caption>Zużycie w tym miesiącu</caption>'
         + '<tbody>'
-        + '<tr><th scope="row">Ogólne</th><td style="--size:' + usedPct + '"><span class="data">' + Math.round(usedPct*100) + '%</span></td></tr>'
+        + '<tr><th scope="row">Ogólne</th><td style="--size:' + ratio + '" title="' + used.toLocaleString() + ' / ' + limit.toLocaleString() + ' (' + Math.round(ratio*100) + '%)" aria-label="' + used.toLocaleString() + ' / ' + limit.toLocaleString() + ' (' + Math.round(ratio*100) + '%)"><span class="data">' + used.toLocaleString() + ' / ' + limit.toLocaleString() + '</span></td></tr>'
         + '</tbody>'
         + '</table>';
       mountChart('chartUsageCurrent', usageHtml);
