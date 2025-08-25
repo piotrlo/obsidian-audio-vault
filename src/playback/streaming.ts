@@ -4,10 +4,9 @@
 
 import type { App, TFile } from "obsidian";
 import type { PlaybackSession, TtsProvider, TtsSettings } from "../types";
-import { captureToBlob } from "../core/audio";
+import { captureToBlob, canStream, waitForEndOrAbort } from "../core/audio";
 import { mimeFromFormat } from "../core/helpers";
 import { fileExtFromFormat, playbackRateFromRateSetting } from "../core/helpers";
-import { waitForEndOrAbort } from "../core/audio";
 import { writeBinary, upsertAudioReferenceSorted } from "../utils/fs";
 import { notify as notifyUtil } from "../core/notify";
 
@@ -31,8 +30,28 @@ export async function playStreamedPartAndSave(params: {
 
   const streamFormat = settings.outputFormat;
   const streamMime = mimeFromFormat(streamFormat);
+  const { supported: mseSupported } = canStream(streamFormat);
 
   const stream = await provider.synthesize(ssml, streamFormat, "", abort.signal);
+
+  // Fallback path when MSE is unavailable or unsupported: capture entire blob, optionally save, no MSE playback.
+  if (!mseSupported) {
+    const blob = await captureToBlob(stream, undefined, streamFormat);
+    const session: PlaybackSession = { abort, audioEl: null, mediaSource: null, sourceBuffer: null, lastBlob: blob, fileBase: base } as any;
+    setSession(session);
+    if (savePerPart !== false) {
+      const arrayBuf = await blob.arrayBuffer();
+      if (arrayBuf && arrayBuf.byteLength > 0) {
+        const ext = fileExtFromFormat(settings.outputFormat);
+        const audioPath = `${folder}/${base}_part_${part}.${ext}`;
+        await writeBinary(app, audioPath, arrayBuf);
+        await upsertAudioReferenceSorted(app, file, audioPath);
+      } else {
+        try { notifyUtil(settings, `Pominięto zapis części ${part} (brak danych)`, true); } catch {}
+      }
+    }
+    return;
+  }
 
   const mediaSource = new MediaSource();
   const objectUrl = URL.createObjectURL(mediaSource);
@@ -81,6 +100,14 @@ export async function playStreamedPartAndSave(params: {
   const blob = await captureToBlob(stream, onChunk, streamFormat);
   setSession({ ...session, lastBlob: blob });
   if (mediaSource.readyState === "open") { try { mediaSource.endOfStream(); } catch {} }
+
+  // If no data was received, skip saving and return immediately to avoid hanging on playback end.
+  if (!blob || blob.size === 0) {
+    if (savePerPart !== false) {
+      try { notifyUtil(settings, `Pominięto zapis części ${part} (brak danych)`, true); } catch {}
+    }
+    return;
+  }
 
   const wait = waitForEndOrAbort(audioEl, abort.signal);
 
