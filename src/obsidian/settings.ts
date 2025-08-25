@@ -107,15 +107,40 @@ export class ListenModeSettingsTab extends PluginSettingTab {
             list = Array.isArray(data) ? data : [];
           }
 
-          const filtered = list.filter(v => {
-            const key = (v.ShortName || v.Name || "").toString();
-            if (!this.plugin.settings.onlyHdVoices) return !!key;
-            const isNeural = /Neural/i.test(key);
-            const isHd = /(HD|Dragon)/i.test(key);
-            return !!key && isNeural && isHd;
-          });
+          // Build options with robust HD detection/mapping.
+          // Many Azure entries for personas (e.g., Ava) do not include ":DragonHDLatestNeural" in ShortName,
+          // so we map known HD personas to DragonHDLatestNeural explicitly when the toggle is enabled.
+          const hdPersonas = new Set([
+            'Ava','Ava3','Andrew','Andrew2','Andrew3','Aria','Brian','Davis','Emma','Emma2','Jenny','Steffan','Serena','Adam','Alloy','Nova','Phoebe',
+            'Remy','Vivienne','Florian','Seraphina','Tristan','Ximena','Masaru','Nanami','Xiaochen','Yunfan','MultiTalker-Ava-Andrew'
+          ]);
+          const deriveLocaleAndPersona = (key: string) => {
+            const m = key.match(/^([a-z]{2}-[A-Z]{2})-/);
+            const locale = m ? m[1] : '';
+            let rest = key.replace(/^([a-z]{2}-[A-Z]{2})-/, '');
+            rest = rest.split(':')[0];
+            rest = rest.replace(/Multilingual/i, '');
+            rest = rest.replace(/Neural/i, '');
+            return { locale, persona: rest };
+          };
+
           const options: Record<string, string> = {};
-          for (const v of filtered) { const key = v.ShortName || v.Name; if (key) options[key] = key; }
+          for (const v of list) {
+            const rawKey = (v.ShortName || v.Name || '').toString();
+            if (!rawKey) continue;
+            if (!this.plugin.settings.onlyHdVoices) {
+              options[rawKey] = rawKey;
+              continue;
+            }
+            const isNeural = /Neural/i.test(rawKey);
+            const hasDragon = /DragonHD/i.test(rawKey);
+            const { locale, persona } = deriveLocaleAndPersona(rawKey);
+            const isHdPersona = hdPersonas.has(persona);
+            if (isNeural && (hasDragon || isHdPersona) && locale) {
+              const hdKey = `${locale}-${persona}:DragonHDLatestNeural`;
+              options[hdKey] = hdKey;
+            }
+          }
           if (voiceDropdown) {
             while (voiceDropdown.selectEl.firstChild) {
               voiceDropdown.selectEl.removeChild(voiceDropdown.selectEl.firstChild);
