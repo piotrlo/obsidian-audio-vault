@@ -13,6 +13,9 @@
     "test": "bun run test:plugin && bun run test:backend",
     "test:plugin": "bun test --preload=./tests/setup.ts ./src/**/*.test.ts ./tests/**/*.test.ts",
     "test:backend": "bash -lc 'cd listenmode-backend && bun run test'",
+    "coverage": "bun run coverage:plugin && bun run coverage:backend",
+    "coverage:plugin": "bun test --preload=./tests/setup.ts --coverage ./src/**/*.test.ts ./tests/**/*.test.ts",
+    "coverage:backend": "bash -lc 'cd listenmode-backend && bun run coverage'",
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "prepare": "husky install"
