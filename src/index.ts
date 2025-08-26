@@ -40,6 +40,13 @@ export default class ListenModePlugin extends Plugin {
   async onload(): Promise<void> {
     await this.loadSettings();
     setDebugLogging(!!this.settings.debugLogs);
+    if (!this.settings.clientId || this.settings.clientId.trim().length < 8) {
+      try {
+        const uuid = (crypto && 'randomUUID' in crypto) ? (crypto as any).randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+        this.settings.clientId = uuid;
+        await this.saveSettings();
+      } catch {}
+    }
     this.provider = this.buildProviderFromSettings();
     this.addCommand({ id: "listenmode-play-pause", name: "Play/Pause current note", callback: () => { this.playOrStart(); } });
     this.addCommand({ id: "listenmode-stop", name: "Stop", callback: () => { void this.stopPlayback(); } });
@@ -293,8 +300,15 @@ notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
           return;
         }
       } catch (e: unknown) {
-        const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
-notifyUtil(this.settings, `TTS failed on part ${part}: ${msg}` , true);
+        const status = (e && typeof e === 'object' && 'status' in e) ? (e as any).status : undefined;
+        const code = (e && typeof e === 'object' && 'code' in e) ? (e as any).code : undefined;
+        if (status === 402 || code === 'PAYMENT_REQUIRED' || code === 'DEVICE_LIMIT_EXCEEDED') {
+          try { notifyUtil(this.settings, `Wymagany upgrade planu (${code || status}). Otwórz stronę planów.`, true); } catch {}
+          try { window.open('https://listenmode.app/upgrade', '_blank'); } catch {}
+        } else {
+          const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
+          notifyUtil(this.settings, `TTS failed on part ${part}: ${msg}` , true);
+        }
         break;
       }
     }
@@ -436,8 +450,15 @@ notifyUtil(this.settings, `Could not remove old parts (continuing): ${((e as any
           }
 log("downloaded part", { part, total: totalParts });
         } catch (e: unknown) {
-          const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
-notifyUtil(this.settings, `Download failed on part ${part}: ${msg}`, true);
+          const status = (e && typeof e === 'object' && 'status' in e) ? (e as any).status : undefined;
+          const code = (e && typeof e === 'object' && 'code' in e) ? (e as any).code : undefined;
+          if (status === 402 || code === 'PAYMENT_REQUIRED' || code === 'DEVICE_LIMIT_EXCEEDED') {
+            try { notifyUtil(this.settings, `Wymagany upgrade planu (${code || status}). Otwórz stronę planów.`, true); } catch {}
+            try { window.open('https://listenmode.app/upgrade', '_blank'); } catch {}
+          } else {
+            const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
+            notifyUtil(this.settings, `Download failed on part ${part}: ${msg}`, true);
+          }
           break;
         }
         part += 1;
@@ -496,7 +517,7 @@ notifyUtil(this.settings, `Failed to ensure folder "${folder}": ${((e as any)?.m
 
   private buildProviderFromSettings(): TtsProvider {
     if (this.settings.useBackend && this.settings.backendUrl && this.settings.licenseKey) {
-      return new BackendTtsProvider({ backendUrl: this.settings.backendUrl, licenseKey: this.settings.licenseKey });
+      return new BackendTtsProvider({ backendUrl: this.settings.backendUrl, licenseKey: this.settings.licenseKey, clientId: this.settings.clientId });
     }
     return new AzureTtsProvider({ apiKey: this.settings.azureApiKey, region: "westeurope" });
   }

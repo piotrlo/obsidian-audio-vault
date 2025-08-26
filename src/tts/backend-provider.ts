@@ -6,12 +6,14 @@ import type { TtsProvider, Voice } from "../types";
 export class BackendTtsProvider implements TtsProvider {
   private readonly backendUrl: string;
   private readonly licenseKey: string;
+  private readonly clientId?: string;
   private jwtToken: string | null = null;
   private tokenExpiry: number = 0;
 
-  constructor(params: { backendUrl: string; licenseKey: string }) {
+  constructor(params: { backendUrl: string; licenseKey: string; clientId?: string }) {
     this.backendUrl = params.backendUrl.replace(/\/$/, "");
     this.licenseKey = params.licenseKey;
+    this.clientId = params.clientId;
   }
 
   private async getValidToken(): Promise<string> {
@@ -19,11 +21,17 @@ export class BackendTtsProvider implements TtsProvider {
     const res = await fetch(`${this.backendUrl}/v1/auth/validate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ license_key: this.licenseKey })
+      body: JSON.stringify({ license_key: this.licenseKey, client_id: this.clientId })
     });
     if (!res.ok) {
-      let msg = ""; try { const j = await res.json(); msg = j?.error || ""; } catch {}
-      throw new Error(`License validation failed: ${msg || res.statusText}`);
+      let detail: any = null;
+      try { detail = await res.json(); } catch { try { detail = await res.text(); } catch {}
+      }
+      const err = new Error(`License validation failed: ${res.status}`);
+      (err as any).status = res.status;
+      (err as any).code = (detail && typeof detail === 'object') ? (detail.error_code || detail.code) : undefined;
+      (err as any).body = detail;
+      throw err;
     }
     const data = await res.json();
     this.jwtToken = data?.data?.token || null;
@@ -40,11 +48,16 @@ export class BackendTtsProvider implements TtsProvider {
     const res = await fetch(`${this.backendUrl}/v1/auth/validate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ license_key: this.licenseKey })
+      body: JSON.stringify({ license_key: this.licenseKey, client_id: this.clientId })
     });
     if (!res.ok) {
-      let t = ""; try { t = await res.text(); } catch {}
-      throw new Error(`License validation failed: ${res.status}${t ? ` - ${t}` : ""}`);
+      let detail: any = null;
+      try { detail = await res.json(); } catch { try { detail = await res.text(); } catch {} }
+      const err = new Error(`License validation failed: ${res.status}`);
+      (err as any).status = res.status;
+      (err as any).code = (detail && typeof detail === 'object') ? (detail.error_code || detail.code) : undefined;
+      (err as any).body = detail;
+      throw err;
     }
     const payload = await res.json();
     const token = payload?.data?.token as string | undefined;
@@ -68,8 +81,13 @@ export class BackendTtsProvider implements TtsProvider {
     const token = await this.getValidToken();
     const res = await fetch(`${this.backendUrl}/v1/auth/usage`, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) {
-      let t = ""; try { t = await res.text(); } catch {}
-      throw new Error(`Usage fetch failed: ${res.status}${t ? ` - ${t}` : ""}`);
+      let detail: any = null;
+      try { detail = await res.json(); } catch { try { detail = await res.text(); } catch {} }
+      const err = new Error(`Usage fetch failed: ${res.status}`);
+      (err as any).status = res.status;
+      (err as any).code = (detail && typeof detail === 'object') ? (detail.error_code || detail.code) : undefined;
+      (err as any).body = detail;
+      throw err;
     }
     const payload = await res.json();
     return payload?.data || {};
@@ -87,8 +105,13 @@ export class BackendTtsProvider implements TtsProvider {
       signal: abortSignal
     });
     if (!res.ok || !res.body) {
-      let t = ""; try { t = await res.text(); } catch {}
-      throw new Error(`TTS request failed: ${res.status}${t ? ` - ${t}` : ""}`);
+      let detail: any = null;
+      try { detail = await res.json(); } catch { try { detail = await res.text(); } catch {} }
+      const err = new Error(`TTS request failed: ${res.status}`);
+      (err as any).status = res.status;
+      (err as any).code = (detail && typeof detail === 'object') ? (detail.error_code || detail.code) : undefined;
+      (err as any).body = detail;
+      throw err;
     }
     return res.body as ReadableStream<Uint8Array>;
   }

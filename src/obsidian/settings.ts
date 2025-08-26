@@ -26,6 +26,27 @@ export class ListenModeSettingsTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
+    const root = containerEl.createDiv();
+    const tabs = root.createDiv({ cls: 'listenmode-tabs' });
+    const basicBtn = tabs.createEl('button', { text: 'Basic' });
+    const advBtn = tabs.createEl('button', { text: 'Advanced' });
+    basicBtn.style.marginRight = '8px';
+    const content = root.createDiv({ cls: 'listenmode-tab-content' });
+
+    let currentTab: 'basic' | 'advanced' = 'basic';
+    const render = () => {
+      content.empty();
+      if (currentTab === 'basic') this.renderBasic(content);
+      else this.renderAdvanced(content);
+      basicBtn.classList.toggle('mod-active', currentTab === 'basic');
+      advBtn.classList.toggle('mod-active', currentTab === 'advanced');
+    };
+    basicBtn.onclick = () => { currentTab = 'basic'; render(); };
+    advBtn.onclick = () => { currentTab = 'advanced'; render(); };
+    render();
+  }
+
+  private renderBasic(containerEl: HTMLElement): void {
     // Auto-refresh license status on opening the tab (with basic caching)
     void (async () => {
       try {
@@ -34,7 +55,7 @@ export class ListenModeSettingsTab extends PluginSettingTab {
         const tokenFresh = !!s.licenseTokenExpiresAt && Date.now() < (s.licenseTokenExpiresAt - 120_000);
         if (hasBackend && !tokenFresh) {
           const provider = (await import("../tts/backend-provider")).BackendTtsProvider;
-          const p = new provider({ backendUrl: s.backendUrl!, licenseKey: s.licenseKey! });
+          const p = new provider({ backendUrl: s.backendUrl!, licenseKey: s.licenseKey!, clientId: s.clientId });
           const v = await p.validateLicense();
           this.plugin.settings.licensePlan = v.plan;
           this.plugin.settings.licenseQuotaRemaining = v.quota_remaining;
@@ -45,111 +66,24 @@ export class ListenModeSettingsTab extends PluginSettingTab {
             this.plugin.settings.licenseUsagePeriod = u.period || this.plugin.settings.licenseUsagePeriod;
           } catch {}
           await this.plugin.saveSettings();
-          // Re-render with updated info
-          this.display();
+          this.renderBasic(containerEl);
           return;
         }
       } catch {}
     })();
 
-    new Setting(containerEl)
-      .setName("Azure API Key")
-      .setDesc("Stored locally in plugin data")
-      .addText((t) =>
-        t.setPlaceholder("••••••••")
-          .setValue(this.plugin.settings.azureApiKey)
-          .onChange(async (v) => { this.plugin.settings.azureApiKey = v.trim(); await this.plugin.saveSettings(); })
-      );
-
-    if (!this.plugin.settings.useBackend) {
-      new Setting(containerEl)
-        .setName("Azure Region")
-        .setDesc("Fixed: westeurope (local mode)")
-        .addText((t) =>
-          t.setDisabled(true)
-            .setPlaceholder("westeurope")
-            .setValue("westeurope")
-        );
-      this.plugin.settings.azureRegion = "westeurope";
-      void this.plugin.saveSettings();
-    }
-
-    /**
-     * Voice selection: dropdown plus fetch button to load from Azure for the configured region.
-     */
-    const voiceRow = new Setting(containerEl)
-      .setName("Voice")
-      .setDesc("Choose voice; fetch via Azure or backend depending on settings");
-
-    let voiceDropdown: import("obsidian").DropdownComponent | null = null;
-    voiceRow.addDropdown((dd) => {
-      voiceDropdown = dd;
-      dd.addOption(this.plugin.settings.voiceName, this.plugin.settings.voiceName);
-      dd.setValue(this.plugin.settings.voiceName);
-      dd.onChange(async (v) => { this.plugin.settings.voiceName = v; await this.plugin.saveSettings(); });
-    });
-    voiceRow.addButton((btn) =>
-      btn.setButtonText("Fetch voices").setCta().onClick(async () => {
-        try {
-          let list: Array<{ ShortName?: string; Name?: string }> = [];
-          if (this.plugin.settings.useBackend && this.plugin.settings.backendUrl) {
-            const url = `${this.plugin.settings.backendUrl.replace(/\/$/, '')}/v1/voices`;
-            const res = await fetch(url);
-            if (!res.ok) { let t = ""; try { t = await res.text(); } catch {} ; new Notice(`Voice list failed: ${res.status}${t?` - ${t}`:""}`); return; }
-            const payload = await res.json();
-            const items = Array.isArray(payload?.data) ? payload.data : [];
-            list = items.map((v: any) => ({ ShortName: v?.shortName, Name: v?.name }));
-          } else {
-            if (!this.plugin.settings.azureApiKey?.trim()) {
-              new Notice("Set Azure API Key first");
-              return;
-            }
-            const url = `https://westeurope.tts.speech.microsoft.com/cognitiveservices/voices/list`;
-            const res = await fetch(url, { headers: { "Ocp-Apim-Subscription-Key": this.plugin.settings.azureApiKey } });
-            if (!res.ok) { let t = ""; try { t = await res.text(); } catch {} ; new Notice(`Voice list failed: ${res.status}${t?` - ${t}`:""}`); return; }
-            const data = await res.json();
-            list = Array.isArray(data) ? data : [];
-          }
-
-   
-          const options: Record<string, string> = {};
-          for (const v of list) {
-            const rawKey = (v.ShortName || v.Name || '').toString();
-            if (!rawKey) continue;
-            if (!/MultilingualNeural/i.test(rawKey)) continue;
-            options[rawKey] = rawKey;
-          }
-          if (voiceDropdown) {
-            while (voiceDropdown.selectEl.firstChild) {
-              voiceDropdown.selectEl.removeChild(voiceDropdown.selectEl.firstChild);
-            }
-            Object.entries(options).forEach(([k, label]) => voiceDropdown!.addOption(k, label));
-            const preferred = this.plugin.settings.voiceName;
-            if (options[preferred]) voiceDropdown.setValue(preferred);
-            else {
-              const first = Object.keys(options)[0];
-              if (first) { voiceDropdown.setValue(first); this.plugin.settings.voiceName = first; await this.plugin.saveSettings(); }
-            }
-          }
-          new Notice(`Voices loaded: ${Object.keys(options).length}`);
-        } catch (e: any) {
-          new Notice(`Voice list error: ${e?.message || String(e)}`);
-        }
-      })
-    );
-    new Setting(containerEl)
-      .setName("Use backend (Cloudflare Workers)")
-      .setDesc("Proxy via Hono API; hides Azure key and enforces limits")
-      .addToggle((tg) => tg
-        .setValue(!!this.plugin.settings.useBackend)
-        .onChange(async (v) => { this.plugin.settings.useBackend = v; await this.plugin.saveSettings(); })
-      );
+    // License CTA + status
+    const licCta = new Setting(containerEl)
+      .setName("ListenMode Plus — aktywuj darmową licencję lub kup plan")
+      .setDesc("Darmowy plan z miesięcznym limitem (2 urządzenia). Wyższe plany bez limitu urządzeń i większe limity znaków.");
+    licCta.addButton((b) => b.setButtonText("Upgrade").setCta().onClick(() => {
+      try { window.open('https://listenmode.app/upgrade', '_blank'); } catch {}
+    }));
 
     // License status row (plan/quota/expiry)
     const licenseStatus = new Setting(containerEl)
-      .setName("License status")
-      .setDesc("Plan, pozostałe tokeny i ważność")
-      .addText((t) => {
+      .setName("Status licencji")
+      .setDesc("Plan, pozostałe tokeny i ważność").addText((t) => {
         const s = this.plugin.settings;
         const parts: string[] = [];
         if (s.licensePlan) parts.push(`Plan: ${s.licensePlan}`);
@@ -160,7 +94,6 @@ export class ListenModeSettingsTab extends PluginSettingTab {
         t.setValue(statusText);
         return t;
       });
-    // Colored badge appended to the setting name
     try {
       const s = this.plugin.settings;
       const span = licenseStatus.nameEl.createEl('span');
@@ -170,179 +103,154 @@ export class ListenModeSettingsTab extends PluginSettingTab {
       span.style.fontSize = '0.9em';
       span.style.color = '#fff';
       const hasCfg = !!s.useBackend && !!s.backendUrl && !!s.licenseKey;
-      if (!hasCfg) {
-        span.textContent = 'Brak konfiguracji';
-        span.style.backgroundColor = '#b00020';
-      } else if (typeof s.licenseQuotaRemaining === 'number' && typeof s.licenseQuotaLimit === 'number' && s.licenseQuotaLimit > 0) {
+      if (!hasCfg) { span.textContent = 'Brak konfiguracji'; span.style.backgroundColor = '#b00020'; }
+      else if (typeof s.licenseQuotaRemaining === 'number' && typeof s.licenseQuotaLimit === 'number' && s.licenseQuotaLimit > 0) {
         const pct = s.licenseQuotaRemaining / s.licenseQuotaLimit;
         span.textContent = pct <= 0 ? '0%' : `${Math.round(pct * 100)}%`;
         if (pct <= 0.05) span.style.backgroundColor = '#b00020';
         else if (pct <= 0.15) span.style.backgroundColor = '#f57c00';
         else span.style.backgroundColor = '#388e3c';
-      } else {
-        span.textContent = 'N/D';
-        span.style.backgroundColor = '#616161';
-      }
+      } else { span.textContent = 'N/D'; span.style.backgroundColor = '#616161'; }
     } catch {}
 
-    // License actions (validate + usage)
-    const licenseActions = new Setting(containerEl)
-      .setName("Weryfikacja licencji")
-      .setDesc("Sprawdź licencję i pobierz limit/pozostałe tokeny")
-    licenseActions.addButton((btn) =>
-      btn.setButtonText("Zweryfikuj licencję").setCta().onClick(async () => {
-        try {
-          if (!this.plugin.settings.useBackend || !this.plugin.settings.backendUrl || !this.plugin.settings.licenseKey) {
-            new Notice("Włącz backend, ustaw URL i klucz licencyjny");
-            return;
-          }
-          const provider = (await import("../tts/backend-provider")).BackendTtsProvider;
-          const p = new provider({ backendUrl: this.plugin.settings.backendUrl!, licenseKey: this.plugin.settings.licenseKey! });
-          const v = await p.validateLicense();
-          this.plugin.settings.licensePlan = v.plan;
-          this.plugin.settings.licenseQuotaRemaining = v.quota_remaining;
-          this.plugin.settings.licenseQuotaLimit = v.quota_limit;
-          this.plugin.settings.licenseTokenExpiresAt = v.expiresAtMs;
-          await this.plugin.saveSettings();
-          new Notice("Licencja zweryfikowana");
-          this.display();
-        } catch (e: any) {
-          new Notice(`Błąd weryfikacji: ${e?.message || String(e)}`);
-        }
-      })
-    );
-    licenseActions.addButton((btn) =>
-      btn.setButtonText("Odśwież użycie").onClick(async () => {
-        try {
-          if (!this.plugin.settings.useBackend || !this.plugin.settings.backendUrl || !this.plugin.settings.licenseKey) {
-            new Notice("Włącz backend, ustaw URL i klucz licencyjny");
-            return;
-          }
-          const provider = (await import("../tts/backend-provider")).BackendTtsProvider;
-          const p = new provider({ backendUrl: this.plugin.settings.backendUrl!, licenseKey: this.plugin.settings.licenseKey! });
-          const u = await p.fetchUsage();
-          this.plugin.settings.licensePlan = u.plan || this.plugin.settings.licensePlan;
-          this.plugin.settings.licenseQuotaRemaining = typeof u.quota_remaining === 'number' ? u.quota_remaining : this.plugin.settings.licenseQuotaRemaining;
-          this.plugin.settings.licenseQuotaLimit = typeof u.quota_limit === 'number' ? u.quota_limit : this.plugin.settings.licenseQuotaLimit;
-          this.plugin.settings.licenseUsagePeriod = u.period || this.plugin.settings.licenseUsagePeriod;
-          await this.plugin.saveSettings();
-          new Notice("Użycie odświeżone");
-          this.display();
-        } catch (e: any) {
-          new Notice(`Błąd pobierania użycia: ${e?.message || String(e)}`);
-        }
-      })
-    );
+    // License input + actions
+    const licInput = new Setting(containerEl)
+      .setName("License Key")
+      .setDesc("Wklej klucz, aby aktywować licencję (Plus)")
+      .addText((t) => t.setPlaceholder("LM-...-...").setValue(this.plugin.settings.licenseKey || "").onChange(async (v) => { this.plugin.settings.licenseKey = v.trim(); await this.plugin.saveSettings(); }));
+    licInput.addButton((btn) => btn.setButtonText("Aktywuj").setCta().onClick(async () => {
+      try {
+        if (!this.plugin.settings.useBackend || !this.plugin.settings.backendUrl || !this.plugin.settings.licenseKey) { new Notice("Włącz tryb Plus i wklej klucz licencji"); return; }
+        const provider = (await import("../tts/backend-provider")).BackendTtsProvider;
+        const p = new provider({ backendUrl: this.plugin.settings.backendUrl!, licenseKey: this.plugin.settings.licenseKey!, clientId: this.plugin.settings.clientId });
+        const v = await p.validateLicense();
+        this.plugin.settings.licensePlan = v.plan;
+        this.plugin.settings.licenseQuotaRemaining = v.quota_remaining;
+        this.plugin.settings.licenseQuotaLimit = v.quota_limit;
+        this.plugin.settings.licenseTokenExpiresAt = v.expiresAtMs;
+        await this.plugin.saveSettings();
+        new Notice("Licencja zweryfikowana");
+        this.renderBasic(containerEl);
+      } catch (e: any) { new Notice(`Błąd weryfikacji: ${e?.message || String(e)}`); }
+    }));
 
-    new Setting(containerEl)
-      .setName("Backend URL")
-      .setDesc("Base URL to your Worker, e.g., https://listenmode-backend.<subdomain>.workers.dev")
-      .addText((t) => t
-        .setPlaceholder("https://listenmode-backend...workers.dev")
-        .setValue(this.plugin.settings.backendUrl || "")
-        .onChange(async (v) => { this.plugin.settings.backendUrl = v.trim(); await this.plugin.saveSettings(); })
-      );
+    const usageBtn = new Setting(containerEl).setName("Weryfikacja licencji / użycie").setDesc("Pobiera plan i pozostałe tokeny");
+    usageBtn.addButton((btn) => btn.setButtonText("Sprawdź").onClick(async () => {
+      try {
+        if (!this.plugin.settings.useBackend || !this.plugin.settings.backendUrl || !this.plugin.settings.licenseKey) { new Notice("Włącz tryb Plus i wklej klucz licencji"); return; }
+        const provider = (await import("../tts/backend-provider")).BackendTtsProvider;
+        const p = new provider({ backendUrl: this.plugin.settings.backendUrl!, licenseKey: this.plugin.settings.licenseKey!, clientId: this.plugin.settings.clientId });
+        const u = await p.fetchUsage();
+        this.plugin.settings.licensePlan = u.plan || this.plugin.settings.licensePlan;
+        this.plugin.settings.licenseQuotaRemaining = typeof u.quota_remaining === 'number' ? u.quota_remaining : this.plugin.settings.licenseQuotaRemaining;
+        this.plugin.settings.licenseQuotaLimit = typeof u.quota_limit === 'number' ? u.quota_limit : this.plugin.settings.licenseQuotaLimit;
+        this.plugin.settings.licenseUsagePeriod = u.period || this.plugin.settings.licenseUsagePeriod;
+        await this.plugin.saveSettings();
+        new Notice("Użycie odświeżone");
+        this.renderBasic(containerEl);
+      } catch (e: any) { new Notice(`Błąd pobierania użycia: ${e?.message || String(e)}`); }
+    }));
 
+    // Mode: Local (Azure) vs Plus
     new Setting(containerEl)
-      .setName("License key")
-      .setDesc("Used to obtain a short-lived JWT from backend")
-      .addText((t) => t
-        .setPlaceholder("LM-...-...")
-        .setValue(this.plugin.settings.licenseKey || "")
-        .onChange(async (v) => { this.plugin.settings.licenseKey = v.trim(); await this.plugin.saveSettings(); })
-      );
+      .setName("Tryb")
+      .setDesc("Własny klucz Azure (lokalnie) lub Plus (backend)")
+      .addToggle((tg) => tg.setValue(!!this.plugin.settings.useBackend).onChange(async (v) => { this.plugin.settings.useBackend = v; await this.plugin.saveSettings(); this.renderBasic(containerEl); }));
 
+    // Azure key (only in Local mode)
+    if (!this.plugin.settings.useBackend) {
+      new Setting(containerEl)
+        .setName("Azure API Key")
+        .setDesc("Przechowywany lokalnie w danych wtyczki")
+        .addText((t) => t.setPlaceholder("••••••••").setValue(this.plugin.settings.azureApiKey).onChange(async (v) => { this.plugin.settings.azureApiKey = v.trim(); await this.plugin.saveSettings(); }));
+    }
+
+    // Speed slider (-100%..+500%)
+    const speedRow = new Setting(containerEl)
+      .setName("Speed")
+      .setDesc("Tempo czytania: -100% do +500% (domyślnie +10%)");
+    const currentRate = this.plugin.settings.rate || "+10%";
+    const toNum = (s: string) => { const m = s.match(/(-?\d+)\s*%/); return m ? Math.max(-100, Math.min(500, parseInt(m[1], 10))) : 10; };
+    const toStr = (n: number) => `${n >= 0 ? "+" : ""}${n}%`;
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = "-100";
+    slider.max = "500";
+    slider.value = String(toNum(currentRate));
+    slider.style.width = '200px';
+    const label = document.createElement('span');
+    label.style.marginLeft = '8px';
+    label.textContent = toStr(toNum(currentRate));
+    slider.oninput = async () => { const n = Math.max(-100, Math.min(500, Math.floor(Number(slider.value)))); label.textContent = toStr(n); this.plugin.settings.rate = toStr(n); await this.plugin.saveSettings(); };
+    speedRow.settingEl.appendChild(slider);
+    speedRow.settingEl.appendChild(label);
+
+    // Language (auto/pl/en)
     new Setting(containerEl)
-      .setName("TTS Provider")
-      .setDesc("For now only Azure is available; OpenAI later")
+      .setName("Language")
+      .setDesc("Automatycznie (PL/EN) lub wymuś język")
       .addDropdown((dd) => {
-        dd.addOption("azure", "Azure");
-        dd.setValue(this.plugin.settings.ttsProvider || "azure");
-        dd.onChange(async (v) => { this.plugin.settings.ttsProvider = v as any; await this.plugin.saveSettings(); });
+        dd.addOption('auto', 'Auto');
+        dd.addOption('pl-PL', 'Polski');
+        dd.addOption('en-US', 'English');
+        dd.setValue(this.plugin.settings.language || 'auto');
+        dd.onChange(async (v) => { this.plugin.settings.language = v as any; this.plugin.settings.languageOverride = v === 'auto' ? '' : v; await this.plugin.saveSettings(); });
       });
 
     new Setting(containerEl)
-      .setName("Output format")
-      .setDesc("e.g., audio-24khz-48kbitrate-mono-mp3 or riff-24khz-16bit-mono-pcm")
-      .addText((t) =>
-        t.setPlaceholder("audio-24khz-48kbitrate-mono-mp3")
-          .setValue(this.plugin.settings.outputFormat)
-          .onChange(async (v) => { this.plugin.settings.outputFormat = v.trim(); await this.plugin.saveSettings(); })
-      );
-
-    new Setting(containerEl)
-      .setName("Rate")
-      .setDesc("SSML rate, e.g., +10% for ~1.1x")
-      .addText((t) =>
-        t.setPlaceholder("+10%")
-          .setValue(this.plugin.settings.rate)
-          .onChange(async (v) => { this.plugin.settings.rate = v.trim() || "+0%"; await this.plugin.saveSettings(); })
-      );
-
-    new Setting(containerEl)
-      .setName("Only HD neural voices")
-      .setDesc("Filter voice list to Neural HD voices (e.g., DragonHD)")
-      .addToggle((tg) => tg.setValue(this.plugin.settings.onlyHdVoices).onChange(async (v) => { this.plugin.settings.onlyHdVoices = v; await this.plugin.saveSettings(); }));
-
-    // Language is automatic by default (hidden); provide optional override input.
-    new Setting(containerEl)
-      .setName("Language (optional override)")
-      .setDesc("BCP-47 code (e.g., es-ES). Leave empty for auto (PL/EN).")
-      .addText((t) =>
-        t.setPlaceholder("e.g., es-ES")
-          .setValue(this.plugin.settings.languageOverride || "")
-          .onChange(async (v) => { this.plugin.settings.languageOverride = v.trim(); await this.plugin.saveSettings(); })
-      );
-
-    new Setting(containerEl)
-      .setName("Chunk size (characters)")
-      .setDesc("Max characters per part. Range: 500 – 9000. Default 5000.")
-      .addText((t) =>
-        t.setPlaceholder("5000")
-          .setValue(String(this.plugin.settings.chunkSize || 5000))
-          .onChange(async (v) => {
-            const n = Math.floor(Number(v));
-            const clamped = isFinite(n) ? Math.max(500, Math.min(9000, n)) : 5000;
-            this.plugin.settings.chunkSize = clamped;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
       .setName("Streaming (realtime)")
-      .setDesc("Disable if playback fails on iOS")
+      .setDesc("Wyłącz, jeśli odtwarzanie nie działa na iOS")
       .addToggle((tg) => tg.setValue(this.plugin.settings.enableStreaming).onChange(async (v) => { this.plugin.settings.enableStreaming = v; await this.plugin.saveSettings(); }));
 
-/** Panel removed – control via ribbon/commands only */
-
     new Setting(containerEl)
-      .setName("Merge parts into a single audio file (MP3)")
-      .setDesc("When enabled and format is MP3: save a single file instead of parts")
-      .addToggle((tg) => tg
-        .setValue(!!this.plugin.settings.mergeParts)
-        .onChange(async (v) => { this.plugin.settings.mergeParts = v; await this.plugin.saveSettings(); })
-      );
+      .setName("Merge parts into single audio file (MP3)")
+      .setDesc("Zapisuje jeden scalony plik zamiast wielu części")
+      .addToggle((tg) => tg.setValue(!!this.plugin.settings.mergeParts).onChange(async (v) => { this.plugin.settings.mergeParts = v; await this.plugin.saveSettings(); }));
 
     new Setting(containerEl)
       .setName("Audio folder")
-      .setDesc("Target folder for generated audio files")
-      .addText((t) =>
-        t.setPlaceholder("Audio")
-          .setValue(this.plugin.settings.audioFolder)
-          .onChange(async (v) => { this.plugin.settings.audioFolder = v.trim() || "Audio"; await this.plugin.saveSettings(); })
-      );
+      .setDesc("Folder docelowy na pliki audio")
+      .addText((t) => t.setPlaceholder("Audio").setValue(this.plugin.settings.audioFolder).onChange(async (v) => { this.plugin.settings.audioFolder = v.trim() || "Audio"; await this.plugin.saveSettings(); }));
+  }
+
+  private renderAdvanced(containerEl: HTMLElement): void {
+    new Setting(containerEl)
+      .setName("TTS Provider")
+      .setDesc("Obecnie dostępny: Azure")
+      .addDropdown((dd) => { dd.addOption("azure", "Azure"); dd.setValue(this.plugin.settings.ttsProvider || "azure"); dd.onChange(async (v) => { this.plugin.settings.ttsProvider = v as any; await this.plugin.saveSettings(); }); });
+
+    new Setting(containerEl)
+      .setName("Output format")
+      .setDesc("np. audio-24khz-48kbitrate-mono-mp3")
+      .addText((t) => t.setPlaceholder("audio-24khz-48kbitrate-mono-mp3").setValue(this.plugin.settings.outputFormat).onChange(async (v) => { this.plugin.settings.outputFormat = v.trim(); await this.plugin.saveSettings(); }));
+
+    new Setting(containerEl)
+      .setName("Chunk size (characters)")
+      .setDesc("Maks. znaki na część (500–9000)")
+      .addText((t) => t.setPlaceholder("5000").setValue(String(this.plugin.settings.chunkSize || 5000)).onChange(async (v) => {
+        const n = Math.floor(Number(v));
+        const clamped = isFinite(n) ? Math.max(500, Math.min(9000, n)) : 5000;
+        this.plugin.settings.chunkSize = clamped; await this.plugin.saveSettings();
+      }));
 
     new Setting(containerEl)
       .setName("Debug logs")
-      .setDesc("Print detailed streaming and fetch diagnostics to the console")
-      .addToggle((tg) => tg
-        .setValue(!!this.plugin.settings.debugLogs)
-        .onChange(async (v) => { this.plugin.settings.debugLogs = v; await this.plugin.saveSettings(); try { (await import("../utils/logger")).setDebugLogging(v); } catch {} })
-      );
+      .setDesc("Szczegółowe logi w konsoli")
+      .addToggle((tg) => tg.setValue(!!this.plugin.settings.debugLogs).onChange(async (v) => { this.plugin.settings.debugLogs = v; await this.plugin.saveSettings(); try { (await import("../utils/logger")).setDebugLogging(v); } catch {} }));
 
-    new Setting(containerEl)
-      .setName("Help")
-      .setDesc("Use command palette: ListenMode: Read current note")
+    const reset = new Setting(containerEl)
+      .setName("Przywróć domyślne")
+      .setDesc("Resetuje ustawienia do wartości domyślnych");
+    reset.addButton((b) => b.setButtonText("Reset").onClick(async () => {
+      try {
+        const { DEFAULT_SETTINGS } = await import('../core/settings');
+        const keep = { licenseKey: this.plugin.settings.licenseKey, clientId: this.plugin.settings.clientId } as any;
+        this.plugin.settings = Object.assign({}, DEFAULT_SETTINGS, keep);
+        await this.plugin.saveSettings();
+        new Notice('Ustawienia przywrócone');
+        this.display();
+      } catch (e: any) { new Notice(`Nie udało się przywrócić: ${e?.message || String(e)}`); }
+    }));
   }
 }
 

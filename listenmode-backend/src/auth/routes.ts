@@ -3,12 +3,12 @@ import type { Bindings, ApiResponse, JWTPayload } from '../types';
 import { jsonError } from '../types';
 import { z } from 'zod';
 import { hashLicenseKey, generateJWT, verifyJWT } from './jwt';
-import { findLicenseByHash, checkQuotaLimit, logEvent } from '../db/queries';
-import { PLAN_LIMITS } from '../types';
+import { findLicenseByHash, checkQuotaLimit, logEvent, upsertLicenseClient } from '../db/queries';
+import { PLAN_LIMITS, PLAN_MAX_CLIENTS } from '../types';
 
 const auth = new Hono<{ Bindings: Bindings }>();
 
-const ValidateBodySchema = z.object({ license_key: z.string().min(1) });
+const ValidateBodySchema = z.object({ license_key: z.string().min(1), client_id: z.string().min(8).optional() });
 
 function getValidateLimit(c: any): number {
   const envVal = c.env.AUTH_VALIDATE_BODY_LIMIT_BYTES;
@@ -53,6 +53,7 @@ auth.post('/validate', async (c) => {
     const result = ValidateBodySchema.safeParse(parsed);
     if (!result.success) return jsonError(c, 400, 'VALIDATION_FAILED', 'Invalid request body', result.error.flatten());
     const licenseKey = result.data.license_key;
+    const clientId = (result.data as any).client_id as string | undefined;
 
     const hash = await hashLicenseKey(licenseKey);
     const lic = await findLicenseByHash(c.env.DB, hash);
@@ -69,8 +70,18 @@ auth.post('/validate', async (c) => {
       return jsonError(c, 401, 'LICENSE_EXPIRED', 'License expired');
     }
 
+    // Enforce max clients for free plan when client_id is provided
+    if (clientId && lic.plan === 'free') {
+      const count = await upsertLicenseClient(c.env.DB, lic.id, clientId);
+      const max = (PLAN_MAX_CLIENTS as any).free ?? 2;
+      if (count > max) {
+        await logEvent(c.env.DB, lic.id, 'license_client_rejected', { client_id: clientId, count, max });
+        return jsonError(c, 402, 'DEVICE_LIMIT_EXCEEDED', `Free plan allows up to ${max} devices`);
+      }
+    }
+
     const quota = await checkQuotaLimit(c.env.DB, lic.id, lic.plan as any, 0, PLAN_LIMITS as any);
-    const jwt = await generateJWT({ license_id: lic.id, plan: lic.plan, quota_remaining: quota.remaining }, c.env.JWT_SECRET, 15);
+    const jwt = await generateJWT({ license_id: lic.id, plan: lic.plan, quota_remaining: quota.remaining, client_id: clientId }, c.env.JWT_SECRET, 15);
     await logEvent(c.env.DB, lic.id, 'license_validated', { plan: lic.plan, remaining: quota.remaining });
 
     return c.json<ApiResponse<{ token: string; expires_in: number; plan: string; quota_remaining: number; quota_limit: number }>>({

@@ -5,6 +5,7 @@ export const DEFAULT_SETTINGS: TtsSettings = {
   useBackend: true,
   backendUrl: "https://listenmode-backend.loch-piotr.workers.dev",
   licenseKey: "",
+  clientId: "",
   azureApiKey: "",
   azureRegion: "westeurope",
   voiceName: "en-US-Ava:DragonHDLatestNeural",
