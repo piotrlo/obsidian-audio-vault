@@ -37,7 +37,7 @@ export function missingSettings(s: TtsSettings): string[] {
   const out: string[] = [];
   if (s.useBackend) {
     if (!s.backendUrl?.trim()) out.push("Backend URL");
-    if (!s.licenseKey?.trim()) out.push("License key");
+    // licenseKey is optional in auto-free activation mode
   } else {
     if (!s.azureApiKey?.trim()) out.push("Azure API Key");
   }

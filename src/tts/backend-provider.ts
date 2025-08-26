@@ -18,10 +18,13 @@ export class BackendTtsProvider implements TtsProvider {
 
   private async getValidToken(): Promise<string> {
     if (this.jwtToken && Date.now() < this.tokenExpiry - 60_000) return this.jwtToken;
-    const res = await fetch(`${this.backendUrl}/v1/auth/validate`, {
+    const useKey = !!(this.licenseKey && this.licenseKey.trim());
+    const url = useKey ? `${this.backendUrl}/v1/auth/validate` : `${this.backendUrl}/v1/auth/activate-free`;
+    const body = useKey ? { license_key: this.licenseKey, client_id: this.clientId } : { client_id: this.clientId };
+    const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ license_key: this.licenseKey, client_id: this.clientId })
+      body: JSON.stringify(body)
     });
     if (!res.ok) {
       let detail: any = null;
@@ -45,10 +48,13 @@ export class BackendTtsProvider implements TtsProvider {
    * Expose token metadata for UI (plan, quota, expiry) using a single validation call.
    */
   async validateLicense(): Promise<{ token: string; expiresAtMs: number; plan?: string; quota_remaining?: number; quota_limit?: number }> {
-    const res = await fetch(`${this.backendUrl}/v1/auth/validate`, {
+    const useKey = !!(this.licenseKey && this.licenseKey.trim());
+    const url = useKey ? `${this.backendUrl}/v1/auth/validate` : `${this.backendUrl}/v1/auth/activate-free`;
+    const body = useKey ? { license_key: this.licenseKey, client_id: this.clientId } : { client_id: this.clientId };
+    const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ license_key: this.licenseKey, client_id: this.clientId })
+      body: JSON.stringify(body)
     });
     if (!res.ok) {
       let detail: any = null;

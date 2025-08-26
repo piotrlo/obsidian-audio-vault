@@ -120,5 +120,78 @@ auth.get('/usage', async (c) => {
   }
 });
 
+/**
+ * POST /v1/auth/activate-free – idempotent activation of a free license per client_id
+ */
+auth.post('/activate-free', async (c) => {
+  try {
+    const limit = 8192;
+    let parsed: unknown;
+    try {
+      const raw = await readBodyWithLimit(c.req.raw, limit);
+      parsed = JSON.parse(raw);
+    } catch (e: any) {
+      if (e && e.message === 'BODY_TOO_LARGE') return jsonError(c, 413, 'REQUEST_ENTITY_TOO_LARGE', `Body exceeds ${limit} bytes`);
+      return jsonError(c, 400, 'INVALID_JSON', 'Invalid JSON body');
+    }
+    const Schema = z.object({ client_id: z.string().min(8) });
+    const result = Schema.safeParse(parsed);
+    if (!result.success) return jsonError(c, 400, 'VALIDATION_FAILED', 'Invalid request body', result.error.flatten());
+    const clientId = result.data.client_id;
+
+    // Try to find an active license already bound to this client
+    const lic = await c.env.DB
+      .prepare(`SELECT l.* FROM license_clients lc JOIN licenses l ON l.id = lc.license_id WHERE lc.client_id = ? AND l.status = 'active' ORDER BY l.id DESC LIMIT 1`)
+      .bind(clientId)
+      .first<any>();
+
+    let license = lic as any;
+    if (!license) {
+      // Create a new free license and bind this client_id
+      const licenseKeyPlain = `LM-FREE-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+      const hash = await hashLicenseKey(licenseKeyPlain);
+      try {
+        await c.env.DB
+          .prepare('INSERT INTO licenses (license_key_hash, plan, status) VALUES (?, ?, ?)')
+          .bind(hash, 'free', 'active')
+          .run();
+      } catch {
+        return jsonError(c, 500, 'LICENSE_CREATE_FAILED', 'Could not create license');
+      }
+      license = await c.env.DB
+        .prepare('SELECT * FROM licenses WHERE license_key_hash = ?')
+        .bind(hash)
+        .first<any>();
+      try {
+        await c.env.DB
+          .prepare('INSERT OR IGNORE INTO license_clients (license_id, client_id) VALUES (?, ?)')
+          .bind(license.id, clientId)
+          .run();
+      } catch {}
+      await logEvent(c.env.DB, license.id, 'free_license_activated', { client_id: clientId });
+    } else {
+      // Ensure mapping exists and enforce device limits for free plan
+      const count = await upsertLicenseClient(c.env.DB, license.id, clientId);
+      if (license.plan === 'free') {
+        const max = (PLAN_MAX_CLIENTS as any).free ?? 2;
+        if (count > max) {
+          await logEvent(c.env.DB, license.id, 'license_client_rejected', { client_id: clientId, count, max });
+          return jsonError(c, 402, 'DEVICE_LIMIT_EXCEEDED', `Free plan allows up to ${max} devices`);
+        }
+      }
+    }
+
+    const quota = await checkQuotaLimit(c.env.DB, license.id, license.plan as any, 0, PLAN_LIMITS as any);
+    const jwt = await generateJWT({ license_id: license.id, plan: license.plan, quota_remaining: quota.remaining, client_id: clientId }, c.env.JWT_SECRET, 15);
+
+    return c.json<ApiResponse<{ token: string; expires_in: number; plan: string; quota_remaining: number; quota_limit: number }>>({
+      success: true,
+      data: { token: jwt, expires_in: 15 * 60, plan: license.plan, quota_remaining: quota.remaining, quota_limit: quota.limit }
+    });
+  } catch (e) {
+    return jsonError(c, 500, 'INTERNAL_ERROR', 'Internal error');
+  }
+});
+
 export { auth as authRoutes };
 
