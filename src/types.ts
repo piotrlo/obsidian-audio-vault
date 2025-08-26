@@ -46,6 +46,8 @@ export interface TtsSettings {
   mergeParts: boolean;
   /** Cached license plan from backend validation. */
   licensePlan?: string;
+  /** License key that was last successfully validated; used to mark dirty input. */
+  licenseValidatedKey?: string;
   /** Cached remaining quota (characters) from backend validation/usage. */
   licenseQuotaRemaining?: number;
   /** Cached quota limit (characters) from backend validation/usage. */
