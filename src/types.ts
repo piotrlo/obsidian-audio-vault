@@ -16,6 +16,8 @@ export interface TtsSettings {
   backendUrl?: string;
   /** License key used to obtain short-lived JWT from backend. */
   licenseKey?: string;
+  /** Anonymous device/client identifier used by backend licensing. */
+  clientId?: string;
   /** Azure AI Speech API key stored in plugin data. */
   azureApiKey: string;
   /** Azure region, e.g., westeurope. */

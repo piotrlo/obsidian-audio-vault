@@ -155,20 +155,21 @@ Scope
 - License-key input and validation, token handling, monthly char limits UI, and error surfaces.
 
 Tasks
-- Settings: licenseKey input; Validate -> backend /v1/auth/validate to short-lived JWT stored transientnie (expiry), persistujemy wyłącznie licenseKey.
-- Settings: sekcja statusu licencji (plan, quota remaining/limit, expiry) + przyciski „Zweryfikuj licencję” i „Odśwież użycie” (GET `/v1/auth/usage`) — zaimplementowane.
-- Auto-refresh statusu po otwarciu zakładki ustawień w oparciu o cache ważności JWT — zaimplementowane.
-- Handle 402 z `/v1/tts` z Notice i linkiem do Stripe Customer Portal — DO ZROBIENIA.
+- Settings UI redesign: tabs Basic/Advanced. Basic: License CTA+status+Activate+Upgrade; Mode switch (Local Azure / Plus backend); Speed slider (-100..+500%); Language; Streaming; Merge MP3; Audio folder. Advanced: TTS Provider; Output format; Chunk size; Debug logs; Reset defaults.
+- Remove Backend URL, Only HD voices, Help from UI; keep backend URL internal (defaults).
+- Generate persistent clientId (UUID) and send in POST /v1/auth/validate; store only licenseKey and clientId.
+- Display license plan/remaining/expiry; auto-refresh on opening tab.
+- Handle 402 from `/v1/tts` with Notice and link to Stripe Customer Portal — TODO.
 
 Acceptance criteria mapping
-- spec §4.2 API, §4b Stripe models, §5 DoD backend/licensing bullets.
+- spec §4.2 API, §4.3 frontend settings tabs, §4b Stripe models and device limits, §5 DoD backend/licensing bullets.
 
 Risks
 - Token refresh cadence; cichy refresh w tle przed wygasaniem.
 
 Tests
 - License happy-path i expired token handling (mock backend) — częściowo.
-- Dodać test obsługi 402 (Payment Required) i komunikatów w UI.
+- Dodać test obsługi 402 (Payment Required/DEVICE_LIMIT_EXCEEDED) i komunikatów w UI.
 
 Stage 5 — Streaming robustness, mobile polish, offline playback
 Scope

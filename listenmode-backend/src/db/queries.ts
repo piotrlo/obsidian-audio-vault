@@ -68,3 +68,18 @@ export async function logEvent(db: D1Database, licenseId: number | null, eventTy
     .run();
 }
 
+/**
+ * Ensure a client_id is registered for a license; returns total clients after upsert.
+ */
+export async function upsertLicenseClient(db: D1Database, licenseId: number, clientId: string): Promise<number> {
+  await db
+    .prepare('INSERT OR IGNORE INTO license_clients (license_id, client_id) VALUES (?, ?)')
+    .bind(licenseId, clientId)
+    .run();
+  const row = await db
+    .prepare('SELECT COUNT(*) as cnt FROM license_clients WHERE license_id = ?')
+    .bind(licenseId)
+    .first<{ cnt: number }>();
+  return row?.cnt ?? 0;
+}
+

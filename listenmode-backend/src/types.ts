@@ -22,6 +22,7 @@ export interface JWTPayload {
   license_id: number;
   plan: string;
   quota_remaining: number;
+  client_id?: string;
   exp: number;
   iat: number;
 }
@@ -64,6 +65,12 @@ export const PLAN_LIMITS = {
   free: 10_000,
   basic: 100_000,
   pro: 300_000,
+} as const;
+
+export const PLAN_MAX_CLIENTS = {
+  free: 2,
+  basic: Infinity,
+  pro: Infinity,
 } as const;
 
 export type ErrorBody = {
