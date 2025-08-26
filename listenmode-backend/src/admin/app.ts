@@ -84,7 +84,7 @@ export const ADMIN_CLIENT_JS = `
         + '<table class="charts-css bar show-primary-axis show-data-axes data-spacing-5">'
         + '<caption>Usage this month</caption>'
         + '<tbody>'
-        + '<tr><th scope="row">Ogólne</th><td style="--size:' + ratio + '" title="' + used.toLocaleString() + ' / ' + limit.toLocaleString() + ' (' + Math.round(ratio*100) + '%)" aria-label="' + used.toLocaleString() + ' / ' + limit.toLocaleString() + ' (' + Math.round(ratio*100) + '%)"><span class="data">' + used.toLocaleString() + ' / ' + limit.toLocaleString() + '</span></td></tr>'
+        + '<tr><th scope="row">Overall</th><td style="--size:' + ratio + '" title="' + used.toLocaleString() + ' / ' + limit.toLocaleString() + ' (' + Math.round(ratio*100) + '%)" aria-label="' + used.toLocaleString() + ' / ' + limit.toLocaleString() + ' (' + Math.round(ratio*100) + '%)"><span class="data">' + used.toLocaleString() + ' / ' + limit.toLocaleString() + '</span></td></tr>'
         + '</tbody>'
         + '</table>';
       mountChart('chartUsageCurrent', usageHtml);
@@ -224,9 +224,9 @@ export const ADMIN_CLIENT_JS = `
     if (!t) return;
     if (t.classList && t.classList.contains('save')) {
       const id = t.getAttribute('data-id');
-      // zapis plan/status/expiry
+      // save plan/status/expiry
       await saveRow(id);
-      // zapis limitu jeśli pole istnieje
+      // save limit if field exists
       const limitEl = document.querySelector('input[data-id="' + id + '"][data-field="limit_override"]');
       if (limitEl) { await saveLimit(id); }
       return;

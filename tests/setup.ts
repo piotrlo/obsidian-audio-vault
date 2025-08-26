@@ -1,5 +1,5 @@
 // Minimal globals/mocks for browser APIs used in plugin tests
-// Uwaga: nie ustawiamy domyślnie MediaSource, aby testy mogły sprawdzić brak MSE.
+// Note: we don't set MediaSource by default so tests can check for missing MSE.
 
 if (!(globalThis as any).Audio) {
   (globalThis as any).Audio = class {
