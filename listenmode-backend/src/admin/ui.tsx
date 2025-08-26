@@ -15,7 +15,7 @@ const Page: FC<{ items?: LicenseWithUsage[]; page?: number; pageSize?: number; t
     <head>
       <meta charSet="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <title>ListenMode Admin</title>
+      <title>AudioVault Admin</title>
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css" />
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/charts.css/dist/charts.min.css" />
       <style>{`
@@ -50,7 +50,7 @@ const Page: FC<{ items?: LicenseWithUsage[]; page?: number; pageSize?: number; t
         <div class="container">
           <div class="level">
             <div class="level-left">
-              <h1 class="title is-4 gradient-text">ListenMode — Admin</h1>
+              <h1 class="title is-4 gradient-text">AudioVault — Admin</h1>
             </div>
             <div class="level-right">
               <div class="level-item">
@@ -58,7 +58,7 @@ const Page: FC<{ items?: LicenseWithUsage[]; page?: number; pageSize?: number; t
               </div>
               <div class="level-item">
                 <form method="post" action="/admin/logout">
-                  <button class="button is-small is-light" type="submit">Wyloguj</button>
+                  <button class="button is-small is-light" type="submit">Logout</button>
                 </form>
               </div>
             </div>
@@ -152,17 +152,17 @@ const Page: FC<{ items?: LicenseWithUsage[]; page?: number; pageSize?: number; t
           </div>
 
           <div class="panel-card" style="margin-bottom:1rem;">
-            <h2 class="title is-6 gradient-text" style="margin-bottom:.75rem;">Statystyki</h2>
+            <h2 class="title is-6 gradient-text" style="margin-bottom:.75rem;">Statistics</h2>
             <div class="columns is-multiline">
               <div class="column is-full-touch is-half-desktop">
                 <div class="panel-card">
-                  <h3 class="subtitle is-6">Liczba licencji wg planów</h3>
+                  <h3 class="subtitle is-6">Number of licenses by plan</h3>
                   <div id="chartPlans" class="chart-animate"></div>
                 </div>
               </div>
               <div class="column is-full-touch is-half-desktop">
                 <div class="panel-card">
-                  <h3 class="subtitle is-6">Zużycie znaków — ten miesiąc</h3>
+                  <h3 class="subtitle is-6">Character usage — this month</h3>
                   <div id="chartUsageCurrent" class="chart-animate"></div>
                 </div>
               </div>
@@ -226,7 +226,7 @@ const Page: FC<{ items?: LicenseWithUsage[]; page?: number; pageSize?: number; t
                     })()}
                   </td>
                   <td>
-                    <input class="input is-small" type="number" min="0" step="1" data-id={String(lic.id)} data-field="limit_override" value={String((lic as any).limit_override ?? '')} placeholder={String((lic as any).quota_limit ?? '')} title="Override miesi9czny. Puste = limit planu." />
+                    <input class="input is-small" type="number" min="0" step="1" data-id={String(lic.id)} data-field="limit_override" value={String((lic as any).limit_override ?? '')} placeholder={String((lic as any).quota_limit ?? '')} title="Monthly overrideoverride. Empty = plan limit." />
                   </td>
                   <td class="right">
                     <div class="controls">
@@ -271,7 +271,7 @@ function renderLogin(message?: string) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>ListenMode Admin — Login</title>
+        <title>AudioVault Admin — Login</title>
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css" />
       </head>
       <body>

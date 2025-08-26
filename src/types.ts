@@ -3,7 +3,7 @@
  */
 
 /**
- * Settings for the ListenMode plugin.
+ * Settings for the AudioVault plugin.
  */
 export type SupportedLang = 'auto' | 'pl-PL' | 'en-US';
 

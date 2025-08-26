@@ -1,6 +1,6 @@
-# ListenMode Backend (Cloudflare Workers + Hono)
+# AudioVault Backend (Cloudflare Workers + Hono)
 
-Krawędziowe API dla wtyczki ListenMode (Obsidian). Proxy’uje TTS do Azure, wydaje krótkotrwałe JWT, egzekwuje miesięczne limity w D1 i cache’uje listę głosów w KV.
+Krawędziowe API dla wtyczki AudioVault (Obsidian). Proxy'uje TTS do Azure, wydaje krótkotrwałe JWT, egzekwuje miesięczne limity w D1 i cache'uje listę głosów w KV.
 
 Uwaga: pracujemy wyłącznie na środowisku produkcyjnym (bez lokalnego dev dla backendu).
 

@@ -68,7 +68,7 @@ export const ADMIN_CLIENT_JS = `
       const maxPlan = Math.max(1, free, basic, pro);
       var plansHtml = ''
         + '<table class="charts-css column show-labels data-spacing-5">'
-        + '<caption>Aktywne licencje wg planów</caption>'
+        + '<caption>Active licenses by plan</caption>'
         + '<tbody>'
         + '<tr><th scope="row">free</th><td style="--size:' + (free/maxPlan) + '" title="free: ' + free + '" aria-label="free: ' + free + '"><span class="data">' + free + '</span></td></tr>'
         + '<tr><th scope="row">basic</th><td style="--size:' + (basic/maxPlan) + '" title="basic: ' + basic + '" aria-label="basic: ' + basic + '"><span class="data">' + basic + '</span></td></tr>'
@@ -82,7 +82,7 @@ export const ADMIN_CLIENT_JS = `
       const ratio = Math.max(0, Math.min(1, used/limit));
       var usageHtml = ''
         + '<table class="charts-css bar show-primary-axis show-data-axes data-spacing-5">'
-        + '<caption>Zużycie w tym miesiącu</caption>'
+        + '<caption>Usage this month</caption>'
         + '<tbody>'
         + '<tr><th scope="row">Ogólne</th><td style="--size:' + ratio + '" title="' + used.toLocaleString() + ' / ' + limit.toLocaleString() + ' (' + Math.round(ratio*100) + '%)" aria-label="' + used.toLocaleString() + ' / ' + limit.toLocaleString() + ' (' + Math.round(ratio*100) + '%)"><span class="data">' + used.toLocaleString() + ' / ' + limit.toLocaleString() + '</span></td></tr>'
         + '</tbody>'
@@ -129,7 +129,7 @@ export const ADMIN_CLIENT_JS = `
       html += '</div>';
       html += '</td>';
       html += '<td>';
-      html += '<input class="input is-small" type="number" min="0" step="1" data-id="' + lic.id + '" data-field="limit_override" value="' + (lic.limit_override ?? '') + '" placeholder="' + (lic.quota_limit ?? '') + '" title="Override miesiczny. Puste = limit planu." />';
+      html += '<input class="input is-small" type="number" min="0" step="1" data-id="' + lic.id + '" data-field="limit_override" value="' + (lic.limit_override ?? '') + '" placeholder="' + (lic.quota_limit ?? '') + '" title="Monthly override. Empty = plan limit." />';
       html += '</td>';
       html += '<td class="right">';
       html += '<div class="controls">';
