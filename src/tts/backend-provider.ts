@@ -6,14 +6,12 @@ import type { TtsProvider, Voice } from "../types";
 export class BackendTtsProvider implements TtsProvider {
   private readonly backendUrl: string;
   private readonly licenseKey: string;
-  private readonly region: string;
   private jwtToken: string | null = null;
   private tokenExpiry: number = 0;
 
-  constructor(params: { backendUrl: string; licenseKey: string; region: string }) {
+  constructor(params: { backendUrl: string; licenseKey: string }) {
     this.backendUrl = params.backendUrl.replace(/\/$/, "");
     this.licenseKey = params.licenseKey;
-    this.region = params.region;
   }
 
   private async getValidToken(): Promise<string> {
@@ -85,7 +83,7 @@ export class BackendTtsProvider implements TtsProvider {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`
       },
-      body: JSON.stringify({ ssml, outputFormat, language: this.region }),
+      body: JSON.stringify({ ssml, outputFormat, language: _lang }),
       signal: abortSignal
     });
     if (!res.ok || !res.body) {
@@ -95,9 +93,8 @@ export class BackendTtsProvider implements TtsProvider {
     return res.body as ReadableStream<Uint8Array>;
   }
 
-  async listVoices(region?: string): Promise<Voice[]> {
-    const r = region || this.region;
-    const res = await fetch(`${this.backendUrl}/v1/voices?region=${encodeURIComponent(r)}`);
+  async listVoices(): Promise<Voice[]> {
+    const res = await fetch(`${this.backendUrl}/v1/voices`);
     if (!res.ok) {
       let t = ""; try { t = await res.text(); } catch {}
       throw new Error(`Failed to fetch voices: ${res.status}${t ? ` - ${t}` : ""}`);
