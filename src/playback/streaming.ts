@@ -60,7 +60,7 @@ export async function playStreamedPartAndSave(params: {
         await writeBinary(app, audioPath, arrayBuf);
         await upsertAudioReferenceSorted(app, file, audioPath);
       } else {
-        try { notifyUtil(settings, `Pominięto zapis części ${part} (brak danych)`, true); } catch {}
+        try { notifyUtil(settings, `Skipped saving part ${part} (no data)`, true); } catch {}
       }
     }
     return;
@@ -117,7 +117,7 @@ export async function playStreamedPartAndSave(params: {
   // If no data was received, skip saving and return immediately to avoid hanging on playback end.
   if (!blob || blob.size === 0) {
     if (savePerPart !== false) {
-      try { notifyUtil(settings, `Pominięto zapis części ${part} (brak danych)`, true); } catch {}
+      try { notifyUtil(settings, `Skipped saving part ${part} (no data)`, true); } catch {}
     }
     return;
   }
@@ -135,7 +135,7 @@ export async function playStreamedPartAndSave(params: {
       await writeBinary(app, audioPath, arrayBuf);
       await upsertAudioReferenceSorted(app, file, audioPath);
     } else {
-      try { notifyUtil(settings, `Pominięto zapis części ${part} (brak danych)`, true); } catch {}
+      try { notifyUtil(settings, `Skipped saving part ${part} (no data)`, true); } catch {}
     }
   }
 
