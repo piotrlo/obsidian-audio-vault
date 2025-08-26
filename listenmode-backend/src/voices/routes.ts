@@ -24,8 +24,12 @@ voices.get('/', async (c) => {
     }
 
     const raw = await res.json<any[]>();
+    const hasMultilingualNeural = (v: any): boolean => {
+      const key = String(v?.ShortName || v?.Name || '');
+      return /MultilingualNeural/i.test(key);
+    };
     const mapped: VoiceInfo[] = (Array.isArray(raw) ? raw : [])
-      .filter(v => v?.VoiceType === 'Neural')
+      .filter(v => v?.VoiceType === 'Neural' && hasMultilingualNeural(v))
       .map(v => ({ name: v.Name || v.DisplayName || '', shortName: v.ShortName || v.Name || '', gender: v.Gender, locale: v.Locale }))
       .filter(v => v.name && v.shortName);
 
