@@ -1,12 +1,12 @@
-# Specyfikacja STC dla wtyczki ListenMode (`spec-then-code.md`)
+# Specyfikacja STC dla wtyczki AudioVault (`spec-then-code.md`)
 ## Uwaga
 > **Wszystkie decyzje projektowe, implementacyjne oraz marketingowe mają być uzasadnione ponizszym dokumentem. Każda zmiana powinna posiadać aktualizację specyfikacji oraz checklistę testów.**
 
 
-## Nazwa wtyczki: `ListenMode`
+## Nazwa wtyczki: `AudioVault`
 
 ### 1. Cel produktu
-`ListenMode` jest płatną wtyczką dla `Obsidian`, której celem jest natychmiastowa konwersja tekstowych notatek użytkownika na wysokiej jakości mowę (audio), z opcją odsłuchiwania lokalnie, offline i z prostą obsługą. Produkt odpowiada na realną potrzebę: słuchanie własnych notatek jak podcastów, aby efektywnie wykorzystać czas (jazda samochodem, sprzątanie, trening), wspiera osoby z dysleksją czy trudnościami w czytaniu i jest użyteczny zarówno dla profesjonalistów, studentów, jak i każdego, kto gromadzi wiedzę w `Obsidian`.
+`AudioVault` jest płatną wtyczką dla `Obsidian`, której celem jest natychmiastowa konwersja tekstowych notatek użytkownika na wysokiej jakości mowę (audio), z opcją odsłuchiwania lokalnie, offline i z prostą obsługą. Produkt odpowiada na realną potrzebę: słuchanie własnych notatek jak podcastów, aby efektywnie wykorzystać czas (jazda samochodem, sprzątanie, trening), wspiera osoby z dysleksją czy trudnościami w czytaniu i jest użyteczny zarówno dla profesjonalistów, studentów, jak i każdego, kto gromadzi wiedzę w `Obsidian`.
 
 ### 2. Wartość biznesowa i segmenty odbiorców
 - Użytkownicy, którzy zapisują w `Obsidian` artykuły/do przeczytania później.

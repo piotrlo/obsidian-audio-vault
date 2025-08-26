@@ -5,7 +5,7 @@ import { ensureFolder, writeBinary, deleteExistingParts, upsertAudioReferenceSor
 import { AzureTtsProvider } from "./tts/azure-provider";
 import { BackendTtsProvider } from "./tts/backend-provider";
 import { log, warn, setDebugLogging } from "./utils/logger";
-import { ListenModeSettingsTab } from "./obsidian/settings";
+import { AudioVaultSettingsTab } from "./obsidian/settings";
 import { fileExtFromFormat, missingSettings, resolveLang, buildChunks } from "./core/helpers";
 import type { PlaybackSession, TtsProvider, TtsSettings } from "./types";
 import { canStream, captureToBlob } from "./core/audio";
@@ -19,9 +19,9 @@ import { Mp3Assembler } from "./utils/mp3";
 
 
 /**
- * ListenMode Obsidian plugin entrypoint (MVP wiring).
+ * AudioVault Obsidian plugin entrypoint (MVP wiring).
  */
-export default class ListenModePlugin extends Plugin {
+export default class AudioVaultPlugin extends Plugin {
   /** Current settings. */
   settings!: TtsSettings;
   /** Session state. */
@@ -48,15 +48,15 @@ export default class ListenModePlugin extends Plugin {
       } catch {}
     }
     this.provider = this.buildProviderFromSettings();
-    this.addCommand({ id: "listenmode-play-pause", name: "Play/Pause current note", callback: () => { this.playOrStart(); } });
-    this.addCommand({ id: "listenmode-stop", name: "Stop", callback: () => { void this.stopPlayback(); } });
-    this.addCommand({ id: "listenmode-restart", name: "Restart", callback: () => { void this.readCurrentNote(true); } });
-    this.addCommand({ id: "listenmode-download", name: "Download audio (no playback)", callback: () => { void this.downloadCurrentNote(); } });
+    this.addCommand({ id: "audiovault-play-pause", name: "Play/Pause current note", callback: () => { this.playOrStart(); } });
+    this.addCommand({ id: "audiovault-stop", name: "Stop", callback: () => { void this.stopPlayback(); } });
+    this.addCommand({ id: "audiovault-restart", name: "Restart", callback: () => { void this.readCurrentNote(true); } });
+    this.addCommand({ id: "audiovault-download", name: "Download audio (no playback)", callback: () => { void this.downloadCurrentNote(); } });
 
     /** Ribbon: Play/Pause current note */
     this.addRibbonIcon('headphones', 'Play/Pause current note', () => { this.playOrStart(); });
 
-    this.addSettingTab(new ListenModeSettingsTab(this.app, this));
+    this.addSettingTab(new AudioVaultSettingsTab(this.app, this));
   }
 
   /**
@@ -114,13 +114,13 @@ destroyPanel(): void {}
               new Uint8Array(ab).set(merged);
               await writeBinary(this.app, audioPath, ab);
               await replaceAudioReferencesWithSingle(this.app, ctx.file, audioPath);
-              notifyUtil(this.settings, `Zapisano scalony plik: [[${audioPath}]]`);
+              notifyUtil(this.settings, `Saved merged file: [[${audioPath}]]`);
             } else {
-              notifyUtil(this.settings, `Pominięto zapis scalonego pliku (brak danych)`, true);
+              notifyUtil(this.settings, `Skipped saving merged file (no data)`, true);
             }
           } catch (e: unknown) {
             const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
-            notifyUtil(this.settings, `Nie udało się zapisać pliku scalonego: ${msg}`, true);
+            notifyUtil(this.settings, `Failed to save merged file: ${msg}`, true);
           }
         }
         return;
@@ -223,13 +223,13 @@ notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
                 new Uint8Array(ab).set(merged);
                 await writeBinary(this.app, audioPath, ab);
                 await replaceAudioReferencesWithSingle(this.app, file, audioPath);
-                notifyUtil(this.settings, `Zapisano scalony plik: [[${audioPath}]]`);
+                notifyUtil(this.settings, `Saved merged file: [[${audioPath}]]`);
               } else {
-                notifyUtil(this.settings, `Pominięto zapis scalonego pliku (brak danych)`, true);
+                notifyUtil(this.settings, `Skipped saving merged file (no data)`, true);
               }
             } catch (e: unknown) {
               const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
-              notifyUtil(this.settings, `Nie udało się zapisać pliku scalonego: ${msg}`, true);
+              notifyUtil(this.settings, `Failed to save merged file: ${msg}`, true);
             }
           }
           return;
@@ -261,11 +261,11 @@ notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
                     new Uint8Array(ab).set(merged);
                     await writeBinary(this.app, audioPath, ab);
                     await replaceAudioReferencesWithSingle(this.app, file, audioPath);
-                    notifyUtil(this.settings, `Zapisano scalony plik: [[${audioPath}]]`);
+                    notifyUtil(this.settings, `Saved merged file: [[${audioPath}]]`);
                   }
                 } catch (e: unknown) {
                   const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
-                  notifyUtil(this.settings, `Nie udało się zapisać pliku scalonego: ${msg}`, true);
+                  notifyUtil(this.settings, `Failed to save merged file: ${msg}`, true);
                 }
               }
             }
@@ -288,13 +288,13 @@ notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
                 new Uint8Array(ab).set(merged);
                 await writeBinary(this.app, audioPath, ab);
                 await replaceAudioReferencesWithSingle(this.app, file, audioPath);
-                notifyUtil(this.settings, `Zapisano scalony plik: [[${audioPath}]]`);
+                notifyUtil(this.settings, `Saved merged file: [[${audioPath}]]`);
               } else {
-                notifyUtil(this.settings, `Pominięto zapis scalonego pliku (brak danych)`, true);
+                notifyUtil(this.settings, `Skipped saving merged file (no data)`, true);
               }
             } catch (e: unknown) {
               const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
-              notifyUtil(this.settings, `Nie udało się zapisać pliku scalonego: ${msg}`, true);
+              notifyUtil(this.settings, `Failed to save merged file: ${msg}`, true);
             }
           }
           return;
@@ -303,7 +303,7 @@ notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
         const status = (e && typeof e === 'object' && 'status' in e) ? (e as any).status : undefined;
         const code = (e && typeof e === 'object' && 'code' in e) ? (e as any).code : undefined;
         if (status === 402 || code === 'PAYMENT_REQUIRED' || code === 'DEVICE_LIMIT_EXCEEDED') {
-          try { notifyUtil(this.settings, `Wymagany upgrade planu (${code || status}). Otwórz stronę planów.`, true); } catch {}
+          try { notifyUtil(this.settings, `Plan upgrade required (${code || status}). Open plans page.`, true); } catch {}
           try { window.open('https://listenmode.app/upgrade', '_blank'); } catch {}
         } else {
           const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
@@ -323,13 +323,13 @@ notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
           new Uint8Array(ab).set(merged);
           await writeBinary(this.app, audioPath, ab);
           await replaceAudioReferencesWithSingle(this.app, file, audioPath);
-          notifyUtil(this.settings, `Zapisano scalony plik: [[${audioPath}]]`);
+          notifyUtil(this.settings, `Saved merged file: [[${audioPath}]]`);
         } else {
-          notifyUtil(this.settings, `Pominięto zapis scalonego pliku (brak danych)`, true);
+          notifyUtil(this.settings, `Skipped saving merged file (no data)`, true);
         }
       } catch (e: unknown) {
         const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
-        notifyUtil(this.settings, `Nie udało się zapisać pliku scalonego: ${msg}`, true);
+        notifyUtil(this.settings, `Failed to save merged file: ${msg}`, true);
       }
     }
   }
@@ -453,7 +453,7 @@ log("downloaded part", { part, total: totalParts });
           const status = (e && typeof e === 'object' && 'status' in e) ? (e as any).status : undefined;
           const code = (e && typeof e === 'object' && 'code' in e) ? (e as any).code : undefined;
           if (status === 402 || code === 'PAYMENT_REQUIRED' || code === 'DEVICE_LIMIT_EXCEEDED') {
-            try { notifyUtil(this.settings, `Wymagany upgrade planu (${code || status}). Otwórz stronę planów.`, true); } catch {}
+            try { notifyUtil(this.settings, `Plan upgrade required (${code || status}). Open plans page.`, true); } catch {}
             try { window.open('https://listenmode.app/upgrade', '_blank'); } catch {}
           } else {
             const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
@@ -474,13 +474,13 @@ log("downloaded part", { part, total: totalParts });
             new Uint8Array(ab).set(merged);
             await writeBinary(this.app, audioPath, ab);
             await replaceAudioReferencesWithSingle(this.app, ctx.file, audioPath);
-            notifyUtil(this.settings, `Zapisano scalony plik: [[${audioPath}]]`);
+            notifyUtil(this.settings, `Saved merged file: [[${audioPath}]]`);
           } else {
-            notifyUtil(this.settings, `Pominięto zapis scalonego pliku (brak danych)`, true);
+            notifyUtil(this.settings, `Skipped saving merged file (no data)`, true);
           }
         } catch (e: unknown) {
           const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
-          notifyUtil(this.settings, `Nie udało się zapisać pliku scalonego: ${msg}`, true);
+          notifyUtil(this.settings, `Failed to save merged file: ${msg}`, true);
         }
       }
       if (this.stopRequested) {

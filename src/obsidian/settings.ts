@@ -1,24 +1,24 @@
 /**
- * Settings tab implementation for ListenMode.
+ * Settings tab implementation for AudioVault.
  */
 
 import type { App } from "obsidian";
 import { Notice, PluginSettingTab, Setting, ExtraButtonComponent } from "obsidian";
-import type ListenModePlugin from "../index";
+import type AudioVaultPlugin from "../index";
 import type { SupportedLang } from "../types";
 
 /**
  * Build the settings tab UI.
  */
-export class ListenModeSettingsTab extends PluginSettingTab {
-  private plugin: ListenModePlugin;
+export class AudioVaultSettingsTab extends PluginSettingTab {
+  private plugin: AudioVaultPlugin;
   private advancedVisible: boolean = false;
 
   /**
    * @param {App} app Obsidian app.
    * @param {ListenModePlugin} plugin Plugin instance.
    */
-  constructor(app: App, plugin: ListenModePlugin) {
+  constructor(app: App, plugin: AudioVaultPlugin) {
     super(app, plugin);
     this.plugin = plugin;
   }
@@ -28,7 +28,7 @@ export class ListenModeSettingsTab extends PluginSettingTab {
     containerEl.empty();
 
     const root = containerEl.createDiv();
-    const content = root.createDiv({ cls: 'listenmode-content' });
+    const content = root.createDiv({ cls: 'audiovault-content' });
 
     // Basic section
     this.renderBasic(content);
@@ -123,7 +123,7 @@ export class ListenModeSettingsTab extends PluginSettingTab {
         const licenseActive = !!s.licensePlan && tokenFresh && keyMatches;
         if (licenseActive) {
           const badge = licenseStatus.nameEl.createEl('span');
-          badge.textContent = 'Aktywna';
+          badge.textContent = 'Active';
           badge.style.marginLeft = '8px';
           badge.style.padding = '2px 6px';
           badge.style.borderRadius = '6px';
@@ -135,7 +135,7 @@ export class ListenModeSettingsTab extends PluginSettingTab {
         // Label + progress in desc
         const label = document.createElement('div');
         const remainText = (typeof remaining === 'number' && typeof limit === 'number') ? `${remaining}/${limit}` : 'N/D';
-        label.textContent = `Plan: ${plan} | Pozostało: ${remainText} | Token ważny do: ${tokenExpires}`;
+        label.textContent = `Plan: ${plan} | Remaining: ${remainText} | Token valid until: ${tokenExpires}`;
         label.style.marginBottom = '6px';
         licenseStatus.descEl.empty();
         licenseStatus.descEl.appendChild(label);
@@ -226,7 +226,7 @@ export class ListenModeSettingsTab extends PluginSettingTab {
       }));
     }
 
-    // Removed separate "Weryfikacja licencji / użycie" setting; Check button moved to status row
+    // Removed separate "License verification / usage" setting; Check button moved to status row
 
     // Auth mode: Azure key vs Plus (license)
     new Setting(containerEl)

@@ -1,4 +1,4 @@
-# ListenMode — Spec-Then-Code Implementation Plan (spec-then-code-plan.md)
+# AudioVault — Spec-Then-Code Implementation Plan (spec-then-code-plan.md)
 
 This plan breaks down delivery into clear stages, starting from a minimal, locally working MVP plugin (no backend, no auth, no payments) that you can test in Obsidian. Each stage lists scope, tasks, acceptance criteria mapped to spec-then-code.md, risks, and test checklist. The plan aligns with your rules: use Bun, TypeScript with strict typing, JSDoc for documentation, no global state, short functions, minimal dependencies (remove ramda), and simple jest-like tests via bun:test.
 
