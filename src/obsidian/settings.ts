@@ -292,6 +292,73 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
 
   private renderAdvanced(containerEl: HTMLElement): void {
     containerEl.empty();
+    // Voice selection (Advanced)
+    const voiceRow = new Setting(containerEl)
+      .setName("Voice")
+      .setDesc("Choose voice; fetch via backend or Azure");
+    let voiceDropdown: import("obsidian").DropdownComponent | null = null;
+    voiceRow.addDropdown((dd) => {
+      voiceDropdown = dd;
+      const current = this.plugin.settings.voiceName || "en-US-Ava:DragonHDLatestNeural";
+      dd.addOption(current, current);
+      dd.setValue(current);
+      dd.onChange(async (v) => { this.plugin.settings.voiceName = v; await this.plugin.saveSettings(); });
+    });
+    voiceRow.addButton((btn) => btn.setButtonText("Fetch voices").setCta().onClick(async () => {
+      try {
+        let list: Array<{ ShortName?: string; Name?: string; VoiceType?: string }>; list = [];
+        if (this.plugin.settings.useBackend && this.plugin.settings.backendUrl) {
+          const url = `${this.plugin.settings.backendUrl!.replace(/\/$/, '')}/v1/voices`;
+          const res = await fetch(url);
+          if (!res.ok) { let t = ""; try { t = await res.text(); } catch {} ; new Notice(`Voice list failed: ${res.status}${t?` - ${t}`:""}`); return; }
+          const payload = await res.json();
+          const items: Array<{ name?: string; shortName?: string }> = Array.isArray(payload?.data) ? payload.data : [];
+          list = items.map(v => ({ Name: v?.name, ShortName: v?.shortName }));
+        } else {
+          const apiKey = this.plugin.settings.azureApiKey?.trim();
+          const region = (this.plugin.settings as any).azureRegion || 'westeurope';
+          if (!apiKey) { new Notice("Set Azure API key first"); return; }
+          const url = `https://${region}.tts.speech.microsoft.com/cognitiveservices/voices/list`;
+          const res = await fetch(url, { headers: { "Ocp-Apim-Subscription-Key": apiKey } });
+          if (!res.ok) { let t = ""; try { t = await res.text(); } catch {} ; new Notice(`Voice list failed: ${res.status}${t?` - ${t}`:""}`); return; }
+          const data = await res.json();
+          list = Array.isArray(data) ? data : [];
+        }
+
+        // Filter to Multilingual Neural voices to match backend policy
+        const options: Record<string, string> = {};
+        for (const v of list) {
+          const key = String(v.ShortName || v.Name || "");
+          if (!key) continue;
+          const isNeural = /Neural/i.test(key);
+          const isMultilingual = /MultilingualNeural/i.test(key);
+          if (isNeural && isMultilingual) options[key] = key;
+        }
+        if (voiceDropdown) {
+          while (voiceDropdown.selectEl.firstChild) voiceDropdown.selectEl.removeChild(voiceDropdown.selectEl.firstChild);
+          const entries = Object.entries(options);
+          if (entries.length === 0) {
+            // Fallback: show all
+            const all: Record<string, string> = {};
+            for (const v of list) { const k = String(v.ShortName || v.Name || ""); if (k) all[k] = k; }
+            Object.entries(all).forEach(([k, label]) => voiceDropdown!.addOption(k, label));
+          } else {
+            entries.forEach(([k, label]) => voiceDropdown!.addOption(k, label));
+          }
+          const preferred = this.plugin.settings.voiceName;
+          const canKeep = preferred && (options[preferred] || true);
+          if (canKeep) voiceDropdown.setValue(preferred);
+          else {
+            const first = (Object.keys(options).length ? Object.keys(options)[0] : (list.length ? String(list[0].ShortName || list[0].Name || "") : ""));
+            if (first) { voiceDropdown.setValue(first); this.plugin.settings.voiceName = first; await this.plugin.saveSettings(); }
+          }
+        }
+        new Notice(`Voices loaded: ${Object.keys(options).length || list.length}`);
+      } catch (e: any) {
+        new Notice(`Voice list error: ${e?.message || String(e)}`);
+      }
+    }));
+
     new Setting(containerEl)
       .setName("TTS provider")
       .setDesc("Currently available: Azure")
