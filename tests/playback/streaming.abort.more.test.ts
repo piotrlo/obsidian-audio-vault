@@ -55,7 +55,7 @@ describe("playback/streaming abort", () => {
     const settings = { outputFormat: 'audio-24khz-48kbitrate-mono-mp3', rate: 0 } as any;
     const setSession = (_s: any) => {};
 
-    const p = playStreamedPartAndSave({ app, settings, provider, ssml: '<speak>x</speak>', base: 'base', part: 1, folder: 'Audio', file, abort, setSession, savePerPart: true });
+    const p = playStreamedPartAndSave({ app, settings, provider, ssml: '<speak>x</speak>', lang: 'pl-PL', base: 'base', part: 1, folder: 'Audio', file, abort, setSession, savePerPart: true });
     // abort during processing
     abort.abort();
     await p;

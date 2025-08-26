@@ -234,6 +234,7 @@ notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
             settings: this.settings,
             provider,
             ssml,
+            lang,
             base,
             part,
             folder,

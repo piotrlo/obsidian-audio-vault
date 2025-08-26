@@ -18,6 +18,7 @@ test("playStreamedPartAndSave throws when fetch fails (no MSE env)", async () =>
       async listVoices(): Promise<Voice[]> { return []; }
     })(),
     ssml: "<speak>hi</speak>",
+    lang: "pl-PL",
     base: "note",
     part: 1,
     folder: "Audio",
