@@ -495,9 +495,9 @@ notifyUtil(this.settings, `Failed to ensure folder "${folder}": ${((e as any)?.m
 
   private buildProviderFromSettings(): TtsProvider {
     if (this.settings.useBackend && this.settings.backendUrl && this.settings.licenseKey) {
-      return new BackendTtsProvider({ backendUrl: this.settings.backendUrl, licenseKey: this.settings.licenseKey, region: this.settings.azureRegion });
+      return new BackendTtsProvider({ backendUrl: this.settings.backendUrl, licenseKey: this.settings.licenseKey });
     }
-    return new AzureTtsProvider({ apiKey: this.settings.azureApiKey, region: this.settings.azureRegion });
+    return new AzureTtsProvider({ apiKey: this.settings.azureApiKey, region: "westeurope" });
   }
 }
 

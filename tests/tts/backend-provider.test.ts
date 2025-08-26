@@ -6,7 +6,6 @@ const FIXED_NOW = 1_700_000_000_000; // fixed timestamp for deterministic expiry
 describe('BackendTtsProvider', () => {
   const backendUrl = 'https://example.test';
   const licenseKey = 'LM-TEST';
-  const region = 'westeurope';
   let fetchSpy: any;
   let origNow: typeof Date.now;
 
@@ -27,7 +26,7 @@ describe('BackendTtsProvider', () => {
       data: { token: 'jwt', expires_in: 900, plan: 'pro', quota_remaining: 123, quota_limit: 300000 }
     }), { status: 200 }));
 
-    const p = new BackendTtsProvider({ backendUrl, licenseKey, region });
+    const p = new BackendTtsProvider({ backendUrl, licenseKey });
     const v = await p.validateLicense();
     expect(v.token).toBe('jwt');
     expect(v.plan).toBe('pro');
@@ -45,7 +44,7 @@ describe('BackendTtsProvider', () => {
       data: { plan: 'basic', chars_used: 1000, quota_remaining: 100, quota_limit: 10000, period: '2025-01' }
     }), { status: 200 }));
 
-    const p = new BackendTtsProvider({ backendUrl, licenseKey, region });
+    const p = new BackendTtsProvider({ backendUrl, licenseKey });
     const u = await p.fetchUsage();
     expect(u.plan).toBe('basic');
     expect(u.quota_remaining).toBe(100);

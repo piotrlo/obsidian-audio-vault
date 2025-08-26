@@ -34,7 +34,7 @@ export class ListenModeSettingsTab extends PluginSettingTab {
         const tokenFresh = !!s.licenseTokenExpiresAt && Date.now() < (s.licenseTokenExpiresAt - 120_000);
         if (hasBackend && !tokenFresh) {
           const provider = (await import("../tts/backend-provider")).BackendTtsProvider;
-          const p = new provider({ backendUrl: s.backendUrl!, licenseKey: s.licenseKey!, region: s.azureRegion });
+          const p = new provider({ backendUrl: s.backendUrl!, licenseKey: s.licenseKey! });
           const v = await p.validateLicense();
           this.plugin.settings.licensePlan = v.plan;
           this.plugin.settings.licenseQuotaRemaining = v.quota_remaining;
@@ -61,14 +61,18 @@ export class ListenModeSettingsTab extends PluginSettingTab {
           .onChange(async (v) => { this.plugin.settings.azureApiKey = v.trim(); await this.plugin.saveSettings(); })
       );
 
-    new Setting(containerEl)
-      .setName("Azure Region")
-      .setDesc("e.g., westeurope, northeurope")
-      .addText((t) =>
-        t.setPlaceholder("westeurope")
-          .setValue(this.plugin.settings.azureRegion)
-          .onChange(async (v) => { this.plugin.settings.azureRegion = v.trim(); await this.plugin.saveSettings(); })
-      );
+    if (!this.plugin.settings.useBackend) {
+      new Setting(containerEl)
+        .setName("Azure Region")
+        .setDesc("Fixed: westeurope (local mode)")
+        .addText((t) =>
+          t.setDisabled(true)
+            .setPlaceholder("westeurope")
+            .setValue("westeurope")
+        );
+      this.plugin.settings.azureRegion = "westeurope";
+      void this.plugin.saveSettings();
+    }
 
     /**
      * Voice selection: dropdown plus fetch button to load from Azure for the configured region.
@@ -85,22 +89,22 @@ export class ListenModeSettingsTab extends PluginSettingTab {
       dd.onChange(async (v) => { this.plugin.settings.voiceName = v; await this.plugin.saveSettings(); });
     });
     voiceRow.addButton((btn) =>
-      btn.setButtonText("Fetch voices for region").setCta().onClick(async () => {
+      btn.setButtonText("Fetch voices").setCta().onClick(async () => {
         try {
           let list: Array<{ ShortName?: string; Name?: string }> = [];
           if (this.plugin.settings.useBackend && this.plugin.settings.backendUrl) {
-            const url = `${this.plugin.settings.backendUrl.replace(/\/$/, '')}/v1/voices?region=${encodeURIComponent(this.plugin.settings.azureRegion)}`;
+            const url = `${this.plugin.settings.backendUrl.replace(/\/$/, '')}/v1/voices`;
             const res = await fetch(url);
             if (!res.ok) { let t = ""; try { t = await res.text(); } catch {} ; new Notice(`Voice list failed: ${res.status}${t?` - ${t}`:""}`); return; }
             const payload = await res.json();
             const items = Array.isArray(payload?.data) ? payload.data : [];
             list = items.map((v: any) => ({ ShortName: v?.shortName, Name: v?.name }));
           } else {
-            if (!this.plugin.settings.azureApiKey?.trim() || !this.plugin.settings.azureRegion?.trim()) {
-              new Notice("Set Azure API Key and Region first");
+            if (!this.plugin.settings.azureApiKey?.trim()) {
+              new Notice("Set Azure API Key first");
               return;
             }
-            const url = `https://${this.plugin.settings.azureRegion}.tts.speech.microsoft.com/cognitiveservices/voices/list`;
+            const url = `https://westeurope.tts.speech.microsoft.com/cognitiveservices/voices/list`;
             const res = await fetch(url, { headers: { "Ocp-Apim-Subscription-Key": this.plugin.settings.azureApiKey } });
             if (!res.ok) { let t = ""; try { t = await res.text(); } catch {} ; new Notice(`Voice list failed: ${res.status}${t?` - ${t}`:""}`); return; }
             const data = await res.json();
@@ -219,7 +223,7 @@ export class ListenModeSettingsTab extends PluginSettingTab {
             return;
           }
           const provider = (await import("../tts/backend-provider")).BackendTtsProvider;
-          const p = new provider({ backendUrl: this.plugin.settings.backendUrl!, licenseKey: this.plugin.settings.licenseKey!, region: this.plugin.settings.azureRegion });
+          const p = new provider({ backendUrl: this.plugin.settings.backendUrl!, licenseKey: this.plugin.settings.licenseKey! });
           const v = await p.validateLicense();
           this.plugin.settings.licensePlan = v.plan;
           this.plugin.settings.licenseQuotaRemaining = v.quota_remaining;
@@ -241,7 +245,7 @@ export class ListenModeSettingsTab extends PluginSettingTab {
             return;
           }
           const provider = (await import("../tts/backend-provider")).BackendTtsProvider;
-          const p = new provider({ backendUrl: this.plugin.settings.backendUrl!, licenseKey: this.plugin.settings.licenseKey!, region: this.plugin.settings.azureRegion });
+          const p = new provider({ backendUrl: this.plugin.settings.backendUrl!, licenseKey: this.plugin.settings.licenseKey! });
           const u = await p.fetchUsage();
           this.plugin.settings.licensePlan = u.plan || this.plugin.settings.licensePlan;
           this.plugin.settings.licenseQuotaRemaining = typeof u.quota_remaining === 'number' ? u.quota_remaining : this.plugin.settings.licenseQuotaRemaining;

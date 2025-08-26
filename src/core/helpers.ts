@@ -38,10 +38,8 @@ export function missingSettings(s: TtsSettings): string[] {
   if (s.useBackend) {
     if (!s.backendUrl?.trim()) out.push("Backend URL");
     if (!s.licenseKey?.trim()) out.push("License key");
-    if (!s.azureRegion?.trim()) out.push("Azure Region");
   } else {
     if (!s.azureApiKey?.trim()) out.push("Azure API Key");
-    if (!s.azureRegion?.trim()) out.push("Azure Region");
   }
   if (!s.voiceName?.trim()) out.push("Voice name");
   if (!s.outputFormat?.trim()) out.push("Output format");
