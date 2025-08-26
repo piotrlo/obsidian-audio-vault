@@ -21,6 +21,7 @@ export const DEFAULT_SETTINGS: TtsSettings = {
   mergeParts: false
   ,
   licensePlan: undefined,
+  licenseValidatedKey: undefined,
   licenseQuotaRemaining: undefined,
   licenseQuotaLimit: undefined,
   licenseTokenExpiresAt: undefined,
