@@ -66,11 +66,11 @@ export class ListenModeSettingsTab extends PluginSettingTab {
     void (async () => {
       try {
         const s = this.plugin.settings;
-        const hasBackend = !!s.useBackend && !!s.backendUrl && !!s.licenseKey;
+        const hasBackend = !!s.useBackend && !!s.backendUrl;
         const tokenFresh = !!s.licenseTokenExpiresAt && Date.now() < (s.licenseTokenExpiresAt - 120_000);
         if (hasBackend && !tokenFresh) {
           const provider = (await import("../tts/backend-provider")).BackendTtsProvider;
-          const p = new provider({ backendUrl: s.backendUrl!, licenseKey: s.licenseKey!, clientId: s.clientId });
+          const p = new provider({ backendUrl: s.backendUrl!, licenseKey: s.licenseKey || "", clientId: s.clientId });
           const v = await p.validateLicense();
           this.plugin.settings.licensePlan = v.plan;
           this.plugin.settings.licenseQuotaRemaining = v.quota_remaining;
@@ -91,13 +91,15 @@ export class ListenModeSettingsTab extends PluginSettingTab {
     const hasBackendCfg = !!s0.useBackend && !!s0.backendUrl;
     const tokenFresh0 = !!s0.licenseTokenExpiresAt && Date.now() < (s0.licenseTokenExpiresAt - 120_000);
     const keyMatches0 = !!s0.licenseKey && !!(s0 as any).licenseValidatedKey ? s0.licenseKey === (s0 as any).licenseValidatedKey : false;
-    const licenseActive0 = !!s0.licensePlan && tokenFresh0 && keyMatches0;
+    const autoFree0 = !s0.licenseKey && !!s0.licensePlan && tokenFresh0;
+    const licenseActive0 = (!!s0.licensePlan && tokenFresh0 && keyMatches0) || autoFree0;
+    const isFreePlan = (s0.licensePlan || '').toLowerCase() === 'free';
 
     // License CTA (show only when backend mode and license not active)
-    if (this.plugin.settings.useBackend && !licenseActive0) {
+    if (this.plugin.settings.useBackend && (!licenseActive0 || isFreePlan)) {
       const licCta = new Setting(containerEl)
-        .setName("AudioVault Plus — activate free license or upgrade")
-        .setDesc("Free monthly quota (2 devices). Higher plans with no device limit and larger quotas.");
+      .setName("AudioVault Plus — hassle-free TTS service")
+      .setDesc("Free: 13 min/month to test. Basic: 133 min for $8.99/month. Skip Azure registration, API limits tracking, and complex billing. Just works.");
       licCta.addButton((b) => b.setButtonText("Upgrade").setCta().onClick(() => {
         try { window.open('https://listenmode.app/upgrade', '_blank'); } catch {}
       }));
@@ -113,7 +115,7 @@ export class ListenModeSettingsTab extends PluginSettingTab {
         const plan = s.licensePlan || 'N/D';
         const remaining = (typeof s.licenseQuotaRemaining === 'number') ? s.licenseQuotaRemaining : undefined;
         const limit = (typeof s.licenseQuotaLimit === 'number') ? s.licenseQuotaLimit : undefined;
-        const expires = s.licenseTokenExpiresAt ? new Date(s.licenseTokenExpiresAt).toLocaleString() : 'N/D';
+        const tokenExpires = s.licenseTokenExpiresAt ? new Date(s.licenseTokenExpiresAt).toLocaleString() : 'N/D';
 
         // Active badge next to name
         const tokenFresh = !!s.licenseTokenExpiresAt && Date.now() < (s.licenseTokenExpiresAt - 120_000);
@@ -133,7 +135,7 @@ export class ListenModeSettingsTab extends PluginSettingTab {
         // Label + progress in desc
         const label = document.createElement('div');
         const remainText = (typeof remaining === 'number' && typeof limit === 'number') ? `${remaining}/${limit}` : 'N/D';
-        label.textContent = `Plan: ${plan} | Pozostało: ${remainText} | Ważny do: ${expires}`;
+        label.textContent = `Plan: ${plan} | Pozostało: ${remainText} | Token ważny do: ${tokenExpires}`;
         label.style.marginBottom = '6px';
         licenseStatus.descEl.empty();
         licenseStatus.descEl.appendChild(label);
@@ -151,9 +153,9 @@ export class ListenModeSettingsTab extends PluginSettingTab {
         licenseStatus.addButton((btn) =>
           btn.setButtonText("Check").onClick(async () => {
             try {
-              if (!this.plugin.settings.useBackend || !this.plugin.settings.backendUrl || !this.plugin.settings.licenseKey) { new Notice("Enable Plus mode and paste your license key"); return; }
+              if (!this.plugin.settings.useBackend || !this.plugin.settings.backendUrl) { new Notice("Enable Plus mode first"); return; }
               const provider = (await import("../tts/backend-provider")).BackendTtsProvider;
-              const p = new provider({ backendUrl: this.plugin.settings.backendUrl!, licenseKey: this.plugin.settings.licenseKey!, clientId: this.plugin.settings.clientId });
+              const p = new provider({ backendUrl: this.plugin.settings.backendUrl!, licenseKey: this.plugin.settings.licenseKey || "", clientId: this.plugin.settings.clientId });
               // refresh token and fetch usage
               try { await p.validateLicense(); } catch {}
               const u = await p.fetchUsage();
