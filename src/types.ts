@@ -32,6 +32,8 @@ export interface TtsSettings {
   audioFolder: string;
   /** Language selection constrained to supported values. */
   language: SupportedLang;
+  /** Optional BCP-47 override (e.g., es-ES). When set, overrides auto detection. */
+  languageOverride?: string;
   /** If true, voice picker shows only Neural HD voices. */
   onlyHdVoices: boolean;
   /** Enable debug console logs. */

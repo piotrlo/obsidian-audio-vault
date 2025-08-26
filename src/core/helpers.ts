@@ -54,10 +54,13 @@ export function missingSettings(s: TtsSettings): string[] {
  * @returns {string} BCP-47 language code.
  */
 export function resolveLang(content: string, s: TtsSettings): string {
+  const override = (s.languageOverride || "").trim();
+  if (override) return override;
   const auto = detectLanguage(content);
   const configured = s.language === "auto" ? auto : s.language;
   const fromVoice = deriveLangFromVoiceName(s.voiceName);
-  return fromVoice || configured;
+  const out = fromVoice || configured;
+  return (out && out.trim()) ? out : "pl-PL";
 }
 
 /**

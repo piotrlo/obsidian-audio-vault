@@ -310,16 +310,15 @@ export class ListenModeSettingsTab extends PluginSettingTab {
       .setDesc("Filter voice list to Neural HD voices (e.g., DragonHD)")
       .addToggle((tg) => tg.setValue(this.plugin.settings.onlyHdVoices).onChange(async (v) => { this.plugin.settings.onlyHdVoices = v; await this.plugin.saveSettings(); }));
 
+    // Language is automatic by default (hidden); provide optional override input.
     new Setting(containerEl)
-      .setName("Language")
-      .setDesc("SSML xml:lang to use; 'auto' will be added later via detection")
-      .addDropdown((dd) => {
-        dd.addOption("auto", "auto");
-        dd.addOption("pl-PL", "pl-PL");
-        dd.addOption("en-US", "en-US");
-        dd.setValue(this.plugin.settings.language);
-dd.onChange(async (v) => { this.plugin.settings.language = (v as SupportedLang); await this.plugin.saveSettings(); });
-      });
+      .setName("Language (optional override)")
+      .setDesc("BCP-47 code (e.g., es-ES). Leave empty for auto (PL/EN).")
+      .addText((t) =>
+        t.setPlaceholder("e.g., es-ES")
+          .setValue(this.plugin.settings.languageOverride || "")
+          .onChange(async (v) => { this.plugin.settings.languageOverride = v.trim(); await this.plugin.saveSettings(); })
+      );
 
     new Setting(containerEl)
       .setName("Chunk size (characters)")

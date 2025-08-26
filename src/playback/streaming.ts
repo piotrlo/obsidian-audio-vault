@@ -15,6 +15,7 @@ export async function playStreamedPartAndSave(params: {
   settings: TtsSettings;
   provider: TtsProvider;
   ssml: string;
+  lang: string;
   base: string;
   part: number;
   folder: string;
@@ -28,13 +29,14 @@ export async function playStreamedPartAndSave(params: {
   /** Optional hook invoked immediately after network capture completes (before playback finishes). */
   onCaptured?: (blob: Blob) => Promise<void> | void;
 }): Promise<void> {
-  const { app, settings, provider, ssml, base, part, folder, file, abort, setSession, appendToMerged, savePerPart, onCaptured } = params;
+  const { app, settings, provider, ssml, lang, base, part, folder, file, abort, setSession, appendToMerged, savePerPart, onCaptured } = params;
 
   const streamFormat = settings.outputFormat;
   const streamMime = mimeFromFormat(streamFormat);
   const { supported: mseSupported } = canStream(streamFormat);
 
-  const stream = await provider.synthesize(ssml, streamFormat, "", abort.signal);
+  const effectiveLang = (lang && lang.trim()) ? lang : (settings.language || "pl-PL");
+  const stream = await provider.synthesize(ssml, streamFormat, effectiveLang, abort.signal);
 
   // Fallback path when MSE is unavailable or unsupported: capture entire blob, optionally save, no MSE playback.
   if (!mseSupported) {

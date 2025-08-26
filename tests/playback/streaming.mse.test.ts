@@ -67,7 +67,7 @@ describe("playback/streaming MSE success", () => {
     const settings = { outputFormat: 'audio-24khz-48kbitrate-mono-mp3', rate: 0 } as any;
     const setSession = (_s: any) => {};
 
-    await playStreamedPartAndSave({ app, settings, provider, ssml: '<speak>x</speak>', base: 'base', part: 1, folder: 'Audio', file, abort, setSession, savePerPart: true });
+    await playStreamedPartAndSave({ app, settings, provider, ssml: '<speak>x</speak>', lang: 'pl-PL', base: 'base', part: 1, folder: 'Audio', file, abort, setSession, savePerPart: true });
     expect(written.length).toBe(1);
     expect(written[0].path.endsWith('base_part_1.mp3')).toBe(true);
   });

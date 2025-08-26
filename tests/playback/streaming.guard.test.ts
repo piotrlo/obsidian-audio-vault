@@ -26,6 +26,7 @@ describe('streaming save guard', () => {
       settings: { outputFormat: 'audio-24khz-48kbitrate-mono-mp3', rate: '+0%' } as any,
       provider,
       ssml: '<speak/>',
+      lang: 'pl-PL',
       base: 'note',
       part: 1,
       folder: 'Audio',
