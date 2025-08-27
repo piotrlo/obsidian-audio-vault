@@ -40,13 +40,13 @@ export default class AudioVaultPlugin extends Plugin {
   async onload(): Promise<void> {
     await this.loadSettings();
     setDebugLogging(!!this.settings.debugLogs);
-    if (!this.settings.clientId || this.settings.clientId.trim().length < 8) {
-      try {
-        const uuid = (crypto && 'randomUUID' in crypto) ? (crypto as any).randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-        this.settings.clientId = uuid;
+    try {
+      const persistentId = await this.getOrCreateVaultClientId();
+      if (persistentId && persistentId !== this.settings.clientId) {
+        this.settings.clientId = persistentId;
         await this.saveSettings();
-      } catch {}
-    }
+      }
+    } catch {}
     this.provider = this.buildProviderFromSettings();
     this.addCommand({ id: "audiovault-play-pause", name: "Play/Pause current note", callback: () => { this.playOrStart(); } });
     this.addCommand({ id: "audiovault-stop", name: "Stop", callback: () => { void this.stopPlayback(); } });
@@ -64,6 +64,36 @@ export default class AudioVaultPlugin extends Plugin {
    */
   async onunload(): Promise<void> {
     await this.stopPlayback(true);
+  }
+  
+  /**
+   * Read or create a persistent client identifier stored at the vault root.
+   * The identifier is stored in a hidden file named ".audiovault-id" to survive plugin reinstalls.
+   */
+  private async getOrCreateVaultClientId(): Promise<string> {
+    const path = ".audiovault-id";
+    try {
+      const exists = await this.app.vault.adapter.exists(path);
+      if (exists) {
+        try {
+          const raw = await this.app.vault.adapter.read(path);
+          const id = (raw || "").toString().trim();
+          if (id && id.length >= 8) return id;
+        } catch {}
+      }
+      const gen = (crypto && 'randomUUID' in crypto)
+        ? (crypto as any).randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+      try { await this.app.vault.adapter.write(path, gen); } catch {}
+      return gen;
+    } catch {
+      // As a last resort, fall back to settings or in-memory generation
+      if (this.settings.clientId && this.settings.clientId.trim().length >= 8) return this.settings.clientId.trim();
+      const gen = (crypto && 'randomUUID' in crypto)
+        ? (crypto as any).randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+      return gen;
+    }
   }
 /**
  * No UI panel is rendered in the MVP; kept for API compatibility.
