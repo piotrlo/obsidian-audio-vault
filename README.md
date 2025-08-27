@@ -1,34 +1,90 @@
-# AudioVault — Quick Start (README)
+# AudioVault 🎧
 
-Build, test, and deploy (Bun)
-- Build once:
-  - bun run build
-- Watch/dev:
-  - bun run dev
-- Typecheck:
-  - bun run typecheck
-- Run tests:
-  - bun test
-- Deploy to your Obsidian vault (requires VAULT_PATH):
-  - VAULT_PATH="/path/to/YourVault" bun run deploy
+**Transform your Obsidian notes into high-quality audio. Listen to your knowledge vault on the go.**
 
-Using the plugin in Obsidian
-- Enable the plugin (obsidian-azure-speech-tts) in Settings → Community plugins.
-- Configure Settings → AudioVault:
-  - Azure API Key and Region (e.g., westeurope).
-  - Voice (optionally fetch from Azure list), Output format (e.g., audio-24khz-48kbitrate-mono-mp3), Rate (SSML), Streaming (on), Show controls, Audio folder, Language (auto/pl-PL/en-US), Debug logs (optional).
-- Open any note and run the command: "AudioVault: Read current note".
-  - If an audio file already exists in Audio/ for the note, it will play immediately (unless you restart/refresh).
-  - Otherwise, the note will be split into chunks (
-0=10k chars), streamed to Azure, played immediately (MSE), saved to Audio/, and a link is appended at the end of the note.
+[![Obsidian Plugin](https://img.shields.io/badge/Obsidian-Plugin-7C3AED)](https://obsidian.md)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Streaming and fallback
-- When supported (desktop browsers), audio starts instantly via MediaSource (mp3 → audio/mpeg, wav → audio/wav).
-- If streaming is not supported or fails, the plugin falls back to a buffered path — it downloads the audio for each chunk and then plays it.
+## ✨ First audio in 3 clicks
 
-Debugging
-- Toggle "Debug logs" in settings to print detailed diagnostics to the console (Developer Tools → Console). Logs are prefixed with [AudioVault].
+1. **Select** any note in your vault
+2. **Click** the play button in the ribbon
+3. **Listen** to your content instantly
 
-Notes
-- Files are saved into Audio/ in your vault and linked at the end of the note. Duplicate links are prevented.
-- The floating panel provides Play/Pause, Stop, Restart, and a speed slider; it can be collapsed via the header chevron.
+AudioVault converts your text to natural-sounding speech using Azure AI Speech technology, making your notes accessible anywhere - while driving, exercising, or multitasking.
+
+## 🚀 Features
+
+- **Instant TTS**: High-quality neural voices (OpenAI/Azure level)
+- **Smart streaming**: Audio starts playing in seconds, not minutes
+- **Offline playback**: Generated audio files saved to your vault
+- **Multi-language**: Polish, English, and more with automatic detection
+- **Mobile optimized**: Works seamlessly on iOS and Android
+- **No cloud storage**: Your content stays in your vault
+
+## 💰 Pricing
+
+AudioVault offers flexible plans to fit your needs:
+
+- **Free**: 10,000 characters/month (~2 articles)
+- **Basic**: 100,000 characters/month (~20 articles) - $8.99/month
+- **Pro**: 300,000 characters/month (~60 articles) - $24.99/month
+
+[**View full pricing →**](https://audio-vault.app/pricing)
+
+## 🔧 Installation
+
+1. Open Obsidian Settings → Community plugins
+2. Turn off Safe mode
+3. Click "Browse" and search for "AudioVault"
+4. Click "Install" then "Enable"
+
+## 📱 Usage
+
+### Quick Start
+- **Play current note**: Click the play button in the ribbon
+- **Download only**: Use "Download audio (no playback)" command
+- **Voice settings**: Configure in Settings → AudioVault
+
+### Controls
+- **Ribbon**: Always visible play/pause button
+- **Commands**: Play, Stop, Restart, Download
+- **Settings**: Voice, speed, language, streaming options
+
+## 🔒 Privacy & Network
+
+**Network usage**: AudioVault connects to Azure AI Speech for text-to-speech conversion. Your note content is processed in real-time and never stored on external servers.
+
+**Data handling**: Only the text you select is sent for TTS processing. No personal data, notes, or vault structure is transmitted or stored externally.
+
+**Offline mode**: Generated audio files are stored locally in your vault's `Audio/` folder and can be played without internet connection.
+
+## 🎯 Perfect for
+
+- **Students**: Listen to study materials and research notes
+- **Professionals**: Review documents and reports hands-free
+- **Researchers**: Absorb large amounts of text while multitasking
+- **Accessibility**: Support for users with reading difficulties
+- **Productivity**: Maximize time during commutes and workouts
+
+## 🛠️ Technical Details
+
+- **Format**: MP3 only (high quality, small file size)
+- **Streaming**: MediaSource Extensions (MSE) with fallback
+- **Chunking**: Intelligent text splitting for long documents
+- **Caching**: Voice lists cached for 24 hours
+- **Mobile**: iOS/Android optimized with gesture support
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## 🤝 Support
+
+- **Documentation**: [audio-vault.app/docs](https://audio-vault.app/docs)
+- **Issues**: [GitHub Issues](https://github.com/piotrlo/audiovault-plugin/issues)
+- **Community**: [Obsidian Forum](https://forum.obsidian.md)
+
+---
+
+**Made with ❤️ for the Obsidian community**
