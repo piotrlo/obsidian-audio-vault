@@ -334,7 +334,7 @@ notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
         const code = (e && typeof e === 'object' && 'code' in e) ? (e as any).code : undefined;
         if (status === 402 || code === 'PAYMENT_REQUIRED' || code === 'DEVICE_LIMIT_EXCEEDED') {
           try { notifyUtil(this.settings, `Plan upgrade required (${code || status}). Open plans page.`, true); } catch {}
-          try { window.open('https://listenmode.app/upgrade', '_blank'); } catch {}
+          try { window.open('https://audio-vault.app/upgrade', '_blank'); } catch {}
         } else {
           const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
           notifyUtil(this.settings, `TTS failed on part ${part}: ${msg}` , true);
@@ -484,7 +484,7 @@ log("downloaded part", { part, total: totalParts });
           const code = (e && typeof e === 'object' && 'code' in e) ? (e as any).code : undefined;
           if (status === 402 || code === 'PAYMENT_REQUIRED' || code === 'DEVICE_LIMIT_EXCEEDED') {
             try { notifyUtil(this.settings, `Plan upgrade required (${code || status}). Open plans page.`, true); } catch {}
-            try { window.open('https://listenmode.app/upgrade', '_blank'); } catch {}
+            try { window.open('https://audio-vault.app/upgrade', '_blank'); } catch {}
           } else {
             const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
             notifyUtil(this.settings, `Download failed on part ${part}: ${msg}`, true);

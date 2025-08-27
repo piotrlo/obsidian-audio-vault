@@ -59,6 +59,9 @@ export interface Bindings {
   MAX_TTS_BODY_BYTES?: string;
   AUTH_VALIDATE_BODY_LIMIT_BYTES?: string;
   AZURE_TTS_TIMEOUT_MS?: string;
+  // Stripe
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
 }
 
 export const PLAN_LIMITS = {
