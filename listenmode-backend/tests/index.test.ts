@@ -48,7 +48,7 @@ describe('Admin SSR + API guards', () => {
     const res = await app.request(new Request('http://x/admin', { headers: new Headers({ Cookie: cookie.split(';')[0] }) }), {}, MOCK_ENV);
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain('ListenMode — Admin');
+    expect(html).toContain('AudioVault — Admin');
   });
 });
 

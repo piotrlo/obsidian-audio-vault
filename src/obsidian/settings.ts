@@ -16,7 +16,7 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
 
   /**
    * @param {App} app Obsidian app.
-   * @param {ListenModePlugin} plugin Plugin instance.
+   * @param {AudioVaultPlugin} plugin Plugin instance.
    */
   constructor(app: App, plugin: AudioVaultPlugin) {
     super(app, plugin);
@@ -135,7 +135,7 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
         // Label + progress in desc
         const label = document.createElement('div');
         const remainText = (typeof remaining === 'number' && typeof limit === 'number') ? `${remaining}/${limit}` : 'N/D';
-        label.textContent = `Plan: ${plan} | Remaining: ${remainText} | Token valid until: ${tokenExpires}`;
+        label.textContent = `Plan: ${plan} | Remaining: ${remainText}`;
         label.style.marginBottom = '6px';
         licenseStatus.descEl.empty();
         licenseStatus.descEl.appendChild(label);
@@ -235,7 +235,14 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
       .addToggle((tg) => tg
         // Toggle ON means: using own Azure key → useBackend = false
         .setValue(!this.plugin.settings.useBackend)
-        .onChange(async (v) => { this.plugin.settings.useBackend = !v; await this.plugin.saveSettings(); this.display(); })
+        .onChange(async (v) => { 
+          this.plugin.settings.useBackend = !v; 
+          if (this.plugin.settings.useBackend) {
+            this.plugin.settings.outputFormat = "audio-24khz-48kbitrate-mono-mp3";
+          }
+          await this.plugin.saveSettings(); 
+          this.display(); 
+        })
       );
 
     // Azure key (only in Local mode)
@@ -364,8 +371,16 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Output format")
-      .setDesc("e.g., audio-24khz-48kbitrate-mono-mp3")
-      .addText((t) => t.setPlaceholder("audio-24khz-48kbitrate-mono-mp3").setValue(this.plugin.settings.outputFormat).onChange(async (v) => { this.plugin.settings.outputFormat = v.trim(); await this.plugin.saveSettings(); }));
+      .setDesc(this.plugin.settings.useBackend ? "MP3 format enforced in Plus mode" : "e.g., audio-24khz-48kbitrate-mono-mp3")
+      .addText((t) => {
+        t.setPlaceholder("audio-24khz-48kbitrate-mono-mp3")
+          .setValue(this.plugin.settings.outputFormat)
+          .onChange(async (v) => { this.plugin.settings.outputFormat = v.trim(); await this.plugin.saveSettings(); });
+        if (this.plugin.settings.useBackend) {
+          t.setDisabled(true);
+          t.setValue("audio-24khz-48kbitrate-mono-mp3");
+        }
+      });
 
     new Setting(containerEl)
       .setName("Chunk size (characters)")
