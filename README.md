@@ -5,9 +5,9 @@
 [![Obsidian Plugin](https://img.shields.io/badge/Obsidian-Plugin-7C3AED)](https://obsidian.md)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## ✨ First audio in 3 clicks
+## ✨ First audio in 1 click
 
-1. **Select** any note in your vault
+1. **Open** any note in your vault
 2. **Click** the play button in the ribbon
 3. **Listen** to your content instantly
 
