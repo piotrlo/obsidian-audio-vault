@@ -16,6 +16,9 @@ Endpointy
 - POST /v1/tts → strumieniowe proxy do Azure TTS (Bearer JWT)
 - GET  /v1/voices → lista głosów (cache 24h w KV)
 - DELETE /v1/voices/cache → czyszczenie cache (wymaga X-Admin-Token)
+ - POST /v1/billing/checkout → tworzy Stripe Checkout Session (subscription)
+ - POST /v1/billing/portal → tworzy Stripe Customer Portal Session
+ - POST /v1/billing/webhook → obsługa webhooków Stripe (checkout/subscription/invoice)
  - GET  /v1/admin/licenses → lista licencji (paginacja, filtry plan/status/q; wymaga X-Admin-Token)
  - GET  /v1/admin/licenses/:id → szczegóły licencji (wymaga X-Admin-Token)
  - PATCH /v1/admin/licenses/:id → edycja pól: status/plan/expires_at (wymaga X-Admin-Token)
@@ -25,7 +28,7 @@ Endpointy
 Bindings
 - D1: listenmode-db (tabele: licenses, usage_monthly, events)
 - KV: VOICES_CACHE (cache listy głosów)
-- Sekrety/zmienne: AZURE_TTS_API_KEY, AZURE_TTS_REGION, JWT_SECRET, ADMIN_API_TOKEN, ENVIRONMENT
+- Sekrety/zmienne: AZURE_TTS_API_KEY, AZURE_TTS_REGION, JWT_SECRET, ADMIN_API_TOKEN, ENVIRONMENT, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, RESEND_API_KEY, RESEND_FROM_EMAIL
 
 Wymagania
 - Bun (bun.sh)
@@ -62,6 +65,19 @@ bunx --bun wrangler secret put AZURE_TTS_API_KEY --config="$(pwd)/listenmode-bac
 bunx --bun wrangler secret put AZURE_TTS_REGION   --config="$(pwd)/listenmode-backend/wrangler.toml"
 bunx --bun wrangler secret put JWT_SECRET         --config="$(pwd)/listenmode-backend/wrangler.toml"
 bunx --bun wrangler secret put ADMIN_API_TOKEN    --config="$(pwd)/listenmode-backend/wrangler.toml"
+bunx --bun wrangler secret put STRIPE_SECRET_KEY  --config="$(pwd)/listenmode-backend/wrangler.toml"
+bunx --bun wrangler secret put STRIPE_WEBHOOK_SECRET --config="$(pwd)/listenmode-backend/wrangler.toml"
+bunx --bun wrangler secret put RESEND_API_KEY     --config="$(pwd)/listenmode-backend/wrangler.toml"
+bunx --bun wrangler secret put RESEND_FROM_EMAIL  --config="$(pwd)/listenmode-backend/wrangler.toml"
+```
+
+### 3) Konfiguracja DNS dla audio-vault.app (TODO)
+```bash
+# SPF record (TXT)
+v=spf1 include:_spf.google.com ~all
+
+# DKIM record (TXT) - dodać po konfiguracji Resend
+# Resend → Domains → audio-vault.app → DKIM → dodać TXT record
 ```
 
 4) Migracja DB i deploy

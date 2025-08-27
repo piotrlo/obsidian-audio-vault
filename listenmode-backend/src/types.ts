@@ -62,6 +62,9 @@ export interface Bindings {
   // Stripe
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
+  // Resend email
+  RESEND_API_KEY?: string;
+  RESEND_FROM_EMAIL?: string;
 }
 
 export const PLAN_LIMITS = {
