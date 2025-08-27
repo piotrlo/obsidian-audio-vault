@@ -72,8 +72,7 @@ AudioVault offers flexible plans to fit your needs:
 - **Format**: MP3 only (high quality, small file size)
 - **Streaming**: MediaSource Extensions (MSE) with fallback
 - **Chunking**: Intelligent text splitting for long documents
-- **Caching**: Voice lists cached for 24 hours
-- **Mobile**: iOS/Android optimized with gesture support
+- **Mobile**: iOS/Android optimized
 
 ## 📄 License
 
