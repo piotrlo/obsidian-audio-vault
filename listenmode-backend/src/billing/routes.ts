@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Bindings, ApiResponse } from '../types';
 import { jsonError } from '../types';
 import { generateLicenseKey, hashLicenseKey } from '../auth/jwt';
+import { logEvent } from '../db/queries';
 
 /**
  * Minimal Stripe billing routes implemented using fetch to Stripe API.
@@ -28,6 +29,46 @@ function formEncode(payload: Record<string, string | number | boolean | undefine
     }
   }
   return parts.join('&');
+}
+
+async function sendLicenseEmail(c: any, to: string, licenseKey: string, plan: string): Promise<boolean> {
+  const apiKey: string | undefined = c.env.RESEND_API_KEY;
+  const fromEmail: string = c.env.RESEND_FROM_EMAIL || 'AudioVault <no-reply@audio-vault.app>';
+  if (!apiKey || !apiKey.trim()) {
+    try { await logEvent(c.env.DB, null, 'email_skipped', { reason: 'missing_api_key', to }); } catch {}
+    return false;
+  }
+  const subject = 'Twoja licencja AudioVault';
+  const text = `Dziękujemy za zakup AudioVault.\n\nTwój klucz licencyjny: ${licenseKey}\n\nPlan: ${plan}\nInstrukcja: w Obsidian → Settings → AudioVault → wklej klucz i naciśnij Activate.`;
+  const html = `<!doctype html><html><body>
+  <p>Dziękujemy za zakup <strong>AudioVault</strong>.</p>
+  <p><strong>Twój klucz licencyjny:</strong></p>
+  <p style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 14px; padding: 8px 12px; background:#f6f8fa; display:inline-block; border-radius:6px;">${licenseKey}</p>
+  <p>Plan: <strong>${plan}</strong></p>
+  <p>Instrukcja aktywacji: w Obsidian → Settings → AudioVault → wklej klucz i kliknij <em>Activate</em>.</p>
+  </body></html>`;
+  const payload = { from: fromEmail, to, subject, html, text } as any;
+  let attempt = 0; const max = 3;
+  while (attempt < max) {
+    attempt++;
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        try { await logEvent(c.env.DB, null, 'email_sent', { to, attempt }); } catch {}
+        return true;
+      }
+      const body = await res.text().catch(() => '');
+      try { await logEvent(c.env.DB, null, 'email_send_failed', { to, attempt, status: res.status, body }); } catch {}
+    } catch (e: any) {
+      try { await logEvent(c.env.DB, null, 'email_send_error', { to, attempt, error: e?.message || String(e) }); } catch {}
+    }
+    await new Promise(r => setTimeout(r, attempt * 300));
+  }
+  return false;
 }
 
 /**
@@ -138,6 +179,7 @@ billing.post('/webhook', async (c) => {
     if (type === 'checkout.session.completed') {
       const customer: string | undefined = event?.data?.object?.customer || event?.data?.object?.customer_id;
       const plan: 'free'|'basic'|'pro' | undefined = event?.data?.object?.metadata?.plan;
+      const email: string | undefined = event?.data?.object?.customer_details?.email || event?.data?.object?.customer_email || event?.data?.object?.receipt_email;
       // Create license if not exists for this customer
       if (customer) {
         let lic = await c.env.DB
@@ -157,6 +199,10 @@ billing.post('/webhook', async (c) => {
             .first<any>();
           // Audit
           try { await c.env.DB.prepare('INSERT INTO events (license_id, event_type, metadata) VALUES (?, ?, ?)').bind(lic?.id ?? null, 'checkout_session_completed', JSON.stringify({ customer, plan: plan || 'basic' })).run(); } catch {}
+          // Send license email if email present
+          if (email) {
+            await sendLicenseEmail(c, email, keyPlain, plan || 'basic');
+          }
         }
       }
     } else if (type === 'customer.subscription.updated') {
