@@ -100,16 +100,26 @@ export class BackendTtsProvider implements TtsProvider {
   }
 
   async synthesize(ssml: string, outputFormat: string, _lang: string, abortSignal: AbortSignal): Promise<ReadableStream<Uint8Array>> {
-    const token = await this.getValidToken();
-    const res = await fetch(`${this.backendUrl}/v1/tts`, {
+    const makeReq = async (jwt: string) => fetch(`${this.backendUrl}/v1/tts`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`
+        "Authorization": `Bearer ${jwt}`
       },
       body: JSON.stringify({ ssml, outputFormat, language: _lang }),
       signal: abortSignal
     });
+
+    let token = await this.getValidToken();
+    let res = await makeReq(token);
+    if (res.status === 401) {
+      try {
+        this.jwtToken = null;
+        this.tokenExpiry = 0;
+        token = await this.getValidToken();
+        res = await makeReq(token);
+      } catch {}
+    }
     if (!res.ok || !res.body) {
       let detail: any = null;
       try { detail = await res.json(); } catch { try { detail = await res.text(); } catch {} }

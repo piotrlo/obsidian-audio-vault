@@ -299,7 +299,7 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
     let voiceDropdown: import("obsidian").DropdownComponent | null = null;
     voiceRow.addDropdown((dd) => {
       voiceDropdown = dd;
-      const current = this.plugin.settings.voiceName || "en-US-Ava:DragonHDLatestNeural";
+      const current = this.plugin.settings.voiceName || "en-US-Ava3:DragonHDLatestNeural";
       dd.addOption(current, current);
       dd.setValue(current);
       dd.onChange(async (v) => { this.plugin.settings.voiceName = v; await this.plugin.saveSettings(); });
@@ -325,7 +325,6 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
           list = Array.isArray(data) ? data : [];
         }
 
-        // Filter to Multilingual Neural voices to match backend policy
         const options: Record<string, string> = {};
         for (const v of list) {
           const key = String(v.ShortName || v.Name || "");
@@ -338,7 +337,6 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
           while (voiceDropdown.selectEl.firstChild) voiceDropdown.selectEl.removeChild(voiceDropdown.selectEl.firstChild);
           const entries = Object.entries(options);
           if (entries.length === 0) {
-            // Fallback: show all
             const all: Record<string, string> = {};
             for (const v of list) { const k = String(v.ShortName || v.Name || ""); if (k) all[k] = k; }
             Object.entries(all).forEach(([k, label]) => voiceDropdown!.addOption(k, label));
