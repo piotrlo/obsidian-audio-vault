@@ -8,6 +8,7 @@ import { voicesRoutes } from './voices/routes';
 import { adminRoutes } from './admin/routes';
 import { adminUiRoutes } from './admin/ui';
 import { jsonError } from './types';
+import { billingRoutes } from './billing/routes';
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -67,6 +68,7 @@ app.route('/v1/auth', authRoutes);
 app.route('/v1/tts', ttsRoutes);
 app.route('/v1/voices', voicesRoutes);
 app.route('/v1/admin', adminRoutes);
+app.route('/v1/billing', billingRoutes);
 app.route('/admin', adminUiRoutes);
 
 app.notFound((c) => jsonError(c, 404, 'NOT_FOUND', 'Not found'));
