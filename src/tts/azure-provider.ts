@@ -17,7 +17,7 @@ export class AzureTtsProvider implements TtsProvider {
       method: "POST",
       headers: {
         accept: "audio/*",
-        "User-Agent": "ListenMode/0.1",
+        "User-Agent": "AudioVault/1.0",
         "Ocp-Apim-Subscription-Key": this.apiKey,
         "Content-Type": "application/ssml+xml",
         "X-Microsoft-OutputFormat": fmt

@@ -109,7 +109,7 @@ tts.post('/', authMiddleware, async (c) => {
           method: 'POST',
           headers: {
             'Accept': 'audio/*',
-            'User-Agent': 'ListenMode-Backend/1.0',
+            'User-Agent': 'AudioVault-Backend/1.0',
             'Ocp-Apim-Subscription-Key': c.env.AZURE_TTS_API_KEY,
             'Content-Type': 'application/ssml+xml',
             'X-Microsoft-OutputFormat': outputFormat

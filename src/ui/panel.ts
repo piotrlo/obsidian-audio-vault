@@ -117,7 +117,7 @@ export class ControlPanel {
     // Mini button for collapsed state (shown alone)
     const mini = document.createElement("button");
     mini.innerHTML = this.speakerSvg();
-    mini.title = "ListenMode";
+          mini.title = "AudioVault";
     mini.className = "lm-btn lm-mini";
 
     // Mini button uses same position as main panel
