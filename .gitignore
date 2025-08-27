@@ -191,8 +191,8 @@ aidevs/
 main.js
 main.js.map
 
-# ListenMode backend dev artifacts
-listenmode-backend/.dev.vars
-listenmode-backend/.wrangler/
+# AudioVault backend dev artifacts (moved to audiovault-backend repo)
+# listenmode-backend/.dev.vars
+# listenmode-backend/.wrangler/
 out.mp3
 tts-body.json

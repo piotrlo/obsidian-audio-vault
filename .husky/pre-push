@@ -1,5 +1,3 @@
 #!/bin/sh
 . "$(dirname "$0")/_/husky.sh"
 
-# Backend tests before push
-cd listenmode-backend && bun run test
