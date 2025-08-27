@@ -29,10 +29,10 @@
 - Dodatkowa komenda: `Download audio (no playback)` — generuje i zapisuje wszystkie części bez odtwarzania; korzysta z `chunkSize` z ustawień.
 - Odtwarzanie audio bezpośrednio w aplikacji `Obsidian` (zarówno desktopowej jak i mobilnej).
 - Obsługa odtwarzania offline (dla wygenerowanych wcześniej plików audio).
-- Dostępne w MVP: scalanie wszystkich części w jeden plik `MP3` (bezstratne łączenie ramek) i linkowanie pojedynczego pliku w notatce.
+- Scalanie wszystkich części w jeden plik `MP3` (bezstratne łączenie ramek) i linkowanie pojedynczego pliku w notatce.
 - Mobile-specific:
   - Ribbon menu jako główny punkt dostępu (zawsze widoczne, 1‑click) z akcją: `Play/Pause current note` (np. `addRibbonIcon('play-circle', ...)`).
-  - W przypadku urządzeń bez `MSE` lub z ograniczeniami autoplay, odtwarzanie wymaga gestu użytkownika i automatycznie przełącza się w tryb buforowany po wykryciu braku wsparcia.
+  - W przypadku urządzeń bez `MSE` odtwarzanie automatycznie przełącza się w tryb buforowany po wykryciu braku wsparcia.
 
 #### 3.3. Integracja z Obsidian: przechowywanie, synchronizacja
 - Pliki audio są domyślnie przechowywane w folderze `/Audio` w Vault.
@@ -50,7 +50,6 @@
 - Wtyczka oferuje czytelny, kontrastowy interfejs.
 - Proste sterowanie – maksymalnie 3 kliknięcia do wygenerowania pierwszego audio.
 - Możliwość zmiany głosu/prędkości czytania (jeśli pozwala `API`).
-- Obsługa czytników ekranu.
 
 #### 3.6. Stabilność i niezawodność
 - Wtyczka działa bezawaryjnie na typowym Vault (do 50k notatek/pliki tekstowe).
@@ -65,7 +64,6 @@
 ### 4. Wymagania techniczne, architektura, integracje
 - Plugin oparty o `TypeScript` i API `Obsidian`.
 - Współpraca z `API` `OpenAI`/`Azure`/`ElevenLabs` do generacji TTS (opcja na własny endpoint przez `API`).
-- Panel audio na bazie komponentu HTML5 `<audio controls>` z własnym minimalistycznym stylingiem oraz kontrolami `JS` (`play`/`pause`/`rewind`/`skip`/`regenerate`).
 - Przechowywanie plików audio offline w Vault `/Audio`; automatyczne linkowanie audio na dole notatki.
 - Synchronizacja: obsługa przez `Obsidian Sync`, wsparcie synchronizacji offline/lokalnie.
 - `Stripe` dla obsługi płatności/subskrypcji.
@@ -125,8 +123,8 @@
 - **Dodatkowa komenda**: `listenmode-download` („Download audio (no playback)”) — generuje wszystkie części na podstawie `chunkSize` i zapisuje je do `Audio/` bez natychmiastowego odtwarzania; aktualizuje linki w notatce.
 - **Streaming**: zawsze włączony (domyślnie); MSE jeżeli wspierane; iOS domyślnie Buffered (Prefetch) z `chunkSize=500`. Na desktopie fallback do Buffered Prefetch (okno=3) z widocznym `Notice` przy braku MSE/błędzie strumienia.
 - **Zapis offline**: pliki do folderu `Audio/`, nazwy bezpieczne (`toSafeBase`), rozszerzenie `mp3`. Na końcu notatki automatyczny link `[[relPath]]`.
-- **Ustawienia (karty)**: `Basic` i `Advanced`.
-  - `Basic`: status licencji + CTA (Upgrade), aktywacja `License Key`; przełącznik trybu: Lokalny (Azure API Key) lub Plus (backend); `Speed` (suwak −100%..+500% → `rate`), `Language`, `Streaming`, `Merge MP3`, `Audio folder`.
+- **Ustawienia**: `Basic` i `Advanced`.
+  - `Basic`: status licencji + CTA (Upgrade), aktywacja `License Key`; przełącznik trybu: Lokalny (Azure API Key) lub Plus (backend); `Speed` (input −100%..+500% → `rate`), `Language`, `Streaming`, `Merge MP3`, `Audio folder`.
   - `Advanced`: `TTS Provider`, `Output format`, `Chunk size`, `Debug logs`, przycisk „Przywróć domyślne”.
 - Z UI usuwamy: `Backend URL`, `Only HD neural voices`, `Help`.
 - **Zachowanie**: jeżeli istnieje lokalny plik audio i użytkownik nie wymusza regeneracji – odtwarzamy lokalny plik; w innym wypadku generujemy. `Play/Pause` wiąże sesję z aktualną notatką.
@@ -148,7 +146,6 @@
 - **Resilience**: powtarzanie przy błędach sieci, przejrzyste komunikaty `Notice` w UI.
 
 #### 4.6. Zależności i rozmiar
-- **Zależności**: Usuwamy `ramda` bo zajmuje az 1.17MB.
 - **Brak frameworków UI**: natywne elementy `HTML`/`CSS` w obrębie wtyczki.
 
 ### 4a. Konfiguracja TTS (wartości startowe)
@@ -161,9 +158,9 @@
 
 ### 4b. Modele subskrypcji i limity (Stripe)
 - **Plany**:
-  - Free – $0 – 10 000 znaków/miesiąc (~2 artykuły)
-  - Basic – $7 – 100 000 znaków/miesiąc (~20 artykułów)
-  - Pro – $18 – 300 000 znaków/miesiąc (~60 artykułów)
+  - Free – $0 – 10 000 znaków/miesiąc (~2 artykuły, ~13 minut)
+  - Basic – $8.99 – 100 000 znaków/miesiąc (~20 artykułów, ~2h 13 minut)
+  - Pro – $24.99 – 300 000 znaków/miesiąc (~60 artykułów, ~6h 40 minut )
 - **Zakup/zarządzanie**: Stripe Checkout + Customer Portal (zmiana/upgrade/downgrade/karty).
 - **Webhooki**: `checkout.session.completed`, `customer.subscription.updated`, `invoice.paid/failed` – aktualizacja tabeli `licenses` oraz aktywnego planu.
 - **Generowanie licencji**: po potwierdzeniu subskrypcji generujemy `License-Key` (np. `LM-<slug>-<random>`), przechowujemy `hash` w D1, pokazujemy w portalu i wysyłamy e‑mailem.

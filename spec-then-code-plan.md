@@ -181,7 +181,6 @@ Tasks
 - Desktop fallback: when MSE is unavailable or streaming fails, switch to Buffered Prefetch (window=3) and surface a Notice informing about the fallback.
 - If file exists in Audio/, play without generating unless user clicks Refresh.
 - If merged file exists (Audio/<base>.mp3), prefer it over part files when playing existing audio.
-- Add collapsed/expanded panel header toggle and showControls setting persistence.
 
 Acceptance criteria mapping
 - spec §3.2 playback, §4.3 streaming default, §4.5 performance, and §4.1 iOS default Buffered (Prefetch) with forced `chunkSize=500`; desktop fallback to Buffered Prefetch (window=3) with user Notice when streaming fails.
@@ -192,9 +191,7 @@ Risks
 Tests
 - E2E manual checklist on macOS, Windows, Android, iOS; unit tests for file-exists branch.
 - Verify desktop fallback: force a streaming error/unavailable MSE and confirm automatic switch to Buffered Prefetch (window=3) and that a Notice is shown to the user.
- - Abort/timeout tests (done): streaming and buffered paths resolve on abort; notify surfaces messages only when important or debugLogs.
-
-Stage 8 — Docs, onboarding, and pre-release hardening
+- Abort/timeout tests (done): streaming and buffered paths resolve on abort; notify surfaces messages only when important or debugLogs.
 
 Stage 6 — Observability and error reporting
 Scope
@@ -420,3 +417,26 @@ Stage 2 status update (2025-08-24)
   - Moved MIME detection and captureToBlob to core helpers; tests updated.
   - Settings extended with ttsProvider ("azure"); validation kept provider-specific.
   - Tests/typecheck/build are green (bun test/typecheck/build).
+
+Compliance notes vs spec-then-code.md (2025-08-27)
+- Frontend
+  - Controls via Ribbon/Commands only: implemented.
+  - Default streaming enabled; iOS fallback Buffered with chunkSize=500: implemented.
+  - Offline reuse of existing audio; prefer merged `Audio/<base>.mp3`: implemented.
+  - MP3 merge without re-encoding, single link in note: implemented.
+  - Voice fetch via backend or Azure; multilingual neural filter: implemented.
+  - Language auto-detect with optional override: implemented.
+  - Default voice: `en-US-Ava3:DragonHDLatestNeural` ustawiony jako domyślny.
+  - Settings UI tabs Basic/Advanced: currently a single tab with toggle (to adjust).
+- Backend (Workers + Hono)
+  - Routes `/v1/tts` (stream), `/v1/voices` (KV cached 24h), `/v1/auth/validate`, `/v1/auth/usage`, `/v1/admin/*`: implemented.
+  - MP3-only enforcement on `/v1/tts`: implemented + test.
+  - Body limits + Zod validation; 413/400: implemented.
+  - Timeout + retry with backoff; 504/502 mapping: implemented.
+  - X-Request-Id, CORS restricted to Obsidian/localhost: implemented.
+  - Admin purge cache with `X-Admin-Token`: implemented.
+  - Free plan device limit via `license_clients`: implemented.
+  - JWT short-lived issuance: implemented. Client auto-refresh: proactive, a dodatkowo per-request retry na 401 w providerze: implemented.
+
+Outstanding gaps to align with spec
+- Nice-to-have: gdy backend mode ON i ustawiony non‑MP3 format, pokazać krótką notkę, że merge jest ignorowany, a backend i tak egzekwuje MP3.
