@@ -18,7 +18,7 @@ AudioVault converts your text to natural-sounding speech using Azure AI Speech t
 - **Instant TTS**: High-quality neural voices (OpenAI/Azure level)
 - **Smart streaming**: Audio starts playing in seconds, not minutes
 - **Offline playback**: Generated audio files saved to your vault
-- **Multi-language**: Polish, English, and more with automatic detection
+- **Multi-language**: English, Polish and more with automatic detection
 - **Mobile optimized**: Works seamlessly on iOS and Android
 - **No cloud storage**: Your content stays in your vault
 
@@ -26,15 +26,15 @@ AudioVault converts your text to natural-sounding speech using Azure AI Speech t
 
 AudioVault offers flexible plans to fit your needs:
 
-- **Free**: 10,000 characters/month (~2 articles)
-- **Basic**: 100,000 characters/month (~20 articles) - $8.99/month
-- **Pro**: 300,000 characters/month (~60 articles) - $24.99/month
+- **Free**: 10,000 characters/month (~2 articles, ~13 min) 
+- **Basic**: 100,000 characters/month (~20 articles, ~2h 13 min) - $8.99/month
+- **Pro**: 300,000 characters/month (~60 articles, ~6h 40 min) - $24.99/month
 
 [**View full pricing →**](https://audio-vault.app/pricing)
 
 ## 🔧 Installation
 
-1. Open Obsidian Settings → Community plugins
+1. Open Obsidian Settings → Community plugins -> [AudioVault](obsidian://show-plugin?id=audiovault)
 2. Turn off Safe mode
 3. Click "Browse" and search for "AudioVault"
 4. Click "Install" then "Enable"
@@ -80,10 +80,8 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 🤝 Support
 
-- **Documentation**: [audio-vault.app/docs](https://audio-vault.app/docs)
+- **FAQ**: [audio-vault.app/pricing](https://audio-vault.app/pricing)
 - **Issues**: [GitHub Issues](https://github.com/piotrlo/audiovault-plugin/issues)
 - **Community**: [Obsidian Forum](https://forum.obsidian.md)
 
 ---
-
-**Made with ❤️ for the Obsidian community**
