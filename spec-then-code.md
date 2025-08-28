@@ -176,6 +176,18 @@
 5. Przy przekroczeniu limitu: `402` + link do podniesienia planu (Portal Stripe).
 
 
+### 4d. Public Landing Pages (Marketing)
+- **Technologia**: Cloudflare Workers + Hono JSX (server-side rendering), Tailwind CSS via CDN
+- **Strony**:
+  - `/` – strona główna z hero, features, how it works, target audience, privacy, CTA
+  - `/pricing` – tabela cenowa z 3 planami (Free $0, Basic $8.99, Pro $24.99) + rozbudowane FAQ
+  - `/upgrade` – quick upgrade flow z bezpośrednimi przyciskami checkout
+  - `/success` – potwierdzenie zakupu + instrukcja aktywacji w Obsidian
+  - `/cancel` – informacja o anulowaniu checkout
+- **Integracja**: POST `/checkout` → `/v1/billing/checkout` (Stripe), GET `/portal` → `/v1/billing/portal`
+- **Konfiguracja**: wymaga `STRIPE_PRICE_BASIC` i `STRIPE_PRICE_PRO` w environment secrets
+- **Marketing copy**: focus na wartości (save time, learn while commuting, accessibility), social proof, trust signals
+
 ### 5. Kryteria weryfikacji i testy (Definition of Done)
 Weryfikacja polega na potwierdzeniu poniższych punktów:
 - TTS i wydajność:
