@@ -116,7 +116,7 @@
   - `/v1/auth/validate`: limit domyślny 64 KiB (ENV `AUTH_VALIDATE_BODY_LIMIT_BYTES`), `413` przy przekroczeniu; walidacja `Zod`.
 - **Retry/backoff i timeout dla TTS**: timeout 15 s (ENV `AZURE_TTS_TIMEOUT_MS`), do 2 retry na odpowiedzi 5xx z liniowym backoffem; `504` na timeout, `502` na trwały błąd upstream.
 - **Wymuszenie MP3**: `/v1/tts` akceptuje wyłącznie `outputFormat` typu MP3; inne formaty → `400 UNSUPPORTED_FORMAT`.
-- **Admin session cookies**: zarządzane przez `hono/cookie` (HttpOnly, Secure, SameSite=Strict) z „sliding renewal” (odświeżenie gdy < 15 min do wygaśnięcia).
+- **Admin session cookies**: zarządzane przez `hono/cookie` (HttpOnly, Secure, SameSite=Strict) z „sliding renewal” (odświeżenie gdy < 15 min do wygaśnięcia). Manage portal używa bezpiecznego hash-based authentication zamiast cookies.
 
 #### 4.3. Frontend (plugin Obsidian)
 - **Sterowanie**: wyłącznie przez Ribbon i Command Palette (`Play/Pause current note`, `Stop`, `Restart`). Brak pływającego panelu.
@@ -161,7 +161,7 @@
   - Free – $0 – 10 000 znaków/miesiąc (~2 artykuły, ~13 minut)
   - Basic – $8.99 – 100 000 znaków/miesiąc (~20 artykułów, ~2h 13 minut)
   - Pro – $24.99 – 300 000 znaków/miesiąc (~60 artykułów, ~6h 40 minut )
-- **Zakup/zarządzanie**: Stripe Checkout + Customer Portal (zmiana/upgrade/downgrade/karty) z przepływem: wtyczka pobiera krótkotrwały JWT, ustawia cookie via `POST /v1/auth/upgrade-cookie`, następnie otwiera `/upgrade` (bez parametrów w URL).
+- **Zakup/zarządzanie**: Stripe Checkout + Customer Portal (zmiana/upgrade/downgrade/karty) z bezpiecznym przepływem: wtyczka pobiera krótkotrwały JWT, generuje bezpieczny hash via `POST /v1/auth/manage-hash`, następnie otwiera `/upgrade?h={hash}` (hash ważny 5 minut).
 - **Webhooki**: `checkout.session.completed`, `customer.subscription.updated`, `invoice.paid/failed` – aktualizacja tabeli `licenses` oraz aktywnego planu.
 - **Generowanie licencji**: po potwierdzeniu subskrypcji generujemy `License-Key` (np. `LM-<slug>-<random>`), przechowujemy `hash` w D1, pokazujemy w portalu i wysyłamy e‑mailem.
 - **Walidacja w aplikacji**: użytkownik wkleja klucz w ustawieniach wtyczki → `/v1/auth/validate` (wysyła także `client_id`) zwraca krótko‑żyjący `JWT` (10–15 min) z `license_id`, `plan`, `quota_remaining`, `client_id`.
@@ -173,7 +173,8 @@
 2. Webhook w Workers: po aktywacji/zmianie planu tworzy/aktualizuje rekord licencji i wysyła klucz.
 3. Użytkownik wkleja klucz w ustawieniach wtyczki → `/v1/auth/validate` → otrzymuje `JWT`.
 4. Każde żądanie `/v1/tts` z `JWT` – backend nalicza znaki, proxy‑uje stream do Azure/OpenAI.
-5. Przy przekroczeniu limitu: `402` + link do podniesienia planu (Portal Stripe).
+5. Przycisk "Manage" używa bezpiecznego hash-based authentication zamiast cookies.
+6. Przy przekroczeniu limitu: `402` + link do podniesienia planu (Portal Stripe).
 
 
 ### 4d. Public Landing Pages (Marketing)
@@ -181,7 +182,7 @@
 - **Strony**:
   - `/` – strona główna z hero, features, how it works, target audience, privacy, CTA
   - `/pricing` – tabela cenowa z 3 planami (Free $0, Basic $8.99, Pro $24.99) + rozbudowane FAQ
-  - `/upgrade` – endpoint bez UI; działa tylko z ważnym cookie (JWT) i przekierowuje do Stripe Customer Portal, w innym wypadku do `/pricing`
+  - `/upgrade` – endpoint bez UI; waliduje bezpieczny hash z URL parameter `h` (ważny 5 minut) i przekierowuje do Stripe Customer Portal, w innym wypadku do `/pricing`
   - `/success` – potwierdzenie zakupu + instrukcja aktywacji w Obsidian
   - `/cancel` – informacja o anulowaniu checkout
 - **Integracja**: POST `/checkout` → `/v1/billing/checkout` (Stripe), GET `/portal` → `/v1/billing/portal`
@@ -221,6 +222,7 @@ Weryfikacja polega na potwierdzeniu poniższych punktów:
   - Webhooki Stripe aktualizują status planu/licencji; po zmianie planu nowe limity obowiązują natychmiast.
   - Endpoint `/v1/voices` zwraca listę głosów; cache w KV działa (ten sam wynik w oknie 24 h).
   - Endpoint admin `/v1/voices/cache` czyści cache po poprawnym `X-Admin-Token` i zwraca komunikat potwierdzający.
+  - Manage portal używa bezpiecznego hash-based authentication (hash ważny 5 minut) zamiast cookies.
   - Hardening: `X-Request-Id` obecny; jednolity format błędów; limity ciała i walidacja Zod (413/400); TTS timeout+retry (504/502 zgodnie z opisem); wymuszony MP3 w `/v1/tts`; admin cookie via `hono/cookie` z odnowieniem.
 - Bezpieczeństwo i prywatność:
   - Brak klucza Azure w kliencie; wszystkie połączenia do dostawcy idą przez backend proxy.
