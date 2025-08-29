@@ -6,6 +6,7 @@ import type { App } from "obsidian";
 import { Notice, PluginSettingTab, Setting, ExtraButtonComponent } from "obsidian";
 import type AudioVaultPlugin from "../index";
 import type { SupportedLang } from "../types";
+import { hashLicenseKey } from "../utils/crypto";
 
 /**
  * Build the settings tab UI.
@@ -184,13 +185,18 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
         const planLower = (s.licensePlan || '').toLowerCase();
         if (planLower === 'basic' || planLower === 'pro') {
           licenseStatus.addButton((btn) =>
-            btn.setButtonText("Manage").onClick(() => {
+            btn.setButtonText("Manage").onClick(async () => {
               try {
-                // Build URL with license key hash if available
+                // Build URL with license key hash instead of plain text for security
                 const licenseKey = this.plugin.settings.licenseKey || '';
                 const baseUrl = 'https://audio-vault.app/upgrade';
-                const url = licenseKey ? `${baseUrl}?license=${encodeURIComponent(licenseKey)}` : baseUrl;
-                window.open(url, '_blank');
+                if (licenseKey) {
+                  const hash = await hashLicenseKey(licenseKey);
+                  const url = `${baseUrl}?license=${encodeURIComponent(hash)}`;
+                  window.open(url, '_blank');
+                } else {
+                  window.open(baseUrl, '_blank');
+                }
               } catch (e) {
                 console.error('Error opening manage portal:', e);
                 new Notice('Failed to open management portal');
