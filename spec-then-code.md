@@ -161,7 +161,7 @@
   - Free – $0 – 10 000 znaków/miesiąc (~2 artykuły, ~13 minut)
   - Basic – $8.99 – 100 000 znaków/miesiąc (~20 artykułów, ~2h 13 minut)
   - Pro – $24.99 – 300 000 znaków/miesiąc (~60 artykułów, ~6h 40 minut )
-- **Zakup/zarządzanie**: Stripe Checkout + Customer Portal (zmiana/upgrade/downgrade/karty).
+- **Zakup/zarządzanie**: Stripe Checkout + Customer Portal (zmiana/upgrade/downgrade/karty) z przepływem: wtyczka pobiera krótkotrwały JWT, ustawia cookie via `POST /v1/auth/upgrade-cookie`, następnie otwiera `/upgrade` (bez parametrów w URL).
 - **Webhooki**: `checkout.session.completed`, `customer.subscription.updated`, `invoice.paid/failed` – aktualizacja tabeli `licenses` oraz aktywnego planu.
 - **Generowanie licencji**: po potwierdzeniu subskrypcji generujemy `License-Key` (np. `LM-<slug>-<random>`), przechowujemy `hash` w D1, pokazujemy w portalu i wysyłamy e‑mailem.
 - **Walidacja w aplikacji**: użytkownik wkleja klucz w ustawieniach wtyczki → `/v1/auth/validate` (wysyła także `client_id`) zwraca krótko‑żyjący `JWT` (10–15 min) z `license_id`, `plan`, `quota_remaining`, `client_id`.
@@ -181,7 +181,7 @@
 - **Strony**:
   - `/` – strona główna z hero, features, how it works, target audience, privacy, CTA
   - `/pricing` – tabela cenowa z 3 planami (Free $0, Basic $8.99, Pro $24.99) + rozbudowane FAQ
-  - `/upgrade` – quick upgrade flow z bezpośrednimi przyciskami checkout
+  - `/upgrade` – endpoint bez UI; działa tylko z ważnym cookie (JWT) i przekierowuje do Stripe Customer Portal, w innym wypadku do `/pricing`
   - `/success` – potwierdzenie zakupu + instrukcja aktywacji w Obsidian
   - `/cancel` – informacja o anulowaniu checkout
 - **Integracja**: POST `/checkout` → `/v1/billing/checkout` (Stripe), GET `/portal` → `/v1/billing/portal`
