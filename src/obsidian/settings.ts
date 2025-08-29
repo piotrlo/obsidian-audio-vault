@@ -100,8 +100,8 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
       const licCta = new Setting(containerEl)
       .setName("AudioVault Plus — hassle-free TTS service")
       .setDesc("Free: 13 min/month to test. Basic: 133 min for $8.99/month. Skip Azure registration, API limits tracking, and complex billing. Just works.");
-      licCta.addButton((b) => b.setButtonText("Upgrade").setCta().onClick(() => {
-        try { window.open('https://audio-vault.app/upgrade', '_blank'); } catch {}
+licCta.addButton((b) => b.setButtonText("Upgrade").setCta().onClick(() => {
+        try { window.open('https://audio-vault.app/pricing', '_blank'); } catch {}
       }));
     }
 
