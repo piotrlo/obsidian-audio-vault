@@ -7,7 +7,7 @@ export function notify(settings: TtsSettings | undefined, msg: string, important
   if (!(important || settings?.debugLogs)) return;
   // Prefer CJS require when available (plugin runtime), fallback to dynamic import.
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const mod = require("obsidian");
     try { new mod.Notice(msg); return; } catch {}
   } catch {}
