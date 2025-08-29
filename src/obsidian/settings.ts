@@ -6,7 +6,6 @@ import type { App } from "obsidian";
 import { Notice, PluginSettingTab, Setting, ExtraButtonComponent } from "obsidian";
 import type AudioVaultPlugin from "../index";
 import type { SupportedLang } from "../types";
-import { hashLicenseKey } from "../utils/crypto";
 
 /**
  * Build the settings tab UI.
@@ -181,22 +180,25 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
           })
         );
         
-        // Manage button for Basic/Pro users to open Stripe Portal
+        // Manage button for Basic/Pro users to open Stripe Portal using JWT cookie (no query params)
         const planLower = (s.licensePlan || '').toLowerCase();
         if (planLower === 'basic' || planLower === 'pro') {
           licenseStatus.addButton((btn) =>
             btn.setButtonText("Manage").onClick(async () => {
               try {
-                // Build URL with license key hash instead of plain text for security
-                const licenseKey = this.plugin.settings.licenseKey || '';
-                const baseUrl = 'https://audio-vault.app/upgrade';
-                if (licenseKey) {
-                  const hash = await hashLicenseKey(licenseKey);
-                  const url = `${baseUrl}?license=${encodeURIComponent(hash)}`;
-                  window.open(url, '_blank');
-                } else {
-                  window.open(baseUrl, '_blank');
-                }
+                const baseUrl = 'https://audio-vault.app';
+                // Obtain a fresh JWT via backend provider
+                const provider = (await import("../tts/backend-provider")).BackendTtsProvider;
+                const p = new provider({ backendUrl: this.plugin.settings.backendUrl!, licenseKey: this.plugin.settings.licenseKey || "", clientId: this.plugin.settings.clientId });
+                const v = await p.validateLicense();
+                const token = v.token;
+                // Set HttpOnly cookie on audio-vault.app
+                await fetch(`${baseUrl}/v1/auth/upgrade-cookie`, {
+                  method: 'POST',
+                  headers: { Authorization: `Bearer ${token}` },
+                });
+                // Open upgrade page without any sensitive params
+                window.open(`${baseUrl}/upgrade`, '_blank');
               } catch (e) {
                 console.error('Error opening manage portal:', e);
                 new Notice('Failed to open management portal');
