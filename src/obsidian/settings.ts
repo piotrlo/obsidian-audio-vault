@@ -180,7 +180,7 @@ licCta.addButton((b) => b.setButtonText("Upgrade").setCta().onClick(() => {
           })
         );
         
-        // Manage button for Basic/Pro users to open Stripe Portal using secure hash (primary) or JWT cookie (fallback)
+        // Manage button for Basic/Pro users to open Stripe Portal using secure hash
         const planLower = (s.licensePlan || '').toLowerCase();
         if (planLower === 'basic' || planLower === 'pro') {
           licenseStatus.addButton((btn) =>
@@ -193,49 +193,23 @@ licCta.addButton((b) => b.setButtonText("Upgrade").setCta().onClick(() => {
                 const v = await p.validateLicense();
                 const token = v.token;
 
-                // Try secure hash method first (primary method)
-                try {
-                  console.log('Trying secure hash method for manage portal...');
-                  const hashRes = await fetch(`${baseUrl}/v1/auth/manage-hash`, {
-                    method: 'POST',
-                    headers: { Authorization: `Bearer ${token}` },
-                    mode: 'cors'
-                  });
-                  if (hashRes.ok) {
-                    const hashData = await hashRes.json();
-                    const hash = hashData?.data?.hash;
-                    if (hash) {
-                      console.log('Hash method successful, opening with hash parameter');
-                      // Open with secure hash parameter (valid for 5 minutes)
-                      window.open(`${baseUrl}/upgrade?h=${hash}`, '_blank');
-                      return;
-                    } else {
-                      throw new Error('No hash in response');
-                    }
+                // Use secure hash method
+                const hashRes = await fetch(`${baseUrl}/v1/auth/manage-hash`, {
+                  method: 'POST',
+                  headers: { Authorization: `Bearer ${token}` },
+                  mode: 'cors'
+                });
+                if (hashRes.ok) {
+                  const hashData = await hashRes.json();
+                  const hash = hashData?.data?.hash;
+                  if (hash) {
+                    // Open with secure hash parameter (valid for 5 minutes)
+                    window.open(`${baseUrl}/upgrade?h=${hash}`, '_blank');
                   } else {
-                    throw new Error(`Hash request failed: ${hashRes.status}`);
+                    throw new Error('No hash in response');
                   }
-                } catch (e) {
-                  console.log('Hash method failed, trying cookie fallback:', e);
-                  // Fallback: try cookie method for older browsers
-                  try {
-                    const cookieRes = await fetch(`${baseUrl}/v1/auth/upgrade-cookie`, {
-                      method: 'POST',
-                      headers: { Authorization: `Bearer ${token}` },
-                      credentials: 'include',
-                      mode: 'cors'
-                    });
-                    if (cookieRes.ok) {
-                      console.log('Cookie method successful, opening without parameters');
-                      // If cookie method works, open without parameters
-                      window.open(`${baseUrl}/upgrade`, '_blank');
-                    } else {
-                      throw new Error(`Cookie request failed: ${cookieRes.status}`);
-                    }
-                  } catch (cookieError) {
-                    console.error('Cookie method also failed:', cookieError);
-                    throw new Error('Both hash and cookie methods failed');
-                  }
+                } else {
+                  throw new Error(`Hash request failed: ${hashRes.status}`);
                 }
               } catch (e) {
                 console.error('Error opening manage portal:', e);
