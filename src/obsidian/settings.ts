@@ -196,6 +196,8 @@ licCta.addButton((b) => b.setButtonText("Upgrade").setCta().onClick(() => {
                 await fetch(`${baseUrl}/v1/auth/upgrade-cookie`, {
                   method: 'POST',
                   headers: { Authorization: `Bearer ${token}` },
+                  credentials: 'include',
+                  mode: 'cors'
                 });
                 // Open upgrade page without any sensitive params
                 window.open(`${baseUrl}/upgrade`, '_blank');
