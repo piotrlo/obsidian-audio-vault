@@ -192,15 +192,43 @@ licCta.addButton((b) => b.setButtonText("Upgrade").setCta().onClick(() => {
                 const p = new provider({ backendUrl: this.plugin.settings.backendUrl!, licenseKey: this.plugin.settings.licenseKey || "", clientId: this.plugin.settings.clientId });
                 const v = await p.validateLicense();
                 const token = v.token;
-                // Set HttpOnly cookie on audio-vault.app
-                await fetch(`${baseUrl}/v1/auth/upgrade-cookie`, {
-                  method: 'POST',
-                  headers: { Authorization: `Bearer ${token}` },
-                  credentials: 'include',
-                  mode: 'cors'
-                });
-                // Open upgrade page without any sensitive params
-                window.open(`${baseUrl}/upgrade`, '_blank');
+                
+                // Try cookie method first
+                try {
+                  await fetch(`${baseUrl}/v1/auth/upgrade-cookie`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}` },
+                    credentials: 'include',
+                    mode: 'cors'
+                  });
+                  // If cookie method works, open without parameters
+                  window.open(`${baseUrl}/upgrade`, '_blank');
+                } catch (e) {
+                  console.log('Cookie method failed, using secure hash method:', e);
+                  // Fallback: create secure hash for URL
+                  try {
+                    const hashRes = await fetch(`${baseUrl}/v1/auth/manage-hash`, {
+                      method: 'POST',
+                      headers: { Authorization: `Bearer ${token}` },
+                      mode: 'cors'
+                    });
+                    if (hashRes.ok) {
+                      const hashData = await hashRes.json();
+                      const hash = hashData?.data?.hash;
+                      if (hash) {
+                        // Open with secure hash parameter (valid for 5 minutes)
+                        window.open(`${baseUrl}/upgrade?h=${hash}`, '_blank');
+                      } else {
+                        throw new Error('No hash in response');
+                      }
+                    } else {
+                      throw new Error(`Hash request failed: ${hashRes.status}`);
+                    }
+                  } catch (hashError) {
+                    console.error('Hash method also failed:', hashError);
+                    new Notice('Failed to open management portal');
+                  }
+                }
               } catch (e) {
                 console.error('Error opening manage portal:', e);
                 new Notice('Failed to open management portal');
