@@ -179,6 +179,25 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
             }
           })
         );
+        
+        // Manage button for Basic/Pro users to open Stripe Portal
+        const planLower = (s.licensePlan || '').toLowerCase();
+        if (planLower === 'basic' || planLower === 'pro') {
+          licenseStatus.addButton((btn) =>
+            btn.setButtonText("Manage").onClick(() => {
+              try {
+                // Build URL with license key hash if available
+                const licenseKey = this.plugin.settings.licenseKey || '';
+                const baseUrl = 'https://audio-vault.app/upgrade';
+                const url = licenseKey ? `${baseUrl}?license=${encodeURIComponent(licenseKey)}` : baseUrl;
+                window.open(url, '_blank');
+              } catch (e) {
+                console.error('Error opening manage portal:', e);
+                new Notice('Failed to open management portal');
+              }
+            })
+          );
+        }
       } catch {}
     }
 
