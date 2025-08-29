@@ -180,7 +180,7 @@ licCta.addButton((b) => b.setButtonText("Upgrade").setCta().onClick(() => {
           })
         );
         
-        // Manage button for Basic/Pro users to open Stripe Portal using JWT cookie (no query params)
+        // Manage button for Basic/Pro users to open Stripe Portal using secure hash (primary) or JWT cookie (fallback)
         const planLower = (s.licensePlan || '').toLowerCase();
         if (planLower === 'basic' || planLower === 'pro') {
           licenseStatus.addButton((btn) =>
@@ -192,41 +192,49 @@ licCta.addButton((b) => b.setButtonText("Upgrade").setCta().onClick(() => {
                 const p = new provider({ backendUrl: this.plugin.settings.backendUrl!, licenseKey: this.plugin.settings.licenseKey || "", clientId: this.plugin.settings.clientId });
                 const v = await p.validateLicense();
                 const token = v.token;
-                
-                // Try cookie method first
+
+                // Try secure hash method first (primary method)
                 try {
-                  await fetch(`${baseUrl}/v1/auth/upgrade-cookie`, {
+                  console.log('Trying secure hash method for manage portal...');
+                  const hashRes = await fetch(`${baseUrl}/v1/auth/manage-hash`, {
                     method: 'POST',
                     headers: { Authorization: `Bearer ${token}` },
-                    credentials: 'include',
                     mode: 'cors'
                   });
-                  // If cookie method works, open without parameters
-                  window.open(`${baseUrl}/upgrade`, '_blank');
+                  if (hashRes.ok) {
+                    const hashData = await hashRes.json();
+                    const hash = hashData?.data?.hash;
+                    if (hash) {
+                      console.log('Hash method successful, opening with hash parameter');
+                      // Open with secure hash parameter (valid for 5 minutes)
+                      window.open(`${baseUrl}/upgrade?h=${hash}`, '_blank');
+                      return;
+                    } else {
+                      throw new Error('No hash in response');
+                    }
+                  } else {
+                    throw new Error(`Hash request failed: ${hashRes.status}`);
+                  }
                 } catch (e) {
-                  console.log('Cookie method failed, using secure hash method:', e);
-                  // Fallback: create secure hash for URL
+                  console.log('Hash method failed, trying cookie fallback:', e);
+                  // Fallback: try cookie method for older browsers
                   try {
-                    const hashRes = await fetch(`${baseUrl}/v1/auth/manage-hash`, {
+                    const cookieRes = await fetch(`${baseUrl}/v1/auth/upgrade-cookie`, {
                       method: 'POST',
                       headers: { Authorization: `Bearer ${token}` },
+                      credentials: 'include',
                       mode: 'cors'
                     });
-                    if (hashRes.ok) {
-                      const hashData = await hashRes.json();
-                      const hash = hashData?.data?.hash;
-                      if (hash) {
-                        // Open with secure hash parameter (valid for 5 minutes)
-                        window.open(`${baseUrl}/upgrade?h=${hash}`, '_blank');
-                      } else {
-                        throw new Error('No hash in response');
-                      }
+                    if (cookieRes.ok) {
+                      console.log('Cookie method successful, opening without parameters');
+                      // If cookie method works, open without parameters
+                      window.open(`${baseUrl}/upgrade`, '_blank');
                     } else {
-                      throw new Error(`Hash request failed: ${hashRes.status}`);
+                      throw new Error(`Cookie request failed: ${cookieRes.status}`);
                     }
-                  } catch (hashError) {
-                    console.error('Hash method also failed:', hashError);
-                    new Notice('Failed to open management portal');
+                  } catch (cookieError) {
+                    console.error('Cookie method also failed:', cookieError);
+                    throw new Error('Both hash and cookie methods failed');
                   }
                 }
               } catch (e) {
