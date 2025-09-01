@@ -45,6 +45,7 @@ AudioVault offers flexible plans to fit your needs:
 - **Play current note**: Click the play button in the ribbon
 - **Download only**: Use "Download audio (no playback)" command
 - **Voice settings**: Configure in Settings → AudioVault
+ - **Auto-clean**: Content is sanitized before TTS (images/HTML/code removed), keeping only readable text.
 
 ### Controls
 - **Ribbon**: Always visible play/pause button
