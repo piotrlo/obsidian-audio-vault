@@ -86,3 +86,10 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - **Community**: [Obsidian Forum](https://forum.obsidian.md)
 
 ---
+
+## Mobile optimized (iOS)
+
+- iOS uses background prefetch (concurrency=5) to download all parts aggressively.
+- Per-part files are always saved to `Audio/` for offline resilience.
+- A partial merged snapshot `<base>.partial.mp3` is updated during download and finalized to `<base>.mp3` at the end.
+- If playback is interrupted by background limits, you can resume inside Obsidian; already downloaded parts will continue to play.

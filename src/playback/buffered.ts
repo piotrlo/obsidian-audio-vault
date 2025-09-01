@@ -3,7 +3,7 @@
  */
 
 import type { App, TFile } from "obsidian";
-import type { PlaybackSession, TtsProvider, TtsSettings } from "../types";
+import type { PlaybackSession, TtsProvider, TtsSettings, PrefetchResult } from "../types";
 import { buildSsml } from "../utils/ssml";
 import { fileExtFromFormat, playbackRateFromRateSetting } from "../core/helpers";
 import { captureToBlob, waitForEndOrAbort } from "../core/audio";
@@ -28,8 +28,10 @@ export async function playBufferedPrefetch(params: {
   appendToMerged?: (bytes: Uint8Array) => void;
   /** If false, the function will not persist per-part files/links. */
   savePerPart?: boolean;
+  /** Optional prefetch results to consume instead of synthesizing anew. */
+  prefetchTasks?: Array<Promise<PrefetchResult>>;
 }): Promise<void> {
-  const { app, settings, provider, chunks, startIndex, base, lang, folder, file, stopRequested, setSession, writeBinary, upsertAudioReferenceSorted, appendToMerged, savePerPart } = params;
+  const { app, settings, provider, chunks, startIndex, base, lang, folder, file, stopRequested, setSession, writeBinary, upsertAudioReferenceSorted, appendToMerged, savePerPart, prefetchTasks } = params;
 
   const abortAll = new AbortController();
   setSession({ abort: abortAll, audioEl: null, mediaSource: null, sourceBuffer: null, lastBlob: null, fileBase: base });
@@ -41,6 +43,18 @@ export async function playBufferedPrefetch(params: {
     const ext = fileExtFromFormat(settings.outputFormat);
 
     const makeTask = (idx: number) => {
+      if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
+        return prefetchTasks[idx]
+          .then((r) => ({ buffer: r.buffer, mime: r.mime, idx }))
+          .catch(async () => {
+            const ssml = buildSsml({ text: chunks[idx], voiceName: settings.voiceName, rate: settings.rate, lang });
+            const stream = await provider.synthesize(ssml, settings.outputFormat, lang, abortAll.signal);
+            const blob = await captureToBlob(stream, undefined, settings.outputFormat);
+            const buffer = await blob.arrayBuffer();
+            const mime = blob.type || (/(wav|riff)/i.test(settings.outputFormat) ? "audio/wav" : "audio/mpeg");
+            return { buffer, mime, idx };
+          });
+      }
       const ssml = buildSsml({ text: chunks[idx], voiceName: settings.voiceName, rate: settings.rate, lang });
       return provider.synthesize(ssml, settings.outputFormat, lang, abortAll.signal)
         .then(async (stream) => {

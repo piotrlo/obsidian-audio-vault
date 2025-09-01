@@ -123,7 +123,7 @@
 #### 4.3. Frontend (plugin Obsidian)
 - **Sterowanie**: wyłącznie przez Ribbon i Command Palette (`Play/Pause current note`, `Stop`, `Restart`). Brak pływającego panelu.
 - **Dodatkowa komenda**: `listenmode-download` („Download audio (no playback)”) — generuje wszystkie części na podstawie `chunkSize` i zapisuje je do `Audio/` bez natychmiastowego odtwarzania; aktualizuje linki w notatce.
-- **Streaming**: zawsze włączony (domyślnie); MSE jeżeli wspierane; iOS domyślnie Buffered (Prefetch) z `chunkSize=500`. Na desktopie fallback do Buffered Prefetch (okno=3) z widocznym `Notice` przy braku MSE/błędzie strumienia.
+- **Streaming**: zawsze włączone (domyślnie); MSE jeżeli wspierane; iOS używa agresywnego Background Prefetch (concurrency=5) z zapisem per‑part oraz partial merge snapshot (`<base>.partial.mp3`). Na desktopie fallback do Buffered Prefetch (okno=3) z widocznym `Notice` przy braku MSE/błędzie strumienia.
 - **Zapis offline**: pliki do folderu `Audio/`, nazwy bezpieczne (`toSafeBase`), rozszerzenie `mp3`. Na końcu notatki automatyczny link `[[relPath]]`.
 - **Ustawienia**: `Basic` i `Advanced`.
   - `Basic`: status licencji + CTA (Upgrade), aktywacja `License Key`; przełącznik trybu: Lokalny (Azure API Key) lub Plus (backend); `Speed` (input −100%..+500% → `rate`), `Language`, `Streaming`, `Merge MP3`, `Audio folder`.
@@ -145,7 +145,7 @@
 
 #### 4.5. Wydajność i niezawodność
 - **Szybki start audio**: strumieniowanie z niskim buforem początkowym, aby spełnić cel „< 5 s dla 5k znaków na chunk” (perceptualne TTFP krótsze dzięki streamowi).
-- **Kolejkowanie fragmentów**: sekwencyjne odtwarzanie — kolejny fragment rozpoczyna się dopiero po zakończeniu/abort poprzedniego; buforowany tryb wykorzystuje Prefetch z oknem 3 równoległych pobrań dla płynności oraz minimalizacji przerw między częściami.
+- **Kolejkowanie fragmentów**: sekwencyjne odtwarzanie — kolejny fragment rozpoczyna się dopiero po zakończeniu/abort poprzedniego; buforowany tryb wykorzystuje Prefetch z oknem 3 równoległych pobrań. Na iOS prefetch działa w tle niezależnie od odtwarzania (concurrency=5), zapewniając odporność na ograniczenia tła.
 - **Resilience**: powtarzanie przy błędach sieci, przejrzyste komunikaty `Notice` w UI.
 
 #### 4.6. Zależności i rozmiar
@@ -207,7 +207,7 @@ Weryfikacja polega na potwierdzeniu poniższych punktów:
 - Link do wygenerowanego pliku jest automatycznie dopisywany na końcu notatki; nazwy plików są bezpieczne; nie dopuszczamy duplikowania wpisów linków (utrzymujemy pojedynczy aktualny link).
 - Streaming:
   - Streaming zawsze włączony; odtwarzanie działa na desktop (Windows/macOS), Android i iOS.
-  - iOS: domyślnie Buffered (Prefetch) z `chunkSize=500` i oknem 3.
+  - iOS: domyślnie Background Prefetch (concurrency=5), zapis per‑part, partial merge snapshot, automatyczna finalizacja scalonego MP3 po ukończeniu wszystkich części.
   - Desktop fallback: przy błędzie strumieniowania lub braku MSE następuje automatyczne przełączenie do Buffered Prefetch (okno=3) z widocznym `Notice`.
 - Mobile UI:
 - Scalanie części (opcjonalne):

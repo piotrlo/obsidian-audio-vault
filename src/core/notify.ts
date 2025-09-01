@@ -18,4 +18,18 @@ export function notify(settings: TtsSettings | undefined, msg: string, important
   } catch {}
 }
 
+/**
+ * Notice: network paused; background downloads will continue from downloaded parts.
+ */
+export function backgroundPausedNotice(settings: TtsSettings | undefined): void {
+  notify(settings, "Network paused; playback will continue from downloaded parts. Open Obsidian to resume downloads.", true);
+}
+
+/**
+ * Notice: resumed background downloads on iOS.
+ */
+export function backgroundResumedNotice(settings: TtsSettings | undefined): void {
+  notify(settings, "Resumed background downloads (iOS)", true);
+}
+
 

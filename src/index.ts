@@ -7,7 +7,7 @@ import { BackendTtsProvider } from "./tts/backend-provider";
 import { log, warn, setDebugLogging } from "./utils/logger";
 import { AudioVaultSettingsTab } from "./obsidian/settings";
 import { fileExtFromFormat, missingSettings, resolveLang, buildChunks } from "./core/helpers";
-import type { PlaybackSession, TtsProvider, TtsSettings } from "./types";
+import type { PlaybackSession, TtsProvider, TtsSettings, PrefetchResult } from "./types";
 import { canStream, captureToBlob } from "./core/audio";
 import { cleanupSessionResources as cleanupSessionResourcesHelper } from "./playback/session";
 import { tryPlayExistingParts as tryPlayExistingPartsHelper } from "./playback/existing";
@@ -15,7 +15,9 @@ import { playBufferedPrefetch as playBufferedPrefetchHelper } from "./playback/b
 import { DEFAULT_SETTINGS } from "./core/settings";
 import { playStreamedPartAndSave } from "./playback/streaming";
 import { notify as notifyUtil } from "./core/notify";
-import { Mp3Assembler } from "./utils/mp3";
+import { Mp3Assembler, buildPartialSnapshot } from "./utils/mp3";
+import { prefetchAllParts } from "./playback/prefetch";
+import { readManifest, writeManifest } from "./utils/fs";
 import { sanitizeNoteForTts } from "./utils/sanitize";
 
 
@@ -122,9 +124,27 @@ destroyPanel(): void {}
 
       const isIos = Platform.isIosApp;
       if (isIos) {
-        notifyUtil(this.settings, "Using buffered prefetch mode (iOS)");
+        notifyUtil(this.settings, "Using iOS background prefetch (concurrency=5)");
         const mergingEnabled = !!this.settings.mergeParts && /mp3/i.test(this.settings.outputFormat);
         const assembler = mergingEnabled ? new Mp3Assembler() : null;
+
+        const provider = this.buildProviderFromSettings();
+        this.provider = provider;
+        const { tasks, controller, allDone } = await prefetchAllParts({
+          app: this.app,
+          settings: this.settings,
+          provider,
+          chunks: ctx.chunks,
+          base: ctx.base,
+          folder: ctx.folder,
+          file: ctx.file,
+          lang: ctx.lang,
+          concurrency: 5,
+          enablePartialMerge: mergingEnabled,
+          finalizeOnComplete: true,
+        });
+
+        // Play part 1 immediately as soon as available; consume prefetch tasks
         await this.playBufferedPrefetch(
           ctx.chunks,
           0,
@@ -132,28 +152,14 @@ destroyPanel(): void {}
           ctx.lang,
           ctx.folder,
           ctx.file,
-          this.buildProviderFromSettings(),
+          provider,
           assembler ? (u8) => assembler.append(u8) : undefined,
-          assembler ? false : true
+          true,
+          tasks
         );
-        if (assembler && !this.stopRequested) {
-          try {
-            const merged = assembler.build();
-            if (merged && merged.byteLength > 0) {
-              const audioPath = `${ctx.folder}/${ctx.base}.mp3`;
-              const ab = new ArrayBuffer(merged.byteLength);
-              new Uint8Array(ab).set(merged);
-              await writeBinary(this.app, audioPath, ab);
-              await replaceAudioReferencesWithSingle(this.app, ctx.file, audioPath);
-              notifyUtil(this.settings, `Saved merged file: [[${audioPath}]]`);
-            } else {
-              notifyUtil(this.settings, `Skipped saving merged file (no data)`, true);
-            }
-          } catch (e: unknown) {
-            const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
-            notifyUtil(this.settings, `Failed to save merged file: ${msg}`, true);
-          }
-        }
+
+        // Wait background finalize to ensure references updated soon after playback
+        try { await allDone; } catch {}
         return;
       }
 
@@ -407,7 +413,8 @@ notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
     file: TFile,
     provider: TtsProvider,
     appendToMerged?: (u8: Uint8Array) => void,
-    savePerPart: boolean = true
+    savePerPart: boolean = true,
+    prefetchTasks?: Array<Promise<PrefetchResult>>
   ): Promise<void> {
     await playBufferedPrefetchHelper({
       app: this.app,
@@ -424,7 +431,8 @@ notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
       writeBinary: writeBinary,
       upsertAudioReferenceSorted: upsertAudioReferenceSorted,
       appendToMerged,
-      savePerPart
+      savePerPart,
+      prefetchTasks
     });
   }
 

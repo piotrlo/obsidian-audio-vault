@@ -94,3 +94,33 @@ export interface TtsProvider {
   listVoices(region: string, apiKey?: string): Promise<Voice[]>;
 }
 
+/**
+ * Result of a single prefetch task.
+ */
+export interface PrefetchResult {
+  /** Zero-based part index. */
+  idx: number;
+  /** Raw audio bytes for the part. */
+  buffer: ArrayBuffer;
+  /** MIME type for the bytes. */
+  mime: string;
+}
+
+/**
+ * Lightweight manifest describing fetched audio parts and merge progress.
+ */
+export interface AudioManifest {
+  /** Schema version for future migrations. */
+  version: number;
+  /** File extension without dot (e.g. "mp3"). */
+  ext: string;
+  /** Expected total number of parts for the note. */
+  totalParts: number;
+  /** 1-based indices of fetched parts. */
+  fetchedParts: number[];
+  /** Highest 1-based part index already merged into the partial snapshot. */
+  mergedUntil: number;
+  /** Last update timestamp in milliseconds since epoch. */
+  updatedAt: number;
+}
+

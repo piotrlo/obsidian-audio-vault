@@ -36,3 +36,18 @@ export class Mp3Assembler {
 }
 
 
+/**
+ * Build a partial merged MP3 snapshot and return as ArrayBuffer.
+ * Intended for periodic persistence to `<base>.partial.mp3`.
+ *
+ * @param {Mp3Assembler} assembler In-memory assembler with appended parts.
+ * @returns {ArrayBuffer} Built ArrayBuffer of merged data.
+ */
+export function buildPartialSnapshot(assembler: Mp3Assembler): ArrayBuffer {
+  const merged = assembler.build();
+  const ab = new ArrayBuffer(merged.byteLength);
+  new Uint8Array(ab).set(merged);
+  return ab;
+}
+
+
