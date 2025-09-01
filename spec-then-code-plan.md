@@ -57,6 +57,7 @@ Key capabilities
 - Settings UI: azureRegion, azureApiKey, voiceName (manual text, optional fetch), outputFormat, rate (SSML), enableStreaming, chunkSize (500–9000; default 5000), audioFolder.
 - Mobile UI: Ribbon menu integration as primary access (always visible, 1-click) via Obsidian toolbar; optional draggable floating panel (touch + mouse) constrained to viewport; default offset above mobile bottom navigation; collapsible header; position persisted across sessions; safe positioning away from system buttons.
 - Text processing: split into <= chunkSize (default 5,000; max 9,000) preferring sentence boundaries; if a sentence exceeds limit, split by words; language selection default to pl-PL (configurable later).
+ - Sanitization: przed chunkowaniem treść notatki przechodzi przez `sanitizeNoteForTts` (usuwa frontmatter, HTML/script/style/svg/iframe, obrazy, kod, linki‑URL), zachowując czytelny tekst i etykiety linków.
 - Synthesis: build SSML, call POST https://{region}.tts.speech.microsoft.com/cognitiveservices/v1 with X-Microsoft-OutputFormat.
 - Streaming: attempt MSE for MP3 (MVP wspiera wyłącznie MP3); fallback do capture‑then‑play.
 - Storage: write to Audio/ jako {safe-basename}_part_{n}.mp3; append [[relPath]] at note end. MP3 merge dostępne i wdrożone.
@@ -87,6 +88,7 @@ Tests (bun test)
 - utils/chunk.test.ts: chunk size and sentence-boundary behavior.
 - utils/safe-name.test.ts: path-safe outputs.
 - utils/ssml.test.ts: escaping &, <, > and rate insertion.
+ - utils/sanitize.test.ts: sanity cases web‑clippera (usunięcie SVG/IMG/kodu/frontmatter, zachowanie tekstu linków, wiki links → nazwa pliku).
 - utils/mp3.test.ts: ID3v2 stripping from chunk beginning.
 - tts/azure.test.ts: MIME detection for formats; stream-to-blob assembly with fake reader.
 

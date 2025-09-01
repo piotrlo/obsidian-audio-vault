@@ -16,6 +16,7 @@ import { DEFAULT_SETTINGS } from "./core/settings";
 import { playStreamedPartAndSave } from "./playback/streaming";
 import { notify as notifyUtil } from "./core/notify";
 import { Mp3Assembler } from "./utils/mp3";
+import { sanitizeNoteForTts } from "./utils/sanitize";
 
 
 /**
@@ -529,7 +530,8 @@ notifyUtil(this.settings, `Download complete: ${part - 1} of ${totalParts} part(
     if (!file) { notifyUtil(this.settings, "No active note", true); return null; }
     const missing = missingSettings(this.settings);
     if (missing.length) { notifyUtil(this.settings, `Missing settings: ${missing.join(", ")}`, true); return null; }
-    const content = await this.app.vault.read(file);
+    const raw = await this.app.vault.read(file);
+    const content = sanitizeNoteForTts(raw);
     if (!content.trim()) { notifyUtil(this.settings, "Note is empty", true); return null; }
     const chunks = buildChunks(content, this.settings, Platform.isIosApp);
     const base = toSafeBase(file.basename);

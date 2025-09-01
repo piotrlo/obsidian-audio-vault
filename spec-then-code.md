@@ -24,6 +24,8 @@
 - Mechanizm obsługi długich notatek (do 50,000 znaków), podział na fragmenty 10,000 znaków, automatyczne odtwarzanie po kolei.
 - Możliwość wyboru głosu/prędkości czytania (jeśli udostępnia to `API`).
 
+- Sanitization: przed chunkowaniem treść notatki jest automatycznie czyszczona z elementów nie do odczytania (frontmatter, obrazy, kod, SVG/iframe/script/style, HTML tagi, linki w formie adresów). Zachowywany jest sam tekst oraz widoczny tekst linków.
+
 #### 3.2. Odtwarzanie audio (desktop + mobile)
 - Sterowanie wyłącznie przez Ribbon oraz Command Palette: `Play/Pause current note`, `Stop`, `Restart`.
 - Dodatkowa komenda: `Download audio (no playback)` — generuje i zapisuje wszystkie części bez odtwarzania; korzysta z `chunkSize` z ustawień.
@@ -128,6 +130,7 @@
   - `Advanced`: `TTS Provider`, `Output format`, `Chunk size`, `Debug logs`, przycisk „Przywróć domyślne”.
 - Z UI usuwamy: `Backend URL`, `Only HD neural voices`, `Help`.
 - **Zachowanie**: jeżeli istnieje lokalny plik audio i użytkownik nie wymusza regeneracji – odtwarzamy lokalny plik; w innym wypadku generujemy. `Play/Pause` wiąże sesję z aktualną notatką.
+- **Sanitization**: `sanitizeNoteForTts()` w `src/utils/sanitize.ts` usuwa szum pochodzący z web clippera (HTML, obrazy, wideo, kod, frontmatter) i pozostawia czysty tekst dla TTS.
 - **Scalenie MP3**: jeżeli istnieje scalony plik `Audio/<base>.mp3`, preferujemy jego odtwarzanie; utrzymujemy pojedynczy link w notatce.
 
 #### 4.4. Bezpieczeństwo i prywatność
