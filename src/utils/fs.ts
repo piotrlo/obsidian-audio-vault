@@ -3,6 +3,7 @@
  */
 
 import type { App, TFile } from "obsidian";
+import type { AudioManifest } from "../types";
 
 /**
  * Ensure a folder exists in the vault.
@@ -111,3 +112,94 @@ export async function replaceAudioReferencesWithSingle(app: App, file: TFile, re
   const updated = body + maybeNl + single + "\n";
   await app.vault.modify(file, updated);
 }
+
+/**
+ * Read AudioVault manifest JSON if present.
+ *
+ * @param {App} app Obsidian app.
+ * @param {string} folder Audio folder path.
+ * @param {string} base Safe base name.
+ * @returns {Promise<AudioManifest | null>} Parsed manifest or null when missing/invalid.
+ */
+export async function readManifest(app: App, folder: string, base: string): Promise<AudioManifest | null> {
+  const path = `${folder}/${base}.manifest.json`;
+  try {
+    const exists = await app.vault.adapter.exists(path);
+    if (!exists) return null;
+    const raw = await app.vault.adapter.read(path);
+    const parsed = JSON.parse(raw) as AudioManifest;
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Atomically write AudioVault manifest JSON via tmp + rename.
+ *
+ * @param {App} app Obsidian app.
+ * @param {string} folder Audio folder path.
+ * @param {string} base Safe base name.
+ * @param {AudioManifest} data Manifest content to write.
+ */
+export async function writeManifest(app: App, folder: string, base: string, data: AudioManifest): Promise<void> {
+  const path = `${folder}/${base}.manifest.json`;
+  const tmp = `${folder}/${base}.manifest.json.tmp`;
+  const body = JSON.stringify(data);
+  await app.vault.adapter.write(tmp, body);
+  try {
+    await app.vault.adapter.rename(tmp, path);
+  } catch {
+    try { await app.vault.adapter.remove(path); } catch {}
+    await app.vault.adapter.write(path, body);
+    try { await app.vault.adapter.remove(tmp); } catch {}
+  }
+}
+
+/**
+ * Safely rename a file using adapter.rename with a fallback to copy+remove.
+ *
+ * @param {App} app Obsidian app.
+ * @param {string} oldPath Source path.
+ * @param {string} newPath Destination path.
+ */
+export async function safeRename(app: App, oldPath: string, newPath: string): Promise<void> {
+  try {
+    await app.vault.adapter.rename(oldPath, newPath);
+    return;
+  } catch {}
+  try {
+    const data = await app.vault.adapter.read(oldPath);
+    await app.vault.adapter.write(newPath, data);
+    await app.vault.adapter.remove(oldPath);
+  } catch {}
+}
+
+/**
+ * Scan vault for existing parts for given base and extension.
+ *
+ * @param {App} app Obsidian app.
+ * @param {string} folder Audio folder path.
+ * @param {string} base Safe base name.
+ * @param {string} ext Extension without dot (e.g., "mp3").
+ * @returns {Promise<number[]>} Sorted unique 1-based indices of existing parts.
+ */
+export async function scanExistingParts(app: App, folder: string, base: string, ext: string): Promise<number[]> {
+  try {
+    const files = app.vault.getFiles();
+    const prefix = `${folder}/${base}_part_`;
+    const suffix = `.${ext}`;
+    const found = new Set<number>();
+    for (const f of files) {
+      if (!f.path.startsWith(prefix) || !f.path.endsWith(suffix)) continue;
+      const mid = f.path.slice(prefix.length, f.path.length - suffix.length);
+      const n = parseInt(mid, 10);
+      if (Number.isFinite(n) && n > 0) found.add(n);
+    }
+    return Array.from(found).sort((a, b) => a - b);
+  } catch {
+    return [];
+  }
+}
+
