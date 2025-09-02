@@ -36,6 +36,11 @@ export default class AudioVaultPlugin extends Plugin {
   private isBusy: boolean = false;
   /** Active TTS provider. */
   private provider: TtsProvider | null = null;
+  /** Status bar progress UI for background prefetch on iOS. */
+  private progressItem: HTMLElement | null = null;
+  private progressTextEl: HTMLElement | null = null;
+  /** Floating overlay container element (center above bottom bar). */
+  private progressOverlay: HTMLDivElement | null = null;
 
   /**
    * Load settings and register commands.
@@ -130,6 +135,7 @@ destroyPanel(): void {}
 
         const provider = this.buildProviderFromSettings();
         this.provider = provider;
+        this.showPrefetchProgress(ctx.chunks.length);
         const { tasks, controller, allDone } = await prefetchAllParts({
           app: this.app,
           settings: this.settings,
@@ -140,26 +146,45 @@ destroyPanel(): void {}
           file: ctx.file,
           lang: ctx.lang,
           concurrency: 5,
-          enablePartialMerge: mergingEnabled,
-          finalizeOnComplete: true,
+          onProgress: ({ fetched, total }) => { this.updatePrefetchProgress(fetched, total); },
+          onPartSaved: async (idx) => {
+            if (idx === 1 && !this.currentSession?.audioEl) {
+              try { await this.tryPlayExistingParts(ctx.base, ctx.folder, ctx.chunks.length, false); } catch {}
+            }
+          }
         });
 
-        // Play part 1 immediately as soon as available; consume prefetch tasks
-        await this.playBufferedPrefetch(
-          ctx.chunks,
-          0,
-          ctx.base,
-          ctx.lang,
-          ctx.folder,
-          ctx.file,
-          provider,
-          assembler ? (u8) => assembler.append(u8) : undefined,
-          true,
-          tasks
-        );
+        // Do not trigger buffered path on iOS to avoid double audio; playback uses from-disk flow.
 
-        // Wait background finalize to ensure references updated soon after playback
         try { await allDone; } catch {}
+        this.hidePrefetchProgress();
+        if (mergingEnabled && !this.stopRequested) {
+          try {
+            const ext = 'mp3';
+            const asm = new Mp3Assembler();
+            for (let i = 1; i <= ctx.chunks.length; i++) {
+              const p = `${ctx.folder}/${ctx.base}_part_${i}.${ext}`;
+              const exists = await this.app.vault.adapter.exists(p);
+              if (!exists) { continue; }
+              const buf = await this.app.vault.adapter.readBinary(p);
+              asm.append(new Uint8Array(buf));
+            }
+            const merged = asm.build();
+            if (merged && merged.byteLength > 0) {
+              const audioPath = `${ctx.folder}/${ctx.base}.mp3`;
+              const ab = new ArrayBuffer(merged.byteLength);
+              new Uint8Array(ab).set(merged);
+              await writeBinary(this.app, audioPath, ab);
+              await replaceAudioReferencesWithSingle(this.app, ctx.file, audioPath);
+              notifyUtil(this.settings, `Saved merged file: [[${audioPath}]]`);
+              // Cleanup parts after successful merge
+              try { await deleteExistingParts(this.app, ctx.folder, ctx.base, ext); } catch {}
+            }
+          } catch (e: unknown) {
+            const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
+            notifyUtil(this.settings, `Failed to finalize merged file: ${msg}`, true);
+          }
+        }
         return;
       }
 
@@ -175,6 +200,7 @@ destroyPanel(): void {}
     if (!quiet) { try { notifyUtil(this.settings, "Stopping playback...", true); } catch {} }
     try { this.currentSession?.abort?.abort(); } catch {}
     try { this.currentSession = await cleanupSessionResourcesHelper(this.currentSession, true); } catch {}
+    this.hidePrefetchProgress();
   }
 
   /** Toggle play/pause or start reading if nothing is playing. */
@@ -434,6 +460,49 @@ notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
       savePerPart,
       prefetchTasks
     });
+  }
+
+  /** Create a floating overlay progress above the bottom status bar. */
+  private showPrefetchProgress(totalParts: number): void {
+    if (this.progressOverlay) return;
+    const overlay = document.createElement("div");
+    overlay.style.position = "fixed";
+    overlay.style.left = "50%";
+    overlay.style.bottom = "32px";
+    overlay.style.transform = "translateX(-50%)";
+    overlay.style.zIndex = "9999";
+    overlay.style.background = "var(--background-secondary)";
+    overlay.style.border = "1px solid var(--background-modifier-border)";
+    overlay.style.borderRadius = "8px";
+    overlay.style.padding = "8px 12px";
+    overlay.style.boxShadow = "0 4px 16px rgba(0,0,0,0.25)";
+
+    const text = document.createElement("span");
+    text.textContent = `Downloading 0/${totalParts} (0%)`;
+    overlay.appendChild(text);
+
+    document.body.appendChild(overlay);
+    this.progressOverlay = overlay;
+    this.progressTextEl = text;
+  }
+
+  /** Update the floating overlay progress. */
+  private updatePrefetchProgress(fetched: number, total: number): void {
+    if (!this.progressOverlay || !this.progressTextEl || total <= 0) return;
+    const pct = Math.round((fetched / total) * 100);
+    this.progressTextEl.textContent = `Downloading ${fetched}/${total} (${pct}%)`;
+  }
+
+  /** Remove the floating overlay progress. */
+  private hidePrefetchProgress(): void {
+    try {
+      if (this.progressOverlay && this.progressOverlay.parentElement) {
+        this.progressOverlay.parentElement.removeChild(this.progressOverlay);
+      }
+    } catch {}
+    this.progressOverlay = null;
+    this.progressItem = null;
+    this.progressTextEl = null;
   }
 
   /** Load settings from storage with defaults. */

@@ -37,7 +37,7 @@ class FakeProvider implements TtsProvider {
 }
 
 describe("prefetch orchestrator", () => {
-  it("downloads all parts with concurrency and writes manifest/partial", async () => {
+  it("downloads all parts with concurrency and saves per-part files", async () => {
     const { app, files } = makeApp({});
     const provider = new FakeProvider();
     const settings: any = { voiceName: "en-US", rate: "+0%", outputFormat: "audio-24khz-48kbitrate-mono-mp3" };
@@ -52,28 +52,18 @@ describe("prefetch orchestrator", () => {
       file: { path: "Note.md" } as any,
       lang: "en-US",
       concurrency: 2,
-      enablePartialMerge: true,
     });
     const results = await Promise.all(tasks);
     expect(results.length).toBe(3);
     expect(files.has("Audio/note_part_1.mp3")).toBe(true);
     expect(files.has("Audio/note_part_2.mp3")).toBe(true);
     expect(files.has("Audio/note_part_3.mp3")).toBe(true);
-    expect(files.has("Audio/note.partial.mp3")).toBe(true);
-    const manifestRaw = files.get("Audio/note.manifest.json") as string;
-    const manifest = JSON.parse(manifestRaw);
-    expect(manifest.totalParts).toBe(3);
-    expect(manifest.fetchedParts.length).toBe(3);
-    expect(manifest.mergedUntil).toBeGreaterThanOrEqual(1);
     expect(provider.calls).toBeGreaterThanOrEqual(3);
   });
 
-  it("resumes by skipping already fetched parts", async () => {
+  it("does not fail when called again (no manifest logic)", async () => {
     const buf = new Uint8Array([9]).buffer;
-    const { app, files } = makeApp({
-      "Audio/note_part_2.mp3": buf,
-      "Audio/note.manifest.json": JSON.stringify({ version: 1, ext: "mp3", totalParts: 3, fetchedParts: [2], mergedUntil: 0, updatedAt: Date.now() })
-    });
+    const { app, files } = makeApp({ "Audio/note_part_2.mp3": buf });
     const provider = new FakeProvider();
     const settings: any = { voiceName: "en-US", rate: "+0%", outputFormat: "audio-24khz-48kbitrate-mono-mp3" };
     const chunks = ["a", "b", "c"];
@@ -87,10 +77,9 @@ describe("prefetch orchestrator", () => {
       file: { path: "Note.md" } as any,
       lang: "en-US",
       concurrency: 2,
-      enablePartialMerge: false,
     });
     await Promise.all(tasks);
-    expect(provider.calls).toBe(2);
+    expect(provider.calls).toBe(3);
     expect(files.has("Audio/note_part_1.mp3")).toBe(true);
     expect(files.has("Audio/note_part_2.mp3")).toBe(true);
     expect(files.has("Audio/note_part_3.mp3")).toBe(true);
