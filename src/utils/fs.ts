@@ -1,9 +1,11 @@
 /**
  * Vault filesystem helpers for saving audio and appending references.
+ * Enhanced with Result pattern for better error handling.
  */
 
 import type { App, TFile } from "obsidian";
-import type { AudioManifest } from "../types";
+import type { AudioManifest, Result, AudioVaultError } from "../types";
+import { safeParseManifest, createValidManifest } from "../schema";
 
 /**
  * Ensure a folder exists in the vault.
@@ -201,5 +203,223 @@ export async function scanExistingParts(app: App, folder: string, base: string, 
   } catch {
     return [];
   }
+}
+
+// Enhanced utilities with Result pattern for better error handling
+
+/**
+ * Atomically write file data using temporary file and rename.
+ * Supports both text and binary data.
+ * @param app Obsidian app instance
+ * @param path Target file path
+ * @param data Data to write (string or ArrayBuffer)
+ * @returns Result indicating success or failure
+ */
+export async function writeFileAtomic(
+  app: App, 
+  path: string, 
+  data: string | ArrayBuffer
+): Promise<Result<void, AudioVaultError>> {
+  const tmpPath = `${path}.tmp`;
+  
+  try {
+    // Write to temporary file
+    if (typeof data === 'string') {
+      await app.vault.adapter.write(tmpPath, data);
+    } else {
+      await app.vault.adapter.writeBinary(tmpPath, data);
+    }
+    
+    // Attempt atomic rename
+    try {
+      await app.vault.adapter.rename(tmpPath, path);
+      return { ok: true, value: undefined };
+    } catch (renameError) {
+      // Fallback: remove target and rename temp
+      try {
+        await app.vault.adapter.remove(path);
+      } catch {}
+      
+      if (typeof data === 'string') {
+        await app.vault.adapter.write(path, data);
+      } else {
+        await app.vault.adapter.writeBinary(path, data);
+      }
+      
+      // Clean up temp file
+      try {
+        await app.vault.adapter.remove(tmpPath);
+      } catch {}
+      
+      return { ok: true, value: undefined };
+    }
+  } catch (error) {
+    // Clean up temp file on failure
+    try {
+      await app.vault.adapter.remove(tmpPath);
+    } catch {}
+    
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      ok: false,
+      error: {
+        kind: 'permanent',
+        reason: `Failed to write file atomically: ${message}`,
+        cause: error instanceof Error ? error : undefined,
+      }
+    };
+  }
+}
+
+/**
+ * Enhanced manifest reading with validation.
+ * @param app Obsidian app instance
+ * @param path Full path to manifest file
+ * @returns Result with validated manifest or error
+ */
+export async function readManifestSafe(
+  app: App, 
+  path: string
+): Promise<Result<AudioManifest, AudioVaultError>> {
+  try {
+    const exists = await app.vault.adapter.exists(path);
+    if (!exists) {
+      return {
+        ok: false,
+        error: {
+          kind: 'permanent',
+          reason: `Manifest file not found: ${path}`,
+        }
+      };
+    }
+    
+    const raw = await app.vault.adapter.read(path);
+    const parsed = JSON.parse(raw);
+    
+    // Validate using Zod schema
+    const result = safeParseManifest(parsed);
+    if (!result.success) {
+      return {
+        ok: false,
+        error: {
+          kind: 'permanent',
+          reason: `Invalid manifest format: ${result.error.message}`,
+          cause: result.error,
+        }
+      };
+    }
+    
+    return { ok: true, value: result.data };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      ok: false,
+      error: {
+        kind: 'permanent',
+        reason: `Failed to read manifest: ${message}`,
+        cause: error instanceof Error ? error : undefined,
+      }
+    };
+  }
+}
+
+/**
+ * Enhanced manifest writing with validation and atomic operation.
+ * @param app Obsidian app instance
+ * @param path Full path to manifest file
+ * @param data Manifest data to write
+ * @returns Result indicating success or failure
+ */
+export async function writeManifestSafe(
+  app: App,
+  path: string, 
+  data: AudioManifest
+): Promise<Result<void, AudioVaultError>> {
+  try {
+    // Ensure data is valid using our schema helpers
+    const validManifest = createValidManifest(data);
+    const json = JSON.stringify(validManifest, null, 2);
+    
+    return await writeFileAtomic(app, path, json);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      ok: false,
+      error: {
+        kind: 'permanent',
+        reason: `Failed to prepare manifest for writing: ${message}`,
+        cause: error instanceof Error ? error : undefined,
+      }
+    };
+  }
+}
+
+/**
+ * Remove multiple files with best-effort cleanup.
+ * Continues removing other files even if some fail.
+ * @param app Obsidian app instance
+ * @param paths Array of file paths to remove
+ * @returns Result with count of successfully removed files
+ */
+export async function removeFiles(
+  app: App, 
+  paths: string[]
+): Promise<Result<number, never>> {
+  let removedCount = 0;
+  
+  for (const path of paths) {
+    try {
+      await app.vault.adapter.remove(path);
+      removedCount++;
+    } catch {
+      // Continue with other files - this is best-effort cleanup
+    }
+  }
+  
+  return { ok: true, value: removedCount };
+}
+
+/**
+ * Build manifest file path for given base name.
+ * @param folder Audio folder path
+ * @param base Safe base name
+ * @returns Manifest file path
+ */
+export function buildManifestPath(folder: string, base: string): string {
+  return `${folder}/${base}.manifest.json`;
+}
+
+/**
+ * Build part file path for given base name and part index.
+ * @param folder Audio folder path
+ * @param base Safe base name
+ * @param partIndex 1-based part index
+ * @param ext File extension without dot
+ * @returns Part file path
+ */
+export function buildPartPath(folder: string, base: string, partIndex: number, ext: string): string {
+  return `${folder}/${base}_part_${partIndex}.${ext}`;
+}
+
+/**
+ * Build merged file path for given base name.
+ * @param folder Audio folder path
+ * @param base Safe base name
+ * @param ext File extension without dot
+ * @returns Merged file path
+ */
+export function buildMergedPath(folder: string, base: string, ext: string): string {
+  return `${folder}/${base}.${ext}`;
+}
+
+/**
+ * Build partial file path for given base name.
+ * @param folder Audio folder path
+ * @param base Safe base name
+ * @param ext File extension without dot
+ * @returns Partial file path
+ */
+export function buildPartialPath(folder: string, base: string, ext: string): string {
+  return `${folder}/${base}.partial.${ext}`;
 }
 
