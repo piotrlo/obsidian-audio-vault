@@ -1,6 +1,15 @@
-import { test, expect } from "bun:test";
+import { test, expect, mock } from "bun:test";
 import { playBufferedPrefetch } from "../../src/playback/buffered";
 import type { TtsProvider, Voice } from "../../src/types";
+
+// Mock the obsidian module
+mock.module("obsidian", () => {
+  return {
+    Platform: {
+      isIosApp: false,
+    }
+  };
+});
 
 test("playBufferedPrefetch starts and finishes with empty chunks", async () => {
   const app: any = {

@@ -11,8 +11,8 @@ import { fileExtFromFormat, playbackRateFromRateSetting } from "../core/helpers"
 import { captureToBlob, waitForEndOrAbort } from "../core/audio";
 import { cleanupSessionResources as cleanupSessionResourcesHelper } from "./session";
 import { notify as notifyUtil } from "../core/notify";
-// Removed platform-specific helpers to simplify playback paths
 import { debug, warn, error as logError } from "../utils/logger";
+import { Platform } from "obsidian";
 
 /**
  * Configuration for enhanced buffered playback.
@@ -69,9 +69,9 @@ export async function playEnhancedBufferedPrefetch(params: {
     appendToMerged, prefetchTasks 
   } = params;
   
-  // Platform-specific optimizations removed; keep deterministic behavior
-  const isiOS = false;
-  const savePerPart = params.savePerPart !== false;
+  // Platform-specific optimizations: iOS requires savePerPart for reliability
+  const isiOS = Platform.isIosApp;
+  const savePerPart = params.savePerPart !== false || isiOS;
   
   const config: Required<EnhancedBufferedConfig> = {
     immediateStart: true,

@@ -12,13 +12,14 @@ import type { AudioManifest } from './types';
  */
 export const manifestSchema = z.object({
   version: z.number().int().min(1),
-  ext: z.string().min(1).regex(/^[a-z0-9]+$/i, 'File extension must be alphanumeric'),
+  ext: z.string().min(1).regex(/^(mp3|wav|m4a)$/i, 'File extension must be a known audio format (mp3, wav, m4a)'),
   totalParts: z.number().int().min(1).max(10000),
   fetchedParts: z.array(z.number().int().min(1))
     .refine((arr) => {
       // Check if array is sorted and unique
       const sorted = [...arr].sort((a, b) => a - b);
-      return JSON.stringify(arr) === JSON.stringify(sorted) && 
+      return arr.length === sorted.length &&
+             arr.every((val, idx) => val === sorted[idx]) && 
              new Set(arr).size === arr.length;
     }, 'fetchedParts must be sorted and contain unique values'),
   mergedUntil: z.number().int().min(0),
@@ -48,7 +49,7 @@ export const prefetchResultSchema = z.object({
 export const fileExtensionSchema = z.string()
   .min(1)
   .max(10)
-  .regex(/^[a-z0-9]+$/i, 'File extension must be alphanumeric');
+  .regex(/^(mp3|wav|m4a)$/i, 'File extension must be a known audio format (mp3, wav, m4a)');
 
 /**
  * Schema for validating safe base names (for file naming).
