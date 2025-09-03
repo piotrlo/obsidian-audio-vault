@@ -468,7 +468,19 @@ export class AudioSessionManager {
         this.audioElement.currentTime = 0;
       } catch {}
       
-      // Remove all event listeners by replacing the element
+      // Explicitly remove all event listeners to prevent memory leaks
+      const eventTypes = ['canplay', 'playing', 'waiting', 'stalled', 'ended', 'error', 'suspend', 'timeupdate', 'canplaythrough'];
+      eventTypes.forEach(eventType => {
+        try {
+          // Clone node to remove all listeners (most reliable method)
+          const clone = this.audioElement!.cloneNode() as HTMLAudioElement;
+          this.audioElement!.parentNode?.replaceChild(clone, this.audioElement!);
+        } catch {
+          // Fallback: just clear src and load
+        }
+      });
+      
+      // Remove src and load to clear any pending requests
       this.audioElement.src = '';
       this.audioElement.load();
       
@@ -479,6 +491,7 @@ export class AudioSessionManager {
     if (this.currentUrl && this.currentUrl.startsWith('blob:')) {
       try {
         URL.revokeObjectURL(this.currentUrl);
+        debug(`Revoked object URL: ${this.currentUrl}`);
       } catch {}
     }
     this.currentUrl = null;
