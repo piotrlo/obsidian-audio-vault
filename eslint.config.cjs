@@ -1,6 +1,7 @@
 // Flat config for ESLint v9+
 const tsParser = require('@typescript-eslint/parser');
 const tsPlugin = require('@typescript-eslint/eslint-plugin');
+const unusedImports = require('eslint-plugin-unused-imports');
 
 /** @type {import('eslint').Linter.FlatConfig[]} */
 module.exports = [
@@ -21,12 +22,14 @@ module.exports = [
       sourceType: 'module'
     },
     plugins: {
-      '@typescript-eslint': tsPlugin
+      '@typescript-eslint': tsPlugin,
+      'unused-imports': unusedImports
     },
     rules: {
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': 'off',
-      '@typescript-eslint/no-explicit-any': 'off'
+      '@typescript-eslint/no-explicit-any': 'off',
+      'unused-imports/no-unused-imports': 'error'
     }
   }
 ];

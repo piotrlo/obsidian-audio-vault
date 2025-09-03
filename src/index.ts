@@ -15,9 +15,7 @@ import { playBufferedPrefetch as playBufferedPrefetchHelper } from "./playback/b
 import { DEFAULT_SETTINGS } from "./core/settings";
 import { playStreamedPartAndSave } from "./playback/streaming";
 import { notify as notifyUtil } from "./core/notify";
-import { Mp3Assembler, buildPartialSnapshot } from "./utils/mp3";
-import { prefetchAllParts } from "./playback/prefetch";
-import { readManifest, writeManifest } from "./utils/fs";
+import { Mp3Assembler } from "./utils/mp3";
 import { sanitizeNoteForTts } from "./utils/sanitize";
 
 
@@ -41,6 +39,7 @@ export default class AudioVaultPlugin extends Plugin {
   private progressTextEl: HTMLElement | null = null;
   /** Floating overlay container element (center above bottom bar). */
   private progressOverlay: HTMLDivElement | null = null;
+  /** Lifecycle orchestrator removed: simplified playback flow */
 
   /**
    * Load settings and register commands.
@@ -65,6 +64,8 @@ export default class AudioVaultPlugin extends Plugin {
     this.addRibbonIcon('headphones', 'Play/Pause current note', () => { this.playOrStart(); });
 
     this.addSettingTab(new AudioVaultSettingsTab(this.app, this));
+    
+    // No special iOS orchestrator. Playback policy handled in readCurrentNote.
   }
 
   /**
@@ -72,6 +73,8 @@ export default class AudioVaultPlugin extends Plugin {
    */
   async onunload(): Promise<void> {
     await this.stopPlayback(true);
+    
+    // No orchestrator to dispose
   }
   
   /**
@@ -129,47 +132,28 @@ destroyPanel(): void {}
 
       const isIos = Platform.isIosApp;
       if (isIos) {
-        notifyUtil(this.settings, "Using iOS background prefetch (concurrency=5)");
+        notifyUtil(this.settings, "Using prefetch playback");
         const mergingEnabled = !!this.settings.mergeParts && /mp3/i.test(this.settings.outputFormat);
         const assembler = mergingEnabled ? new Mp3Assembler() : null;
 
         const provider = this.buildProviderFromSettings();
         this.provider = provider;
-        this.showPrefetchProgress(ctx.chunks.length);
-        const { tasks, controller, allDone } = await prefetchAllParts({
-          app: this.app,
-          settings: this.settings,
+
+        await this.playBufferedPrefetch(
+          ctx.chunks,
+          0,
+          ctx.base,
+          ctx.lang,
+          ctx.folder,
+          ctx.file,
           provider,
-          chunks: ctx.chunks,
-          base: ctx.base,
-          folder: ctx.folder,
-          file: ctx.file,
-          lang: ctx.lang,
-          concurrency: 5,
-          onProgress: ({ fetched, total }) => { this.updatePrefetchProgress(fetched, total); },
-          onPartSaved: async (idx) => {
-            if (idx === 1 && !this.currentSession?.audioEl) {
-              try { await this.tryPlayExistingParts(ctx.base, ctx.folder, ctx.chunks.length, false); } catch {}
-            }
-          }
-        });
+          assembler ? (u8) => assembler.append(u8) : undefined,
+          assembler ? false : true
+        );
 
-        // Do not trigger buffered path on iOS to avoid double audio; playback uses from-disk flow.
-
-        try { await allDone; } catch {}
-        this.hidePrefetchProgress();
-        if (mergingEnabled && !this.stopRequested) {
+        if (mergingEnabled && !this.stopRequested && assembler) {
           try {
-            const ext = 'mp3';
-            const asm = new Mp3Assembler();
-            for (let i = 1; i <= ctx.chunks.length; i++) {
-              const p = `${ctx.folder}/${ctx.base}_part_${i}.${ext}`;
-              const exists = await this.app.vault.adapter.exists(p);
-              if (!exists) { continue; }
-              const buf = await this.app.vault.adapter.readBinary(p);
-              asm.append(new Uint8Array(buf));
-            }
-            const merged = asm.build();
+            const merged = assembler.build();
             if (merged && merged.byteLength > 0) {
               const audioPath = `${ctx.folder}/${ctx.base}.mp3`;
               const ab = new ArrayBuffer(merged.byteLength);
@@ -177,12 +161,12 @@ destroyPanel(): void {}
               await writeBinary(this.app, audioPath, ab);
               await replaceAudioReferencesWithSingle(this.app, ctx.file, audioPath);
               notifyUtil(this.settings, `Saved merged file: [[${audioPath}]]`);
-              // Cleanup parts after successful merge
-              try { await deleteExistingParts(this.app, ctx.folder, ctx.base, ext); } catch {}
+            } else {
+              notifyUtil(this.settings, `Skipped saving merged file (no data)`, true);
             }
           } catch (e: unknown) {
             const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
-            notifyUtil(this.settings, `Failed to finalize merged file: ${msg}`, true);
+            notifyUtil(this.settings, `Failed to save merged file: ${msg}`, true);
           }
         }
         return;
@@ -630,6 +614,11 @@ notifyUtil(this.settings, `Failed to ensure folder "${folder}": ${((e as any)?.m
     }
     return new AzureTtsProvider({ apiKey: this.settings.azureApiKey, region: "westeurope" });
   }
+
+  /**
+   * Initialize lifecycle orchestrator for iOS background management.
+   */
+  // Lifecycle orchestrator removed
 }
 
 

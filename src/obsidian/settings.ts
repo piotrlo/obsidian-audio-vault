@@ -5,7 +5,6 @@
 import type { App } from "obsidian";
 import { Notice, PluginSettingTab, Setting, ExtraButtonComponent } from "obsidian";
 import type AudioVaultPlugin from "../index";
-import type { SupportedLang } from "../types";
 
 /**
  * Build the settings tab UI.
