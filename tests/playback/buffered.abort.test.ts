@@ -1,5 +1,12 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, mock } from "bun:test";
 import { playBufferedPrefetch } from "../../src/playback/buffered";
+
+// Mock Obsidian Platform
+mock.module("obsidian", () => ({
+  Platform: {
+    isIosApp: false,
+  }
+}));
 
 function makeEnv(){
   const written: string[] = [];

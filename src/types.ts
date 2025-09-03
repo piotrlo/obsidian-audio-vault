@@ -124,3 +124,89 @@ export interface AudioManifest {
   updatedAt: number;
 }
 
+/**
+ * Result type for operations that can fail.
+ * Provides type-safe error handling without exceptions.
+ */
+export type Result<T, E = Error> = 
+  | { ok: true; value: T }
+  | { ok: false; error: E };
+
+/**
+ * Helper functions for Result type construction.
+ */
+export const Result = {
+  /**
+   * Creates a successful result.
+   * @param value The success value
+   * @returns Success result
+   */
+  ok: <T>(value: T): Result<T, never> => ({ ok: true, value }),
+  
+  /**
+   * Creates a failed result.
+   * @param error The error value
+   * @returns Error result
+   */
+  err: <E>(error: E): Result<never, E> => ({ ok: false, error }),
+};
+
+/**
+ * Transient error that should be retried.
+ * Used for network failures, timeouts, rate limits, etc.
+ */
+export interface TransientError {
+  kind: 'transient';
+  reason: string;
+  /** Optional retry delay hint in milliseconds */
+  retryAfter?: number;
+  /** Original error that caused this */
+  cause?: Error;
+}
+
+/**
+ * Permanent error that should not be retried.
+ * Used for authentication failures, invalid requests, etc.
+ */
+export interface PermanentError {
+  kind: 'permanent';
+  reason: string;
+  /** HTTP status code if applicable */
+  status?: number;
+  /** Error code if applicable */
+  code?: string;
+  /** Original error that caused this */
+  cause?: Error;
+}
+
+/**
+ * Union type for all error types in the system.
+ */
+export type AudioVaultError = TransientError | PermanentError;
+
+/**
+ * Helper functions for error construction.
+ */
+export const AudioVaultError = {
+  /**
+   * Creates a transient error.
+   */
+  transient: (reason: string, options?: { retryAfter?: number; cause?: Error }): TransientError => ({
+    kind: 'transient',
+    reason,
+    retryAfter: options?.retryAfter,
+    cause: options?.cause,
+  }),
+  
+  /**
+   * Creates a permanent error.
+   */
+  permanent: (reason: string, options?: { status?: number; code?: string; cause?: Error }): PermanentError => ({
+    kind: 'permanent',
+    reason,
+    status: options?.status,
+    code: options?.code,
+    cause: options?.cause,
+  }),
+};
+

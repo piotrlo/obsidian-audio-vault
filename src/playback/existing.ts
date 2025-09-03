@@ -2,7 +2,7 @@
  * Playback of existing local audio parts without regeneration.
  */
 
-import type { App, TAbstractFile } from "obsidian";
+import type { App } from "obsidian";
 import type { PlaybackSession, TtsSettings } from "../types";
 import { mimeFromFormat } from "../core/helpers";
 import { fileExtFromFormat, playbackRateFromRateSetting } from "../core/helpers";

@@ -1,16 +1,46 @@
 /**
- * Buffered prefetch playback with fixed concurrency window.
+ * Enhanced buffered prefetch playbook with iOS optimization and gap handling.
+ * Uses AudioSessionManager for reliable playback state management.
  */
 
 import type { App, TFile } from "obsidian";
 import type { PlaybackSession, TtsProvider, TtsSettings, PrefetchResult } from "../types";
+import { AudioSessionManager, type AudioSessionEventListener } from "./session";
 import { buildSsml } from "../utils/ssml";
 import { fileExtFromFormat, playbackRateFromRateSetting } from "../core/helpers";
 import { captureToBlob, waitForEndOrAbort } from "../core/audio";
 import { cleanupSessionResources as cleanupSessionResourcesHelper } from "./session";
 import { notify as notifyUtil } from "../core/notify";
+import { debug, warn, error as logError } from "../utils/logger";
+import { Platform } from "obsidian";
 
-export async function playBufferedPrefetch(params: {
+/**
+ * Configuration for enhanced buffered playback.
+ */
+export interface EnhancedBufferedConfig {
+  /** Start playback immediately on first part ready */
+  immediateStart?: boolean;
+  /** Prefer partial MP3 for smoother progression */
+  preferPartialMp3?: boolean;
+  /** Max wait time for next part (ms) */
+  maxWaitForNext?: number;
+  /** Backoff delay when waiting (ms) */
+  waitBackoffMs?: number;
+  /** Show buffering UI during gaps */
+  showBufferingUI?: boolean;
+}
+
+/**
+ * Enhanced buffered prefetch playback with session management and iOS optimizations.
+ * 
+ * Key features:
+ * - On iOS: force savePerPart=true for reliability
+ * - Immediate playback start on first part ready
+ * - Smart gap handling with backoff retry
+ * - Prefer .partial.mp3 when available
+ * - Buffering UI feedback
+ */
+export async function playEnhancedBufferedPrefetch(params: {
   app: App;
   settings: TtsSettings;
   provider: TtsProvider;
@@ -26,27 +56,95 @@ export async function playBufferedPrefetch(params: {
   upsertAudioReferenceSorted: (app: App, file: TFile, audioPath: string) => Promise<void>;
   /** Optional merger append hook for MP3 bytes; when set, per-part save can be skipped. */
   appendToMerged?: (bytes: Uint8Array) => void;
-  /** If false, the function will not persist per-part files/links. */
+  /** If false, the function will not persist per-part files/links. On iOS, this is forced to true. */
   savePerPart?: boolean;
   /** Optional prefetch results to consume instead of synthesizing anew. */
   prefetchTasks?: Array<Promise<PrefetchResult>>;
+  /** Enhanced buffered playback configuration */
+  config?: EnhancedBufferedConfig;
 }): Promise<void> {
-  const { app, settings, provider, chunks, startIndex, base, lang, folder, file, stopRequested, setSession, writeBinary, upsertAudioReferenceSorted, appendToMerged, savePerPart, prefetchTasks } = params;
-
+  const { 
+    app, settings, provider, chunks, startIndex, base, lang, folder, file, 
+    stopRequested, setSession, writeBinary, upsertAudioReferenceSorted, 
+    appendToMerged, prefetchTasks 
+  } = params;
+  
+  // Platform-specific optimizations: iOS requires savePerPart for reliability
+  const isiOS = Platform.isIosApp;
+  const savePerPart = params.savePerPart !== false || isiOS;
+  
+  const config: Required<EnhancedBufferedConfig> = {
+    immediateStart: true,
+    preferPartialMp3: true,
+    maxWaitForNext: 10000, // 10 seconds
+    waitBackoffMs: 150,
+    showBufferingUI: true,
+    ...params.config,
+  };
+  
   const abortAll = new AbortController();
-  setSession({ abort: abortAll, audioEl: null, mediaSource: null, sourceBuffer: null, lastBlob: null, fileBase: base });
-
+  let sessionManager: AudioSessionManager | null = null;
+  
+  // Legacy session for backward compatibility
+  const legacySession: PlaybackSession = { 
+    abort: abortAll, 
+    audioEl: null, 
+    mediaSource: null, 
+    sourceBuffer: null, 
+    lastBlob: null, 
+    fileBase: base 
+  };
+  setSession(legacySession);
+  
   try {
-    try { notifyUtil(settings, `Starting buffered prefetch playback (${chunks.length} part(s))...`); } catch {}
-
+    debug(`Starting enhanced buffered prefetch playback (${chunks.length} parts, iOS=${isiOS})`);
+    try { 
+      notifyUtil(settings, `Starting enhanced playback (${chunks.length} part(s))...`); 
+    } catch {}
+    
+    // Audio session configuration
+    const sessionConfig = {
+      playbackRate: playbackRateFromRateSetting(settings.rate),
+      volume: 1.0,
+      preload: 'auto' as const,
+    };
+    
+    // Session event handlers
+    const sessionListeners: AudioSessionEventListener = {
+      onStateChange: (state, previousState) => {
+        debug(`Session state: ${previousState} -> ${state}`);
+        if (state === 'stalled' && config.showBufferingUI) {
+          try {
+            notifyUtil(settings, "Buffering...", true);
+          } catch {}
+        }
+      },
+      onError: (error) => {
+        logError('Audio session error:', error);
+        try {
+          notifyUtil(settings, `Playback error: ${error.message}`);
+        } catch {}
+      },
+      onBuffering: (isBuffering) => {
+        if (isBuffering && config.showBufferingUI) {
+          try {
+            notifyUtil(settings, "Buffering...", true);
+          } catch {}
+        }
+      },
+    };
+    
+    sessionManager = new AudioSessionManager(sessionConfig, sessionListeners);
+    
     const prefetchWindow = 3;
     const ext = fileExtFromFormat(settings.outputFormat);
-
+    
     const makeTask = (idx: number) => {
       if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
         return prefetchTasks[idx]
           .then((r) => ({ buffer: r.buffer, mime: r.mime, idx }))
           .catch(async () => {
+            debug(`Fallback synthesis for part ${idx + 1}`);
             const ssml = buildSsml({ text: chunks[idx], voiceName: settings.voiceName, rate: settings.rate, lang });
             const stream = await provider.synthesize(ssml, settings.outputFormat, lang, abortAll.signal);
             const blob = await captureToBlob(stream, undefined, settings.outputFormat);
@@ -55,6 +153,8 @@ export async function playBufferedPrefetch(params: {
             return { buffer, mime, idx };
           });
       }
+      
+      debug(`Direct synthesis for part ${idx + 1}`);
       const ssml = buildSsml({ text: chunks[idx], voiceName: settings.voiceName, rate: settings.rate, lang });
       return provider.synthesize(ssml, settings.outputFormat, lang, abortAll.signal)
         .then(async (stream) => {
@@ -64,56 +164,270 @@ export async function playBufferedPrefetch(params: {
           return { buffer, mime, idx };
         });
     };
-
+    
     const tasks: Array<Promise<{ buffer: ArrayBuffer; mime: string; idx: number }>> = new Array(chunks.length);
     let started = startIndex;
-    while (started < Math.min(startIndex + prefetchWindow, chunks.length)) { tasks[started] = makeTask(started); started += 1; }
-
-    let partIdx = startIndex;
-    while (partIdx < chunks.length && !stopRequested() && !abortAll.signal.aborted) {
-      while (started < chunks.length && started - partIdx < prefetchWindow) { tasks[started] = makeTask(started); started += 1; }
-
-      const { buffer, mime } = await tasks[partIdx];
-      if (!buffer || buffer.byteLength === 0) { throw new Error("Empty audio buffer"); }
-
-      const blob = new Blob([buffer], { type: mime });
-      const url = URL.createObjectURL(blob);
-      const audioEl = new Audio(url);
-      audioEl.playbackRate = playbackRateFromRateSetting(settings.rate);
-
-      const session: PlaybackSession = { abort: abortAll, audioEl, mediaSource: null, sourceBuffer: null, lastBlob: blob, fileBase: base, objectUrl: url };
-      setSession(session);
-
-      try {
-        try { notifyUtil(settings, `Starting playback (buffered) — part ${partIdx + 1}`, true); } catch {}
-        await audioEl.play();
-        try { notifyUtil(settings, "Playback started", true); } catch {}
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        try { notifyUtil(settings, `Audio play failed (buffered): ${msg}`); } catch {}
-      }
-
-      if (appendToMerged) {
-        try { appendToMerged(new Uint8Array(buffer)); } catch {}
-      }
-      if (savePerPart !== false) {
-        const audioPath = `${folder}/${base}_part_${partIdx + 1}.${ext}`;
-        await writeBinary(app, audioPath, buffer);
-        await upsertAudioReferenceSorted(app, file, audioPath);
-      }
-
-      try { await waitForEndOrAbort(audioEl, abortAll.signal); } catch {}
-      await cleanupSessionResourcesHelper(session);
-      setSession({ ...session, audioEl: null });
-
-      if (stopRequested() || abortAll.signal.aborted) break;
-      partIdx += 1;
+    
+    // Start initial window of tasks
+    while (started < Math.min(startIndex + prefetchWindow, chunks.length)) {
+      tasks[started] = makeTask(started);
+      started += 1;
     }
+    
+    let partIdx = startIndex;
+    let isFirstPart = true;
+    
+    while (partIdx < chunks.length && !stopRequested() && !abortAll.signal.aborted) {
+      // Maintain prefetch window
+      while (started < chunks.length && started - partIdx < prefetchWindow) {
+        tasks[started] = makeTask(started);
+        started += 1;
+      }
+      
+      try {
+        // Check for .partial.mp3 preference first
+        let audioPath: string | null = null;
+        let audioData: ArrayBuffer | null = null;
+        
+        if (config.preferPartialMp3) {
+          const partialPath = `${folder}/${base}.partial.${ext}`;
+          try {
+            const partialExists = await app.vault.adapter.exists(partialPath);
+            if (partialExists) {
+              debug(`Using partial file: ${partialPath}`);
+              audioPath = partialPath;
+              // Don't load buffer for file-based playback
+            }
+          } catch {
+            debug('Partial file not available, falling back to part chaining');
+          }
+        }
+        
+        // Fall back to individual parts
+        if (!audioPath) {
+          // Wait for part to be ready or timeout
+          const partData = await Promise.race([
+            tasks[partIdx],
+            new Promise<never>((_, reject) => {
+              setTimeout(() => reject(new Error('Part timeout')), config.maxWaitForNext);
+            })
+          ]).catch(async (error) => {
+            if (partIdx > startIndex) {
+              // Not the first part, try to continue
+              warn(`Part ${partIdx + 1} failed or timed out:`, error);
+              return null;
+            } else {
+              // First part failed, can't continue
+              throw error;
+            }
+          });
+          
+          if (!partData) {
+            // Skip this part and try next
+            partIdx += 1;
+            continue;
+          }
+          
+          const { buffer, mime } = partData;
+          if (!buffer || buffer.byteLength === 0) {
+            throw new Error(`Empty audio buffer for part ${partIdx + 1}`);
+          }
+          
+          audioData = buffer;
+          
+          // Create blob URL for playback
+          const blob = new Blob([buffer], { type: mime });
+          audioPath = URL.createObjectURL(blob);
+        }
+        
+        // Start playback with session manager
+        try {
+          await sessionManager.startWithPart(audioPath);
+          
+          // Update legacy session for compatibility
+          legacySession.audioEl = sessionManager.audio;
+          legacySession.objectUrl = audioPath.startsWith('blob:') ? audioPath : undefined;
+          setSession({ ...legacySession });
+          
+          if (config.immediateStart || isFirstPart) {
+            debug(`Starting immediate playback for part ${partIdx + 1}`);
+            await sessionManager.play();
+            
+            if (isFirstPart) {
+              const startDelay = Date.now();
+              try {
+                notifyUtil(settings, `Playback started`, true);
+                debug(`First part playback started after ${Date.now() - startDelay}ms`);
+              } catch {}
+              isFirstPart = false;
+            }
+          }
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          logError(`Audio play failed for part ${partIdx + 1}:`, msg);
+          try {
+            notifyUtil(settings, `Audio play failed: ${msg}`);
+          } catch {}
+          
+          // Clean up blob URL if we created one
+          if (audioPath?.startsWith('blob:')) {
+            try {
+              URL.revokeObjectURL(audioPath);
+            } catch {}
+          }
+          
+          // Try to continue with next part
+          partIdx += 1;
+          continue;
+        }
+        
+        // Handle part data (append to merged, save to disk)
+        if (audioData) {
+          if (appendToMerged) {
+            try {
+              appendToMerged(new Uint8Array(audioData));
+            } catch (error) {
+              warn('Failed to append to merged:', error);
+            }
+          }
+          
+          if (savePerPart) {
+            try {
+              const partPath = `${folder}/${base}_part_${partIdx + 1}.${ext}`;
+              await writeBinary(app, partPath, audioData);
+              await upsertAudioReferenceSorted(app, file, partPath);
+              debug(`Saved part ${partIdx + 1} to ${partPath}`);
+            } catch (error) {
+              warn(`Failed to save part ${partIdx + 1}:`, error);
+            }
+          }
+        }
+        
+        // Wait for current part to finish or be aborted
+        try {
+          if (sessionManager.audio) {
+            await waitForEndOrAbort(sessionManager.audio, abortAll.signal);
+          }
+        } catch (error) {
+          debug('Playback interrupted:', error);
+        }
+        
+        // Handle end of part - check if we should wait for next or continue
+        if (partIdx < chunks.length - 1 && !stopRequested() && !abortAll.signal.aborted) {
+          // Not the last part, check if next part is ready
+          const nextPartIdx = partIdx + 1;
+          if (nextPartIdx < tasks.length) {
+            const isNextReady = await Promise.race([
+              tasks[nextPartIdx].then(() => true),
+              new Promise<boolean>(resolve => setTimeout(() => resolve(false), config.waitBackoffMs))
+            ]);
+            
+            if (!isNextReady && config.showBufferingUI) {
+              try {
+                notifyUtil(settings, "Buffering next part...", true);
+              } catch {}
+              
+              // Wait with exponential backoff up to cap
+              let waitTime = config.waitBackoffMs;
+              const maxWait = Math.min(config.maxWaitForNext, 5000);
+              const startWait = Date.now();
+              
+              while (waitTime <= maxWait && !stopRequested() && !abortAll.signal.aborted) {
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+                
+                const isNowReady = await Promise.race([
+                  tasks[nextPartIdx].then(() => true),
+                  new Promise<boolean>(resolve => setTimeout(() => resolve(false), 50))
+                ]);
+                
+                if (isNowReady) {
+                  debug(`Next part became ready after ${Date.now() - startWait}ms`);
+                  break;
+                }
+                
+                waitTime = Math.min(waitTime * 1.5, maxWait);
+              }
+            }
+          }
+        }
+        
+        // Clean up blob URL if we created one
+        if (audioPath?.startsWith('blob:')) {
+          try {
+            URL.revokeObjectURL(audioPath);
+          } catch {}
+        }
+        
+        if (stopRequested() || abortAll.signal.aborted) break;
+        partIdx += 1;
+        
+      } catch (error) {
+        logError(`Error processing part ${partIdx + 1}:`, error);
+        
+        // Try to continue with next part unless it's the first
+        if (partIdx === startIndex) {
+          throw error; // Can't continue if first part fails
+        }
+        
+        partIdx += 1;
+      }
+    }
+    
+    debug(`Enhanced buffered playback completed (processed ${partIdx - startIndex} parts)`);
+    
   } finally {
-    try { abortAll.abort(); } catch {}
-    try { await cleanupSessionResourcesHelper(null, true); } catch {}
+    try {
+      debug('Cleaning up enhanced buffered playback');
+      abortAll.abort();
+    } catch {}
+    
+    try {
+      if (sessionManager) {
+        sessionManager.dispose();
+        sessionManager = null;
+      }
+    } catch {}
+    
+    try {
+      await cleanupSessionResourcesHelper(null, true);
+    } catch {}
+    
     setSession(null);
   }
 }
 
+/**
+ * Legacy buffered prefetch playback function for backward compatibility.
+ * @deprecated Use playEnhancedBufferedPrefetch instead
+ */
+export async function playBufferedPrefetch(params: {
+  app: App;
+  settings: TtsSettings;
+  provider: TtsProvider;
+  chunks: string[];
+  startIndex: number;
+  base: string;
+  lang: string;
+  folder: string;
+  file: TFile;
+  stopRequested: () => boolean;
+  setSession: (s: PlaybackSession | null) => void;
+  writeBinary: (app: App, path: string, buffer: ArrayBuffer) => Promise<void>;
+  upsertAudioReferenceSorted: (app: App, file: TFile, audioPath: string) => Promise<void>;
+  appendToMerged?: (bytes: Uint8Array) => void;
+  savePerPart?: boolean;
+  prefetchTasks?: Array<Promise<PrefetchResult>>;
+}): Promise<void> {
+  // Forward to enhanced implementation
+  return playEnhancedBufferedPrefetch({
+    ...params,
+    config: {
+      immediateStart: true,
+      preferPartialMp3: false, // Maintain legacy behavior
+      maxWaitForNext: 5000,
+      waitBackoffMs: 150,
+      showBufferingUI: false, // Maintain legacy behavior
+    },
+  });
+}
 
