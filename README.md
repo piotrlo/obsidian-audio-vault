@@ -16,8 +16,8 @@ AudioVault converts your text to natural-sounding speech using Azure AI Speech t
 ## 🚀 Features
 
 - **Instant TTS**: High-quality neural voices (OpenAI/Azure level)
-- **Smart streaming**: Audio starts playing in seconds, not minutes
-- **Offline playback**: Generated audio files saved to your vault
+- **Fast start**: Playback starts after the first part; background prefetch downloads the rest
+- **Offline playback**: Parts are saved during playback and merged to a single MP3 as soon as all are fetched
 - **Multi-language**: English, Polish and more with automatic detection
 - **Mobile optimized**: Works seamlessly on iOS and Android
 - **No cloud storage**: Your content stays in your vault
@@ -71,7 +71,7 @@ AudioVault offers flexible plans to fit your needs:
 ## 🛠️ Technical Details
 
 - **Format**: MP3 only (high quality, small file size)
-- **Streaming**: MediaSource Extensions (MSE) with fallback
+- **Playback pipeline**: Fast start + background prefetch + early merge-save; prefers buffered pipeline when Merge MP3 is enabled
 - **Chunking**: Intelligent text splitting for long documents
 - **Mobile**: iOS/Android optimized
 
@@ -89,7 +89,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Mobile optimized (iOS)
 
-- iOS uses background prefetch (concurrency=5) to download all parts aggressively.
-- Per-part files are always saved to `Audio/` for offline resilience.
-- A partial merged snapshot `<base>.partial.mp3` is updated during download and finalized to `<base>.mp3` at the end.
-- If playback is interrupted by background limits, you can resume inside Obsidian; already downloaded parts will continue to play.
+- iOS mirrors desktop behavior for consistency: streaming path disabled, chunk size capped at 500.
+- Fast start after the first part; background prefetch continues downloading remaining parts.
+- As soon as all parts are fetched, the merged MP3 `<base>.mp3` is saved and note links are replaced.
+- Per-part files are deleted after playback finishes (deferred cleanup).
