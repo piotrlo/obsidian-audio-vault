@@ -22,8 +22,10 @@ export interface EnhancedBufferedConfig {
   immediateStart?: boolean;
   /** Prefer partial MP3 for smoother progression */
   preferPartialMp3?: boolean;
-  /** Max wait time for next part (ms) */
+  /** Max wait time for next (non-first) part (ms) */
   maxWaitForNext?: number;
+  /** Max wait time for the very first part (ms) — allows cold starts */
+  firstPartTimeoutMs?: number;
   /** Backoff delay when waiting (ms) */
   waitBackoffMs?: number;
   /** Show buffering UI during gaps */
@@ -73,10 +75,11 @@ export async function playEnhancedBufferedPrefetch(params: {
   const isiOS = Platform.isIosApp;
   const savePerPart = params.savePerPart !== false || isiOS;
   
-  const config: Required<EnhancedBufferedConfig> = {
+const config: Required<EnhancedBufferedConfig> = {
     immediateStart: true,
     preferPartialMp3: true,
-    maxWaitForNext: 10000, // 10 seconds
+    maxWaitForNext: 10000, // 10 seconds for subsequent parts
+    firstPartTimeoutMs: 30000, // 30 seconds for the first part (cold start tolerance)
     waitBackoffMs: 150,
     showBufferingUI: true,
     ...params.config,
@@ -140,9 +143,31 @@ export async function playEnhancedBufferedPrefetch(params: {
     const ext = fileExtFromFormat(settings.outputFormat);
     
     const makeTask = (idx: number) => {
-      if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
+if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
         return prefetchTasks[idx]
-          .then((r) => ({ buffer: r.buffer, mime: r.mime, idx }))
+          .then(async (r) => {
+            // Some prefetch tasks resolve empty when parts already exist on disk via manifest.
+            if (!r.buffer || r.buffer.byteLength === 0) {
+              const partPath = `${folder}/${base}_part_${idx + 1}.${ext}`;
+              try {
+                const data = await app.vault.adapter.readBinary(partPath);
+                const ab = data as ArrayBuffer;
+                const mime = /(wav|riff)/i.test(settings.outputFormat) ? "audio/wav" : "audio/mpeg";
+                debug(`Loaded part ${idx + 1} from disk due to empty prefetch buffer`);
+                return { buffer: ab, mime, idx };
+              } catch {
+                // If not found on disk, fall back to synthesizing now
+                debug(`Prefetch buffer empty and file missing; fallback synthesis for part ${idx + 1}`);
+                const ssml = buildSsml({ text: chunks[idx], voiceName: settings.voiceName, rate: settings.rate, lang });
+                const stream = await provider.synthesize(ssml, settings.outputFormat, lang, abortAll.signal);
+                const blob = await captureToBlob(stream, undefined, settings.outputFormat);
+                const buffer = await blob.arrayBuffer();
+                const mime = blob.type || (/(wav|riff)/i.test(settings.outputFormat) ? "audio/wav" : "audio/mpeg");
+                return { buffer, mime, idx };
+              }
+            }
+            return { buffer: r.buffer, mime: r.mime, idx };
+          })
           .catch(async () => {
             debug(`Fallback synthesis for part ${idx + 1}`);
             const ssml = buildSsml({ text: chunks[idx], voiceName: settings.voiceName, rate: settings.rate, lang });
@@ -203,13 +228,14 @@ export async function playEnhancedBufferedPrefetch(params: {
           }
         }
         
-        // Fall back to individual parts
+// Fall back to individual parts
         if (!audioPath) {
           // Wait for part to be ready or timeout
+          const timeoutMs = (partIdx === startIndex) ? config.firstPartTimeoutMs : config.maxWaitForNext;
           const partData = await Promise.race([
             tasks[partIdx],
             new Promise<never>((_, reject) => {
-              setTimeout(() => reject(new Error('Part timeout')), config.maxWaitForNext);
+              setTimeout(() => reject(new Error(`Part timeout (${timeoutMs}ms)`)), timeoutMs);
             })
           ]).catch(async (error) => {
             if (partIdx > startIndex) {
@@ -217,7 +243,9 @@ export async function playEnhancedBufferedPrefetch(params: {
               warn(`Part ${partIdx + 1} failed or timed out:`, error);
               return null;
             } else {
-              // First part failed, can't continue
+              // First part failed; surface a clearer message
+              const msg = error instanceof Error ? error.message : String(error);
+              warn(`First part timed out after ${timeoutMs}ms; aborting start`, msg);
               throw error;
             }
           });

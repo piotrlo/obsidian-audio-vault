@@ -3,7 +3,7 @@
 This file provides guidance to WARP (warp.dev) when working with code in this repository.
 
 Repository purpose
-- Obsidian plugin "ListenMode" that converts the current note to speech using Azure AI Speech and saves audio files into the vault for playback and offline use.
+- Obsidian plugin "AudioVault" that converts the current note to speech using Azure AI Speech and saves audio files into the vault for playback and offline use.
 
 Commands (Bun-first)
 - Install deps (Bun handles install automatically on first run):
@@ -59,11 +59,17 @@ High-level architecture
   - utils/fs.ts: ensureFolder(), writeBinary(), appendAudioReference(), deleteExistingParts().
   - utils/sanitize.ts: sanitizeNoteForTts() removes non-readable content (HTML, code blocks, frontmatter).
   - utils/mp3.ts: MP3 assembly for merged output files without re-encoding.
+  - network/retry.ts: robust retry logic with exponential backoff for network operations.
 
-- Types (src/types.ts)
-  - TtsSettings: persisted plugin configuration.
-  - PlaybackSession: ephemeral playback bookkeeping.
-  - Voice: minimal voice info type.
+- Types and Validation
+  - src/types.ts: TtsSettings (persisted plugin configuration), PlaybackSession (ephemeral playback bookkeeping), Voice (minimal voice info type).
+  - src/schema.ts: Zod schemas for runtime validation of API responses and user input.
+
+- Core Architecture
+  - src/core/settings.ts: settings management and validation.
+  - src/core/audio.ts: audio processing and playback orchestration.
+  - src/core/helpers.ts: shared utility functions.
+  - src/core/notify.ts: user notification and error handling.
 
 Notes
 - Build output is main.js (bundled from src/index.ts) and consumed by Obsidian via manifest.json ("main": "main.js").
@@ -73,6 +79,8 @@ Conventions and tests
 - Language/stack: TypeScript (strict), Bun runtime and tooling.
 - Test runner: bun:test, tests live under tests/**/*.test.ts and may also appear close to code.
 - Run tests with bun test; keep tests short and focused on single behaviors.
+- Coverage: bun test --coverage
+- Git hooks: pre-push hook runs tests automatically (see .husky/pre-push).
 
 ## Architecture Decisions
 
@@ -96,6 +104,7 @@ Conventions and tests
 Important repository files
 - package.json: Bun-based scripts (build/dev/typecheck/test/deploy), esbuild bundling with external:obsidian.
 - tsconfig.json: ESNext modules, strict, types: ["obsidian", "bun-types"], includes src and tests, excludes legacy code.
+- eslint.config.cjs: ESLint v9+ flat config with TypeScript support, unused imports detection.
 - manifest.json: Obsidian plugin manifest (id: obsidian-audiovault, main: main.js).
 - spec-then-code.md and spec-then-code-plan.md: governing product/tech spec and staged implementation plan; keep them authoritative and updated upon significant changes.
 

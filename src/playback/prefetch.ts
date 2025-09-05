@@ -126,13 +126,35 @@ export async function prefetchAllParts(params: PrefetchOptions): Promise<Prefetc
       manifest = manifestResult.value;
       debug(`Loaded existing manifest: ${manifest.fetchedParts.length}/${manifest.totalParts} parts`);
       
-      // Reconcile with actual files on disk
+      // Reconcile with actual files on disk (trust disk over manifest)
       const existingParts = await scanExistingParts(app, folder, base, ext);
-      const reconciledParts = Array.from(new Set([...manifest.fetchedParts, ...existingParts])).sort((a, b) => a - b);
+      const prunedParts = existingParts
+        .filter((p) => p >= 1 && p <= totalParts)
+        .sort((a, b) => a - b);
+
+      // Compute consecutive prefix length for mergedUntil safety
+      const consecutiveUntil = (() => {
+        let k = 0;
+        for (let i = 1; i <= totalParts; i++) {
+          if (prunedParts.includes(i)) k = i; else break;
+        }
+        return k;
+      })();
       
-      if (reconciledParts.length !== manifest.fetchedParts.length) {
-        debug(`Reconciled manifest: found ${reconciledParts.length} parts on disk vs ${manifest.fetchedParts.length} in manifest`);
-        manifest = updateManifestWithParts(manifest, reconciledParts);
+      // If manifest lists parts not present on disk or totalParts changed, prune and update (replace fetchedParts)
+      const partsChanged = prunedParts.length !== manifest.fetchedParts.length
+        || manifest.totalParts !== totalParts
+        || prunedParts.some((p, i) => p !== manifest.fetchedParts[i]);
+      
+      if (partsChanged) {
+        debug(`Reconciled manifest with disk: ${prunedParts.length} valid parts (was ${manifest.fetchedParts.length}), totalParts=${totalParts}`);
+        manifest = {
+          ...manifest,
+          totalParts,
+          fetchedParts: prunedParts,
+          mergedUntil: Math.min(manifest.mergedUntil ?? 0, consecutiveUntil),
+          updatedAt: Date.now(),
+        };
       }
     } else {
       // No manifest exists, check for existing parts

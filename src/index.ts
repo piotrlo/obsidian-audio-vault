@@ -17,6 +17,7 @@ import { playStreamedPartAndSave } from "./playback/streaming";
 import { notify as notifyUtil } from "./core/notify";
 import { Mp3Assembler } from "./utils/mp3";
 import { sanitizeNoteForTts } from "./utils/sanitize";
+import { prefetchAllParts } from "./playback/prefetch";
 
 
 /**
@@ -39,6 +40,8 @@ export default class AudioVaultPlugin extends Plugin {
   private progressTextEl: HTMLElement | null = null;
   /** Floating overlay container element (center above bottom bar). */
   private progressOverlay: HTMLDivElement | null = null;
+  /** Deferred cleanup of part files after playback finishes. */
+  private pendingPartsCleanup: (() => Promise<void>) | null = null;
   /** Lifecycle orchestrator removed: simplified playback flow */
 
   /**
@@ -130,48 +133,6 @@ destroyPanel(): void {}
         return;
       }
 
-      const isIos = Platform.isIosApp;
-      if (isIos) {
-        notifyUtil(this.settings, "Using prefetch playback");
-        const mergingEnabled = !!this.settings.mergeParts && /mp3/i.test(this.settings.outputFormat);
-        const assembler = mergingEnabled ? new Mp3Assembler() : null;
-
-        const provider = this.buildProviderFromSettings();
-        this.provider = provider;
-
-        await this.playBufferedPrefetch(
-          ctx.chunks,
-          0,
-          ctx.base,
-          ctx.lang,
-          ctx.folder,
-          ctx.file,
-          provider,
-          assembler ? (u8) => assembler.append(u8) : undefined,
-          assembler ? false : true
-        );
-
-        if (mergingEnabled && !this.stopRequested && assembler) {
-          try {
-            const merged = assembler.build();
-            if (merged && merged.byteLength > 0) {
-              const audioPath = `${ctx.folder}/${ctx.base}.mp3`;
-              const ab = new ArrayBuffer(merged.byteLength);
-              new Uint8Array(ab).set(merged);
-              await writeBinary(this.app, audioPath, ab);
-              await replaceAudioReferencesWithSingle(this.app, ctx.file, audioPath);
-              notifyUtil(this.settings, `Saved merged file: [[${audioPath}]]`);
-            } else {
-              notifyUtil(this.settings, `Skipped saving merged file (no data)`, true);
-            }
-          } catch (e: unknown) {
-            const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
-            notifyUtil(this.settings, `Failed to save merged file: ${msg}`, true);
-          }
-        }
-        return;
-      }
-
       await this.playStreamingOrFallback(ctx.chunks, ctx.base, ctx.lang, ctx.folder, ctx.file);
     } finally {
       this.isBusy = false;
@@ -247,8 +208,10 @@ destroyPanel(): void {}
     const assembler = mergingEnabled ? new Mp3Assembler() : null;
     const provider = this.buildProviderFromSettings();
     this.provider = provider;
+    // Ensure no stale stop flag is carried into streaming loop
+    this.stopRequested = false;
     for (const chunk of chunks) {
-      if (this.stopRequested) break;
+      if (this.stopRequested) { warn("Stop requested; exiting streaming loop", { part }); break; }
       try {
         log("tts start part", { part });
         const ssml = buildSsml({ text: chunk, voiceName: this.settings.voiceName, rate: this.settings.rate, lang });
@@ -258,27 +221,100 @@ destroyPanel(): void {}
         const streamFormat = this.settings.outputFormat;
         const { supported: streamSupported, mime: streamMime } = canStream(streamFormat);
 
-        if (!(this.settings.enableStreaming && streamSupported)) {
-notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
-          await this.playBufferedPrefetch(chunks, part - 1, base, lang, folder, file, provider, assembler ? (u8) => assembler.append(u8) : undefined, assembler ? false : true);
-          if (assembler && !this.stopRequested) {
+        const streamEnabled = (this.settings.enableStreaming && streamSupported && !Platform.isIosApp);
+        // Prefer buffered prefetch pipeline whenever merging is enabled, to ensure file saving and early merge
+        const preferBuffered = mergingEnabled;
+        if (!streamEnabled || preferBuffered) {
+notifyUtil(this.settings, "Streaming not available — starting playback immediately with background prefetch");
+          // If merging is enabled for MP3, prefetch in background and save merged as soon as all parts are ready.
+          if (mergingEnabled) {
             try {
-              const merged = assembler.build();
-              if (merged && merged.byteLength > 0) {
-                const audioPath = `${folder}/${base}.mp3`;
-                const ab = new ArrayBuffer(merged.byteLength);
-                new Uint8Array(ab).set(merged);
-                await writeBinary(this.app, audioPath, ab);
-                await replaceAudioReferencesWithSingle(this.app, file, audioPath);
-                notifyUtil(this.settings, `Saved merged file: [[${audioPath}]]`);
-              } else {
-                notifyUtil(this.settings, `Skipped saving merged file (no data)`, true);
+              const orchestrator = await prefetchAllParts({
+                app: this.app,
+                settings: this.settings,
+                provider,
+                chunks,
+                base,
+                folder,
+                file,
+                lang,
+                concurrency: 3,
+              });
+
+              // Fire-and-forget: when prefetch completes, build and save merged immediately
+              void orchestrator.allDone.then(async () => {
+                try {
+                  const results = await Promise.all(orchestrator.tasks);
+                  const assemblerAfter = new Mp3Assembler();
+                  const ext = fileExtFromFormat(this.settings.outputFormat);
+                  for (let i = 0; i < results.length; i++) {
+                    const r = results[i];
+                    if (r.buffer && r.buffer.byteLength > 0) {
+                      assemblerAfter.append(new Uint8Array(r.buffer));
+                    } else {
+                      const partPath = `${folder}/${base}_part_${i + 1}.${ext}`;
+                      try {
+                        const data = await this.app.vault.adapter.readBinary(partPath);
+                        assemblerAfter.append(new Uint8Array(data));
+                      } catch {}
+                    }
+                  }
+                  const merged = assemblerAfter.build();
+                  if (merged && merged.byteLength > 0) {
+                    const audioPath = `${folder}/${base}.mp3`;
+                    const ab = new ArrayBuffer(merged.byteLength);
+                    new Uint8Array(ab).set(merged);
+                    await writeBinary(this.app, audioPath, ab);
+                    await replaceAudioReferencesWithSingle(this.app, file, audioPath);
+                    notifyUtil(this.settings, `Saved merged file: [[${audioPath}]]`);
+
+                    // Defer deletion of part files until entire playback finishes
+                    this.pendingPartsCleanup = async () => {
+                      try {
+                        const extNow = fileExtFromFormat(this.settings.outputFormat);
+                        await deleteExistingParts(this.app, folder, base, extNow);
+                        notifyUtil(this.settings, `Removed ${base}_part_* files`, true);
+                      } catch (e: unknown) {
+                        const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
+                        notifyUtil(this.settings, `Failed to remove part files: ${msg}`, true);
+                      }
+                    };
+                  }
+                } catch (e: unknown) {
+                  const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
+                  notifyUtil(this.settings, `Background merge failed: ${msg}`, true);
+                }
+              });
+
+              // Start playback immediately, consuming prefetch tasks when available; DO NOT save per-part files (merge enabled)
+              await this.playBufferedPrefetch(
+                chunks,
+                part - 1,
+                base,
+                lang,
+                folder,
+                file,
+                provider,
+                undefined,
+                false,
+                orchestrator.tasks
+              );
+              // After playback completes, if we have pending cleanup, run it
+              if (this.pendingPartsCleanup) {
+                try { await this.pendingPartsCleanup(); } catch {}
+                this.pendingPartsCleanup = null;
               }
+              return;
             } catch (e: unknown) {
               const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
-              notifyUtil(this.settings, `Failed to save merged file: ${msg}`, true);
+              notifyUtil(this.settings, `Prefetch setup failed: ${msg}`, true);
+              // Fallback to legacy buffered playback
+              await this.playBufferedPrefetch(chunks, part - 1, base, lang, folder, file, provider, undefined, true);
+              return;
             }
           }
+          // No merging: simple buffered prefetch playback
+          await this.playBufferedPrefetch(chunks, part - 1, base, lang, folder, file, provider, undefined, true);
           return;
         }
 
@@ -296,7 +332,8 @@ notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
             abort,
             setSession: (s) => { this.currentSession = s; },
             appendToMerged: assembler ? (u8) => assembler.append(u8) : undefined,
-            savePerPart: assembler ? false : true,
+            // Save per-part during streaming as well, so behavior matches prefetch (links will be replaced on merge)
+            savePerPart: true,
             onCaptured: async (blob) => {
               // If merging is enabled and this is the last part, write merged file immediately.
               if (assembler && part === chunks.length) {
@@ -309,6 +346,17 @@ notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
                     await writeBinary(this.app, audioPath, ab);
                     await replaceAudioReferencesWithSingle(this.app, file, audioPath);
                     notifyUtil(this.settings, `Saved merged file: [[${audioPath}]]`);
+                    // Defer deletion of part files until entire playback finishes (match prefetch behavior)
+                    this.pendingPartsCleanup = async () => {
+                      try {
+                        const extNow = fileExtFromFormat(this.settings.outputFormat);
+                        await deleteExistingParts(this.app, folder, base, extNow);
+                        notifyUtil(this.settings, `Removed ${base}_part_* files`, true);
+                      } catch (e: unknown) {
+                        const m = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
+                        notifyUtil(this.settings, `Failed to remove part files: ${m}`, true);
+                      }
+                    };
                   }
                 } catch (e: unknown) {
                   const msg = (e && typeof e === "object" && "message" in e) ? (e as any).message : String(e);
@@ -371,6 +419,11 @@ notifyUtil(this.settings, "Streaming not available (using buffered prefetch)");
           await writeBinary(this.app, audioPath, ab);
           await replaceAudioReferencesWithSingle(this.app, file, audioPath);
           notifyUtil(this.settings, `Saved merged file: [[${audioPath}]]`);
+          // Run pending cleanup if defined (deleting per-part files)
+          if (this.pendingPartsCleanup) {
+            try { await this.pendingPartsCleanup(); } catch {}
+            this.pendingPartsCleanup = null;
+          }
         } else {
           notifyUtil(this.settings, `Skipped saving merged file (no data)`, true);
         }
@@ -594,7 +647,9 @@ notifyUtil(this.settings, `Download complete: ${part - 1} of ${totalParts} part(
     const raw = await this.app.vault.read(file);
     const content = sanitizeNoteForTts(raw);
     if (!content.trim()) { notifyUtil(this.settings, "Note is empty", true); return null; }
-    const chunks = buildChunks(content, this.settings, Platform.isIosApp);
+    // Enforce iOS chunk size 500 and streaming off behavior via playback path (not settings mutation)
+    const effectiveSettings = Platform.isIosApp ? { ...this.settings, chunkSize: 500 } : this.settings;
+    const chunks = buildChunks(content, effectiveSettings, Platform.isIosApp);
     const base = toSafeBase(file.basename);
     const folder = this.settings.audioFolder || "Audio";
     try {
