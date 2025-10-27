@@ -196,3 +196,11 @@ main.js.map
 # listenmode-backend/.wrangler/
 out.mp3
 tts-body.json
+
+# Private documentation and internal planning
+docs/
+MARKETING_LAUNCH_STRATEGY.md
+PUBLICATION_CHECKLIST.md
+pre-release-plan.md
+spec-then-code.md
+spec-then-code-plan.md
