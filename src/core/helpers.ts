@@ -56,6 +56,7 @@ export function missingSettings(s: TtsSettings): string[] {
 export function resolveLang(content: string, s: TtsSettings): string {
   const override = (s.languageOverride || "").trim();
   if (override) return override;
+  if (s.ttsProvider === "cartesia" && s.language === "auto" && s.cartesiaVoiceLocale) return s.cartesiaVoiceLocale;
   const auto = detectLanguage(content);
   const configured = s.language === "auto" ? auto : s.language;
   const fromVoice = deriveLangFromVoiceName(s.voiceName);

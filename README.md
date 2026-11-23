@@ -30,6 +30,10 @@ AudioVault generates speech with Cartesia Sonic 3.6 and saves audio in your vaul
 
 Cartesia charges your account according to its [pricing](https://www.cartesia.ai/pricing). AudioVault does not include shared credits or retry failed synthesis automatically. The key is stored per vault on this device outside synced plugin settings; it is not stored in a system keychain. Azure and the old AudioVault proxy are not used by this build. To force Polish, enter `pl-PL` in **Language (optional override)**.
 
+Use **Browse voices** to search the voices available to your Cartesia account by name, description, or ID. Filter by language (`pl`, `fr`) or accent (`en-GB`) and use **Load more** to browse additional results. **Recommended** prioritizes native accent matches and AudioVault's built-in picks among loaded results, not Cartesia popularity. You can also sort by name or keep Cartesia's order. Selecting a catalog voice uses its language or accent for new synthesis unless you set a language override.
+
+Voice browsing sends the search and language filter directly to Cartesia, not the note. Browsing does not synthesize audio, and saved MP3 playback does not need the catalog.
+
 ## 🔧 Installation
 
 1. Download `main.js` and `manifest.json` from the [releases page](https://github.com/piotrlo/obsidian-audio-vault/releases).

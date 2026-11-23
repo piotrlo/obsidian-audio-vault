@@ -11,6 +11,8 @@ export interface TtsSettings {
   /** Selected TTS provider identifier. */
   ttsProvider?: "azure" | "cartesia";
   cartesiaVoiceId?: string;
+  cartesiaVoiceLabel?: string;
+  cartesiaVoiceLocale?: string;
   /** Use backend proxy (Cloudflare Workers) instead of direct provider calls. */
   useBackend?: boolean;
   /** Backend base URL when useBackend is enabled. */

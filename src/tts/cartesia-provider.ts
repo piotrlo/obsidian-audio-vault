@@ -8,6 +8,7 @@ export const CARTESIA_VOICES: readonly Voice[] = [
 
 export const CARTESIA_KEY_STORAGE = "audiovault-cartesia-api-key";
 export const CARTESIA_MP3 = "audio-24khz-64kbitrate-mono-mp3";
+export const CARTESIA_API_VERSION = "2026-08-14";
 
 export class CartesiaTtsProvider implements TtsProvider {
   readonly inputType = "text";
@@ -27,7 +28,7 @@ export class CartesiaTtsProvider implements TtsProvider {
       redirect: "error",
       headers: {
         Authorization: `Bearer ${key}`,
-        "Cartesia-Version": "2026-08-14",
+        "Cartesia-Version": CARTESIA_API_VERSION,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

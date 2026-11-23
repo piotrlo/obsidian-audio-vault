@@ -1,5 +1,6 @@
 import type { TtsSettings } from "../types";
 import { CARTESIA_MP3, CARTESIA_VOICES } from "../tts/cartesia-provider";
+import { normalizeVoiceLocale, validVoiceId } from "../tts/cartesia-catalog";
 
 export const DEFAULT_SETTINGS: TtsSettings = {
   ttsProvider: "cartesia",
@@ -34,8 +35,9 @@ export function loadTtsSettings(saved: Partial<TtsSettings> | null): TtsSettings
     ...DEFAULT_SETTINGS,
     ...saved,
     ttsProvider: "cartesia",
-    cartesiaVoiceId: CARTESIA_VOICES.find((voice) => voice.shortName === saved?.cartesiaVoiceId)?.shortName
-      ?? CARTESIA_VOICES[0].shortName,
+    cartesiaVoiceId: validVoiceId(saved?.cartesiaVoiceId) ? saved.cartesiaVoiceId : CARTESIA_VOICES[0].shortName,
+    cartesiaVoiceLabel: typeof saved?.cartesiaVoiceLabel === "string" ? saved.cartesiaVoiceLabel.slice(0, 256) : undefined,
+    cartesiaVoiceLocale: typeof saved?.cartesiaVoiceLocale === "string" ? normalizeVoiceLocale(saved.cartesiaVoiceLocale) : undefined,
     useBackend: false,
     backendUrl: undefined,
     azureApiKey: "",
@@ -45,4 +47,3 @@ export function loadTtsSettings(saved: Partial<TtsSettings> | null): TtsSettings
     outputFormat: CARTESIA_MP3,
   };
 }
-
