@@ -99,6 +99,25 @@ beforeEach(() => {
   // Mock the platform module before each test
   mock.module("../../src/core/platform", () => mockPlatform);
 });
+
+test("paid synthesis stops the queue on failure without retrying the part", async () => {
+  const { prefetchAllParts } = await import("../../src/playback/prefetch");
+  const { app, files } = makeApp({ "test-note.md": "Synthetic note." });
+  const provider = Object.assign(new TestTtsProvider(), { noSynthesisRetry: true, shouldFail: true });
+  const { tasks, allDone } = await prefetchAllParts({
+    app, provider, settings: createTestSettings(), chunks: ["First", "Second"],
+    base: "test-note", folder: "Audio", file: { path: "test-note.md" } as any,
+    lang: "en-US", concurrency: 1,
+  });
+
+  await allDone;
+  const results = await Promise.all(tasks);
+  expect(provider.calls).toBe(1);
+  expect(results[0].error).toContain("TTS synthesis failed");
+  expect(results[1].error).toBe("Synthesis stopped.");
+  expect(files.has("Audio/test-note_part_1.mp3")).toBe(false);
+});
+
 // Use dynamic import to avoid mocking issues
 test("prefetch downloads all parts with concurrency", async () => {
   const { prefetchAllParts } = await import("../../src/playback/prefetch");
@@ -297,5 +316,4 @@ test("prefetch tracks progress correctly", async () => {
   const savedEvents = progressEvents.filter(e => e.state === 'saved');
   expect(savedEvents.length).toBe(2);
 });
-
 

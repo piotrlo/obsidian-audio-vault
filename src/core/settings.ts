@@ -1,15 +1,16 @@
 import type { TtsSettings } from "../types";
+import { CARTESIA_MP3, CARTESIA_VOICES } from "../tts/cartesia-provider";
 
 export const DEFAULT_SETTINGS: TtsSettings = {
-  ttsProvider: "azure",
-  useBackend: true,
-  backendUrl: "https://audio-vault.app",
+  ttsProvider: "cartesia",
+  cartesiaVoiceId: CARTESIA_VOICES[0].shortName,
+  useBackend: false,
   licenseKey: "",
   clientId: "",
   azureApiKey: "",
   azureRegion: "westeurope",
-  voiceName: "en-US-Ava3:DragonHDLatestNeural",
-  outputFormat: "audio-24khz-48kbitrate-mono-mp3",
+  voiceName: "",
+  outputFormat: CARTESIA_MP3,
   rate: "+10%",
   enableStreaming: true,
   audioFolder: "Audio",
@@ -28,4 +29,20 @@ export const DEFAULT_SETTINGS: TtsSettings = {
   licenseUsagePeriod: undefined
 };
 
+export function loadTtsSettings(saved: Partial<TtsSettings> | null): TtsSettings {
+  return {
+    ...DEFAULT_SETTINGS,
+    ...saved,
+    ttsProvider: "cartesia",
+    cartesiaVoiceId: CARTESIA_VOICES.find((voice) => voice.shortName === saved?.cartesiaVoiceId)?.shortName
+      ?? CARTESIA_VOICES[0].shortName,
+    useBackend: false,
+    backendUrl: undefined,
+    azureApiKey: "",
+    licenseKey: "",
+    licenseValidatedKey: undefined,
+    voiceName: "",
+    outputFormat: CARTESIA_MP3,
+  };
+}
 

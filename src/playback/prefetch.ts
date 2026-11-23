@@ -5,7 +5,7 @@
 
 import type { App, TFile } from "obsidian";
 import type { PrefetchResult, TtsProvider, TtsSettings, AudioManifest, Result, AudioVaultError } from "../types";
-import { buildSsml } from "../utils/ssml";
+import { synthesisInput } from "../tts/input";
 import { captureToBlob } from "../core/audio";
 import { fileExtFromFormat } from "../core/helpers";
 import { 
@@ -240,17 +240,11 @@ export async function prefetchAllParts(params: PrefetchOptions): Promise<Prefetc
       try {
         debug(`Starting download of part ${partNum}`);
         
-        // Build SSML for this chunk
-        const ssml = buildSsml({ 
-          text: chunks[idx], 
-          voiceName: settings.voiceName, 
-          rate: settings.rate, 
-          lang 
-        });
+        const input = synthesisInput(provider, chunks[idx], settings, lang);
         
         // Synthesize using provider with retry logic
         const synthesizeResult = await synthesizeWithRetry(
-          provider, ssml, settings.outputFormat, lang, controller.signal
+          provider, input, settings.outputFormat, lang, controller.signal
         );
         
         if (!synthesizeResult.ok) {
@@ -321,7 +315,9 @@ export async function prefetchAllParts(params: PrefetchOptions): Promise<Prefetc
           idx,
           buffer: new ArrayBuffer(0),
           mime: /wav|riff/i.test(settings.outputFormat) ? "audio/wav" : "audio/mpeg",
+          error: errorMessage,
         });
+        if (provider.noSynthesisRetry) controller.abort();
       }
     }
   };
@@ -338,6 +334,10 @@ export async function prefetchAllParts(params: PrefetchOptions): Promise<Prefetc
   
   const workers = Array.from({ length: actualConcurrency }, () => worker());
   const allDone = Promise.allSettled(workers).then(() => {
+    for (const partNum of workQueue) {
+      const idx = partNum - 1;
+      resolvers[idx]({ idx, buffer: new ArrayBuffer(0), mime: "audio/mpeg", error: "Synthesis stopped." });
+    }
     debug(`Prefetch orchestrator completed. Final state: ${manifest.fetchedParts.length}/${totalParts} parts`);
   });
   
@@ -355,7 +355,7 @@ export async function prefetchAllParts(params: PrefetchOptions): Promise<Prefetc
  */
 async function synthesizeWithRetry(
   provider: TtsProvider,
-  ssml: string,
+  input: string,
   outputFormat: string,
   lang: string,
   abortSignal: AbortSignal,
@@ -370,7 +370,7 @@ async function synthesizeWithRetry(
     const timeout = setTimeout(() => { try { controller.abort(); } catch {} }, timeoutMs);
 
     try {
-      const stream = await provider.synthesize(ssml, outputFormat, lang, controller.signal);
+      const stream = await provider.synthesize(input, outputFormat, lang, controller.signal);
       const blob = await captureToBlob(stream, undefined, outputFormat);
       const buffer = await blob.arrayBuffer();
       const mime = blob.type || (/wav|riff/i.test(outputFormat) ? "audio/wav" : "audio/mpeg");
@@ -432,5 +432,4 @@ export async function prefetchAllPartsLegacy(params: {
     allDone: result.allDone,
   };
 }
-
 

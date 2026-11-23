@@ -9,7 +9,8 @@ export type SupportedLang = 'auto' | 'pl-PL' | 'en-US';
 
 export interface TtsSettings {
   /** Selected TTS provider identifier. */
-  ttsProvider?: "azure";
+  ttsProvider?: "azure" | "cartesia";
+  cartesiaVoiceId?: string;
   /** Use backend proxy (Cloudflare Workers) instead of direct provider calls. */
   useBackend?: boolean;
   /** Backend base URL when useBackend is enabled. */
@@ -84,10 +85,14 @@ export interface Voice {
  * TTS provider abstraction (Stage 2).
  */
 export interface TtsProvider {
+  /** Plain text providers do not receive SSML. */
+  readonly inputType?: "text";
+  /** Do not repeat a synthesis request after an uncertain outcome. */
+  readonly noSynthesisRetry?: boolean;
   /**
    * Start synthesis as a byte stream for given SSML and format.
    */
-  synthesize(ssml: string, outputFormat: string, lang: string, abortSignal: AbortSignal): Promise<ReadableStream<Uint8Array>>;
+  synthesize(input: string, outputFormat: string, lang: string, abortSignal: AbortSignal): Promise<ReadableStream<Uint8Array>>;
   /**
    * List available voices for a region.
    */
@@ -98,6 +103,7 @@ export interface TtsProvider {
  * Result of a single prefetch task.
  */
 export interface PrefetchResult {
+  error?: string;
   /** Zero-based part index. */
   idx: number;
   /** Raw audio bytes for the part. */
@@ -209,4 +215,3 @@ export const AudioVaultError = {
     cause: options?.cause,
   }),
 };
-

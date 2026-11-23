@@ -6,7 +6,7 @@
 import type { App, TFile } from "obsidian";
 import type { PlaybackSession, TtsProvider, TtsSettings, PrefetchResult } from "../types";
 import { AudioSessionManager, type AudioSessionEventListener } from "./session";
-import { buildSsml } from "../utils/ssml";
+import { synthesisInput } from "../tts/input";
 import { fileExtFromFormat, playbackRateFromRateSetting } from "../core/helpers";
 import { captureToBlob, waitForEndOrAbort } from "../core/audio";
 import { cleanupSessionResources as cleanupSessionResourcesHelper } from "./session";
@@ -139,13 +139,14 @@ const config: Required<EnhancedBufferedConfig> = {
     
     sessionManager = new AudioSessionManager(sessionConfig, sessionListeners);
     
-    const prefetchWindow = 3;
+    const prefetchWindow = provider.noSynthesisRetry ? 1 : 3;
     const ext = fileExtFromFormat(settings.outputFormat);
     
     const makeTask = (idx: number) => {
 if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
         return prefetchTasks[idx]
           .then(async (r) => {
+            if (provider.noSynthesisRetry && r.error) throw new Error(r.error);
             // Some prefetch tasks resolve empty when parts already exist on disk via manifest.
             if (!r.buffer || r.buffer.byteLength === 0) {
               const partPath = `${folder}/${base}_part_${idx + 1}.${ext}`;
@@ -155,11 +156,12 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
                 const mime = /(wav|riff)/i.test(settings.outputFormat) ? "audio/wav" : "audio/mpeg";
                 debug(`Loaded part ${idx + 1} from disk due to empty prefetch buffer`);
                 return { buffer: ab, mime, idx };
-              } catch {
+              } catch (error) {
+                if (provider.noSynthesisRetry) throw error;
                 // If not found on disk, fall back to synthesizing now
                 debug(`Prefetch buffer empty and file missing; fallback synthesis for part ${idx + 1}`);
-                const ssml = buildSsml({ text: chunks[idx], voiceName: settings.voiceName, rate: settings.rate, lang });
-                const stream = await provider.synthesize(ssml, settings.outputFormat, lang, abortAll.signal);
+                const input = synthesisInput(provider, chunks[idx], settings, lang);
+                const stream = await provider.synthesize(input, settings.outputFormat, lang, abortAll.signal);
                 const blob = await captureToBlob(stream, undefined, settings.outputFormat);
                 const buffer = await blob.arrayBuffer();
                 const mime = blob.type || (/(wav|riff)/i.test(settings.outputFormat) ? "audio/wav" : "audio/mpeg");
@@ -168,10 +170,11 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
             }
             return { buffer: r.buffer, mime: r.mime, idx };
           })
-          .catch(async () => {
+          .catch(async (error) => {
+            if (provider.noSynthesisRetry) throw error;
             debug(`Fallback synthesis for part ${idx + 1}`);
-            const ssml = buildSsml({ text: chunks[idx], voiceName: settings.voiceName, rate: settings.rate, lang });
-            const stream = await provider.synthesize(ssml, settings.outputFormat, lang, abortAll.signal);
+            const input = synthesisInput(provider, chunks[idx], settings, lang);
+            const stream = await provider.synthesize(input, settings.outputFormat, lang, abortAll.signal);
             const blob = await captureToBlob(stream, undefined, settings.outputFormat);
             const buffer = await blob.arrayBuffer();
             const mime = blob.type || (/(wav|riff)/i.test(settings.outputFormat) ? "audio/wav" : "audio/mpeg");
@@ -180,8 +183,8 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
       }
       
       debug(`Direct synthesis for part ${idx + 1}`);
-      const ssml = buildSsml({ text: chunks[idx], voiceName: settings.voiceName, rate: settings.rate, lang });
-      return provider.synthesize(ssml, settings.outputFormat, lang, abortAll.signal)
+      const input = synthesisInput(provider, chunks[idx], settings, lang);
+      return provider.synthesize(input, settings.outputFormat, lang, abortAll.signal)
         .then(async (stream) => {
           const blob = await captureToBlob(stream, undefined, settings.outputFormat);
           const buffer = await blob.arrayBuffer();
@@ -214,7 +217,7 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
         let audioPath: string | null = null;
         let audioData: ArrayBuffer | null = null;
         
-        if (config.preferPartialMp3) {
+        if (config.preferPartialMp3 && !provider.noSynthesisRetry) {
           const partialPath = `${folder}/${base}.partial.${ext}`;
           try {
             const partialExists = await app.vault.adapter.exists(partialPath);
@@ -238,7 +241,7 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
               setTimeout(() => reject(new Error(`Part timeout (${timeoutMs}ms)`)), timeoutMs);
             })
           ]).catch(async (error) => {
-            if (partIdx > startIndex) {
+            if (partIdx > startIndex && !provider.noSynthesisRetry) {
               // Not the first part, try to continue
               warn(`Part ${partIdx + 1} failed or timed out:`, error);
               return null;
@@ -393,7 +396,7 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
         logError(`Error processing part ${partIdx + 1}:`, error);
         
         // Try to continue with next part unless it's the first
-        if (partIdx === startIndex) {
+        if (partIdx === startIndex || provider.noSynthesisRetry) {
           throw error; // Can't continue if first part fails
         }
         
@@ -458,4 +461,3 @@ export async function playBufferedPrefetch(params: {
     },
   });
 }
-

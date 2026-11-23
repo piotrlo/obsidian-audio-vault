@@ -9,35 +9,32 @@
 
 1. **Open** any note in your vault
 2. **Click** the play button in the ribbon
-3. **Listen** to your content instantly
+3. **Listen** when the first part is ready
 
-AudioVault converts your text to natural-sounding speech using Azure AI Speech technology, making your notes accessible anywhere - while driving, exercising, or multitasking.
+AudioVault generates speech with Cartesia Sonic 3.6 and saves audio in your vault for later playback.
 
 ## 🚀 Features
 
-- **Instant TTS**: High-quality neural voices (OpenAI/Azure level)
-- **Fast start**: Playback starts after the first part; background prefetch downloads the rest
-- **Offline playback**: Parts are saved during playback and merged to a single MP3 as soon as all are fetched
+- **Text to speech**: Cartesia Sonic 3.6 with an English default voice and optional Polish voices
+- **Fast start**: Playback starts after the first part; the next part is prepared in the background
+- **Offline playback**: A single MP3 is saved when the generation completes; older recordings stay available as files
 - **Multi-language**: English, Polish and more with automatic detection
-- **Mobile optimized**: Works seamlessly on iOS and Android
-- **No cloud storage**: Your content stays in your vault
+- **Mobile playback**: Sync the generated MP3 alongside its note before going offline
+- **Local audio files**: Generated audio is saved in your vault
 
-## 💰 Pricing
+## Cartesia setup and costs
 
-AudioVault offers flexible plans to fit your needs:
+1. Create your own API key in [Cartesia](https://play.cartesia.ai/). Keep **overages disabled** in your Cartesia subscription if you want generation to stop when credits run out.
+2. Open **Settings → AudioVault** and paste the key. Jacqueline is the default voice; Marcin and Agnieszka are available for Polish.
+3. Open a note and click the headphones icon. Use **Download audio (no playback)** to prepare audio in advance.
 
-- **Free**: 10,000 characters/month (~2 articles, ~13 min) 
-- **Basic**: 100,000 characters/month (~20 articles, ~2h 13 min) - $8.99/month
-- **Pro**: 300,000 characters/month (~60 articles, ~6h 40 min) - $24.99/month
-
-[**View full pricing →**](https://audio-vault.app/pricing)
+Cartesia charges your account according to its [pricing](https://www.cartesia.ai/pricing). AudioVault does not include shared credits or retry failed synthesis automatically. The key is stored per vault on this device outside synced plugin settings; it is not stored in a system keychain. Azure and the old AudioVault proxy are not used by this build. To force Polish, enter `pl-PL` in **Language (optional override)**.
 
 ## 🔧 Installation
 
-1. Open Obsidian Settings → Community plugins -> [AudioVault](obsidian://show-plugin?id=audiovault)
-2. Turn off Safe mode
-3. Click "Browse" and search for "AudioVault"
-4. Click "Install" then "Enable"
+1. Download `main.js` and `manifest.json` from the [releases page](https://github.com/piotrlo/obsidian-audio-vault/releases).
+2. Copy both files into `.obsidian/plugins/obsidian-audiovault` in your vault.
+3. Restart Obsidian. In **Settings → Community plugins**, enable AudioVault.
 
 ## 📱 Usage
 
@@ -50,13 +47,11 @@ AudioVault offers flexible plans to fit your needs:
 ### Controls
 - **Ribbon**: Always visible play/pause button
 - **Commands**: Play, Stop, Restart, Download
-- **Settings**: Voice, speed, language, streaming options
+- **Settings**: Voice, playback speed, language and audio folder
 
 ## 🔒 Privacy & Network
 
-**Network usage**: AudioVault connects to Azure AI Speech for text-to-speech conversion. Your note content is processed in real-time and never stored on external servers.
-
-**Data handling**: Only the text you select is sent for TTS processing. No personal data, notes, or vault structure is transmitted or stored externally.
+**Network usage**: When you generate audio, AudioVault sends the readable text of the active note to Cartesia. See Cartesia's [privacy policy](https://www.cartesia.ai/privacy) before generating audio from sensitive notes.
 
 **Offline mode**: Generated audio files are stored locally in your vault's `Audio/` folder and can be played without internet connection.
 
@@ -71,9 +66,9 @@ AudioVault offers flexible plans to fit your needs:
 ## 🛠️ Technical Details
 
 - **Format**: MP3 only (high quality, small file size)
-- **Playback pipeline**: Fast start + background prefetch + early merge-save; prefers buffered pipeline when Merge MP3 is enabled
+- **Playback pipeline**: Buffered parts with one part prepared ahead. Only a completed MP3 is linked to the note.
 - **Chunking**: Intelligent text splitting for long documents
-- **Mobile**: iOS/Android optimized
+- **Compatibility**: Previously generated MP3s remain playable from the note's `Generated audio` links.
 
 ## 📄 License
 
@@ -81,15 +76,11 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 🤝 Support
 
-- **FAQ**: [audio-vault.app/pricing](https://audio-vault.app/pricing)
-- **Issues**: [GitHub Issues](https://github.com/piotrlo/audiovault-plugin/issues)
+- **Issues**: [GitHub Issues](https://github.com/piotrlo/obsidian-audio-vault/issues)
 - **Community**: [Obsidian Forum](https://forum.obsidian.md)
 
 ---
 
-## Mobile optimized (iOS)
+## Offline use on mobile
 
-- iOS mirrors desktop behavior for consistency: streaming path disabled, chunk size capped at 500.
-- Fast start after the first part; background prefetch continues downloading remaining parts.
-- As soon as all parts are fetched, the merged MP3 `<base>.mp3` is saved and note links are replaced.
-- Per-part files are deleted after playback finishes (deferred cleanup).
+Sync the note and its MP3 before going offline. No Cartesia key is required to play an existing recording. For generation on iOS, the text is split into smaller parts. Keep Obsidian open while generating; background generation is not guaranteed.

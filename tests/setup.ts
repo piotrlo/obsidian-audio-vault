@@ -24,3 +24,7 @@ if (!(globalThis as any).URL) {
 }
 
 
+import { mock } from "bun:test";
+import * as obsidian from "./__mocks__/obsidian";
+
+mock.module("obsidian", () => obsidian);
