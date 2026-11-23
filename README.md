@@ -33,8 +33,10 @@ Cartesia charges your account according to its [pricing](https://www.cartesia.ai
 ## 🔧 Installation
 
 1. Download `main.js` and `manifest.json` from the [releases page](https://github.com/piotrlo/obsidian-audio-vault/releases).
-2. Copy both files into `.obsidian/plugins/obsidian-audiovault` in your vault.
+2. Copy both files into `.obsidian/plugins/audio-vault` in your vault.
 3. Restart Obsidian. In **Settings → Community plugins**, enable AudioVault.
+
+**Upgrading from a manual install of 1.0.2 or earlier:** Disable the old AudioVault plugin before enabling the new one. Its folder was `.obsidian/plugins/obsidian-audiovault`. Your notes and MP3s stay in the vault and existing audio links still work. Review your settings, reassign any custom hotkeys, and re-enter your Cartesia key locally if prompted.
 
 ## 📱 Usage
 

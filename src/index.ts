@@ -17,10 +17,10 @@ export default class AudioVaultPlugin extends Plugin {
   async onload(): Promise<void> {
     this.settings = loadTtsSettings(await this.loadData());
     setDebugLogging(!!this.settings.debugLogs);
-    this.addCommand({ id: "audiovault-play-pause", name: "Play/Pause current note", callback: () => this.playOrStart() });
-    this.addCommand({ id: "audiovault-stop", name: "Stop", callback: () => this.stopPlayback() });
-    this.addCommand({ id: "audiovault-restart", name: "Regenerate and play current note", callback: () => void this.readCurrentNote(true) });
-    this.addCommand({ id: "audiovault-download", name: "Download audio (no playback)", callback: () => void this.downloadCurrentNote() });
+    this.addCommand({ id: "play-pause", name: "Play/Pause current note", callback: () => this.playOrStart() });
+    this.addCommand({ id: "stop", name: "Stop", callback: () => this.stopPlayback() });
+    this.addCommand({ id: "restart", name: "Regenerate and play current note", callback: () => void this.readCurrentNote(true) });
+    this.addCommand({ id: "download", name: "Download audio (no playback)", callback: () => void this.downloadCurrentNote() });
     this.addRibbonIcon("headphones", "Play/Pause current note", () => this.playOrStart());
     this.addSettingTab(new AudioVaultSettingsTab(this.app, this));
   }

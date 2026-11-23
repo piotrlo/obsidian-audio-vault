@@ -73,7 +73,7 @@ High-level architecture
 
 Notes
 - Build output is main.js (bundled from src/index.ts) and consumed by Obsidian via manifest.json ("main": "main.js").
-- The deploy script syncs manifest.json, main.js, styles.css (if present) into "$VAULT_PATH/.obsidian/plugins/obsidian-audiovault".
+- The deploy script syncs manifest.json, main.js, styles.css (if present) into "$VAULT_PATH/.obsidian/plugins/audio-vault".
 
 Conventions and tests
 - Language/stack: TypeScript (strict), Bun runtime and tooling.
@@ -105,7 +105,7 @@ Important repository files
 - package.json: Bun-based scripts (build/dev/typecheck/test/deploy), esbuild bundling with external:obsidian.
 - tsconfig.json: ESNext modules, strict, types: ["obsidian", "bun-types"], includes src and tests, excludes legacy code.
 - eslint.config.cjs: ESLint v9+ flat config with TypeScript support, unused imports detection.
-- manifest.json: Obsidian plugin manifest (id: obsidian-audiovault, main: main.js).
+- manifest.json: Obsidian plugin manifest (id: audio-vault, main: main.js).
 - spec-then-code.md and spec-then-code-plan.md: governing product/tech spec and staged implementation plan; keep them authoritative and updated upon significant changes.
 
 ## Development Philosophy
