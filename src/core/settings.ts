@@ -2,6 +2,8 @@ import type { TtsSettings } from "../types";
 import { CARTESIA_MP3, CARTESIA_VOICES } from "../tts/cartesia-provider";
 import { normalizeVoiceLocale, validVoiceId } from "../tts/cartesia-catalog";
 
+export const DEFAULT_CHUNK_SIZE = 500;
+
 export const DEFAULT_SETTINGS: TtsSettings = {
   ttsProvider: "cartesia",
   cartesiaVoiceId: CARTESIA_VOICES[0].shortName,
@@ -19,7 +21,7 @@ export const DEFAULT_SETTINGS: TtsSettings = {
   languageOverride: "",
   onlyHdVoices: true,
   debugLogs: false,
-  chunkSize: 5000,
+  chunkSize: DEFAULT_CHUNK_SIZE,
   mergeParts: true
   ,
   licensePlan: undefined,

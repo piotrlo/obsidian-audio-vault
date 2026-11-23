@@ -4,6 +4,7 @@
  * Removes:
  * - YAML frontmatter at the start of the file
  * - Code blocks (```...```, ~~~...~~~) and inline code (`...`)
+ * - Markdown heading markers (# through ######), retaining heading text
  * - HTML blocks: script, style, svg, iframe, audio, video, picture, canvas, object, embed, noscript
  * - HTML comments <!-- ... -->
  * - Images (Markdown ![alt](url), wiki ![[...]], HTML <img ...>)
@@ -45,6 +46,10 @@ export function sanitizeNoteForTts(input: string): string {
   const applyReplace = (text: string, [pattern, replacement]: readonly [RegExp, string]) => 
     text.replace(pattern, replacement);
 
+  const stripHeadingMarkers = (text: string) =>
+    text.replace(/^ {0,3}#{1,6}(?=[\t ]|$)([^\r\n]*)/gm, (_, title: string) =>
+      title.replace(/[\t ]+#+[\t ]*$/, "").trim());
+
   const removeGeneratedAudioLines = (text: string) =>
     text
       .split(/\r?\n/)
@@ -59,6 +64,7 @@ export function sanitizeNoteForTts(input: string): string {
     (s: string) => applyReplace(s, patterns.frontmatter),
     (s: string) => applyReplace(s, patterns.htmlComment),
     (s: string) => applyReplace(s, patterns.codeFences),
+    stripHeadingMarkers,
     (s: string) => applyReplace(s, patterns.inlineCode),
     (s: string) => applyReplace(s, patterns.blockHtml),
     (s: string) => applyReplace(s, patterns.htmlImg),
@@ -79,5 +85,4 @@ export function sanitizeNoteForTts(input: string): string {
 
   return transformations.reduce((acc, transform) => transform(acc), String(input || ""));
 }
-
 

@@ -73,7 +73,8 @@ Voice browsing sends the search and language filter directly to Cartesia, not th
 
 - **Format**: MP3 only (high quality, small file size)
 - **Playback pipeline**: Buffered parts with one part prepared ahead. Only a completed MP3 is linked to the note.
-- **Chunking**: Intelligent text splitting for long documents
+- **Interrupted generation**: Run the same command again without changing the note text, voice, language, or chunk size. AudioVault reuses fully downloaded parts saved under the plugin's `pending-audio` folder. AudioVault never retries automatically. A failed transfer can still consume credits; check Cartesia usage before resuming. If regenerating a note that already has a recording, use **Regenerate and play current note** again; ordinary Play still plays the existing recording.
+- **Chunking**: Splits long notes at sentence boundaries where possible. The default is 500 characters per part. Existing saved values are kept; change yours under **Advanced options → Chunk size (characters)**.
 - **Compatibility**: Previously generated MP3s remain playable from the note's `Generated audio` links.
 
 ## 📄 License

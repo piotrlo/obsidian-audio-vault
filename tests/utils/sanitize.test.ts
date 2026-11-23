@@ -43,4 +43,16 @@ test("sanitize handles wiki links by keeping filename", () => {
   expect(out).toContain("Please read Page and Note.");
 });
 
+test("sanitize keeps heading text without Markdown markers", () => {
+  const headings = Array.from({ length: 6 }, (_, i) => `${"#".repeat(i + 1)} Nagłówek ${i + 1}`);
+  const input = [...headings, "   ###\tSzczegóły ###  ", "###", "Treść notatki."].join("\r\n");
+  expect(sanitizeNoteForTts(input)).toBe([
+    ...headings.map((_, i) => `Nagłówek ${i + 1}`),
+    "Szczegóły", "Treść notatki.",
+  ].join("\n"));
+});
 
+test("sanitize preserves hashes that are not heading markers", () => {
+  const input = "#obsidian\nC# i #42\n### Język C#\n###bez odstępu\nTekst ### w środku.";
+  expect(sanitizeNoteForTts(input)).toBe("#obsidian\nC# i #42\nJęzyk C#\n###bez odstępu\nTekst ### w środku.");
+});

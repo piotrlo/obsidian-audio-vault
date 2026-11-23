@@ -6,6 +6,7 @@ import { splitTextSmart } from "../utils/chunk";
 import { detectLanguage } from "../utils/lang";
 import { deriveLangFromVoiceName } from "../utils/ssml";
 import type { TtsSettings } from "../types";
+import { DEFAULT_CHUNK_SIZE } from "./settings";
 
 /**
  * Map Azure output format string to a persisted file extension.
@@ -72,7 +73,7 @@ export function resolveLang(content: string, s: TtsSettings): string {
  * @returns {string[]} Sentence-aware chunks.
  */
 export function buildChunks(content: string, s: TtsSettings, isIos: boolean): string[] {
-  const maxChars = isIos ? 500 : Math.max(500, Math.min(9000, Number(s.chunkSize) || 5000));
+  const maxChars = isIos ? 500 : Math.max(500, Math.min(9000, Number(s.chunkSize) || DEFAULT_CHUNK_SIZE));
   return splitTextSmart(content, maxChars);
 }
 

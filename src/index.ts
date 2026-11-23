@@ -3,12 +3,16 @@ import { buildChunks, playbackRateFromRateSetting, resolveLang } from "./core/he
 import { notify } from "./core/notify";
 import { loadTtsSettings } from "./core/settings";
 import { AudioVaultSettingsTab } from "./obsidian/settings";
-import { CARTESIA_KEY_STORAGE, CARTESIA_MP3, CARTESIA_VOICES, CartesiaTtsProvider } from "./tts/cartesia-provider";
+import { CARTESIA_API_VERSION, CARTESIA_KEY_STORAGE, CARTESIA_MODEL, CARTESIA_MP3, CARTESIA_VOICES, CartesiaTtsProvider } from "./tts/cartesia-provider";
+import { downloadPart } from "./tts/download-part";
+import { openPendingAudio } from "./tts/pending-audio";
 import type { TtsSettings } from "./types";
 import { setDebugLogging } from "./utils/logger";
 import { buildPartialSnapshot, Mp3Assembler } from "./utils/mp3";
 import { linkedAudioPaths, normalizeAudioFolder, publishAudio } from "./utils/note-audio";
 import { sanitizeNoteForTts } from "./utils/sanitize";
+
+type PartResult = { ok: true; data: ArrayBuffer } | { ok: false; error: unknown };
 
 export default class AudioVaultPlugin extends Plugin {
   settings!: TtsSettings;
@@ -82,6 +86,8 @@ export default class AudioVaultPlugin extends Plugin {
     this.job = job;
     const { signal } = job.abort;
     const settings = { ...this.settings };
+    let pending: Promise<PartResult> | undefined;
+    let checkpoint: Awaited<ReturnType<typeof openPendingAudio>> | undefined;
     try {
       const raw = await this.app.vault.cachedRead(file);
       if (play && !regenerate) {
@@ -111,47 +117,49 @@ export default class AudioVaultPlugin extends Plugin {
       if (existingFolder?.type === "file") throw new Error("The audio folder points to a file.");
       if (!existingFolder) await this.app.vault.createFolder(folder);
       const lang = resolveLang(text, settings);
-      const provider = new CartesiaTtsProvider(key, settings.cartesiaVoiceId ?? CARTESIA_VOICES[0].shortName);
+      const voice = settings.cartesiaVoiceId ?? CARTESIA_VOICES[0].shortName;
+      const provider = new CartesiaTtsProvider(key, voice);
       const assembler = new Mp3Assembler();
-
-      const generate = async (chunk: string): Promise<ArrayBuffer> => {
-        signal.throwIfAborted();
-        const part = new AbortController();
-        const cancel = () => part.abort(signal.reason);
-        signal.addEventListener("abort", cancel, { once: true });
-        const timeout = setTimeout(() => part.abort(new Error("Cartesia timed out. AudioVault did not retry.")), 30_000);
-        try {
-          const stream = await provider.synthesize(chunk, CARTESIA_MP3, lang, part.signal);
-          const bytes = await new Response(stream).arrayBuffer();
-          if (!bytes.byteLength) throw new Error("Cartesia returned empty audio.");
-          return bytes;
-        } finally {
-          clearTimeout(timeout);
-          signal.removeEventListener("abort", cancel);
-        }
-      };
+      const cache = checkpoint = await openPendingAudio(this.app.vault.adapter,
+        `${this.app.vault.configDir}/plugins/${this.manifest.id}/pending-audio`,
+        [file.path, CARTESIA_API_VERSION, CARTESIA_MODEL, CARTESIA_MP3, voice, lang, chunks],
+      );
 
       notify(this.settings, `Generating audio (${chunks.length} ${chunks.length === 1 ? "part" : "parts"})…`, true);
-      const start = (chunk: string) => generate(chunk).then(
-        (bytes) => ({ ok: true as const, bytes }),
-        (error: unknown) => ({ ok: false as const, error }),
+      const start = (index: number): Promise<PartResult> => cache.getOrGenerate(index, () =>
+        downloadPart((partSignal) => provider.synthesize(chunks[index], CARTESIA_MP3, lang, partSignal), signal),
+      signal).then(
+        (data) => ({ ok: true, data }),
+        (error: unknown) => ({ ok: false, error }),
       );
-      let next = start(chunks[0]);
+      let current = pending = start(0);
       for (let index = 0; index < chunks.length; index++) {
-        const result = await next;
-        if (!result.ok) throw result.error;
-        const { bytes } = result;
+        const result = await current;
+        signal.throwIfAborted();
+        if (!result.ok) {
+          const reason = result.error instanceof Error ? result.error.message : "Could not generate audio.";
+          throw new Error(`Part ${index + 1}/${chunks.length}: ${reason}`);
+        }
+        const bytes = result.data;
         assembler.append(new Uint8Array(bytes));
-        if (index + 1 < chunks.length) next = start(chunks[index + 1]);
+        if (index + 1 < chunks.length) current = pending = start(index + 1);
         if (play) await this.playBytes(bytes, settings.rate);
       }
 
       await publishAudio(this.app, file, folder, buildPartialSnapshot(assembler), signal);
+      await cache.clear();
       notify(this.settings, "Audio saved to the vault.", true);
     } catch (error) {
-      if (!signal.aborted) notify(this.settings, error instanceof Error ? error.message : String(error), true);
+      if (!signal.aborted) {
+        const reason = error instanceof Error ? error.message : "Could not complete the audio job.";
+        const resume = checkpoint?.completed
+          ? ` ${checkpoint.completed} completed part(s) saved. Run the same command with unchanged text and voice settings to resume.`
+          : "";
+        notify(this.settings, `${reason}${resume}`, true);
+      }
     } finally {
       job.abort.abort();
+      await pending;
       this.job = null;
     }
   }

@@ -1,5 +1,5 @@
 import { Notice, PluginSettingTab, Setting, type App } from "obsidian";
-import { DEFAULT_SETTINGS } from "../core/settings";
+import { DEFAULT_CHUNK_SIZE, DEFAULT_SETTINGS } from "../core/settings";
 import { CARTESIA_VOICES } from "../tts/cartesia-provider";
 import { setDebugLogging } from "../utils/logger";
 import type AudioVaultPlugin from "../index";
@@ -91,8 +91,8 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
         advanced.hidden = !this.advancedVisible;
         button.setIcon(this.advancedVisible ? "chevron-up" : "chevron-down");
       }));
-    new Setting(advanced).setName("Chunk size (characters)").setDesc("500–9000 characters; iOS uses 500.")
-      .addText((text) => text.setValue(String(settings.chunkSize ?? 5000)).onChange(async (value) => {
+    new Setting(advanced).setName("Chunk size (characters)").setDesc(`500–9000 characters (default: ${DEFAULT_CHUNK_SIZE}); iOS uses 500.`)
+      .addText((text) => text.setValue(String(settings.chunkSize ?? DEFAULT_CHUNK_SIZE)).onChange(async (value) => {
         const size = Number(value);
         if (!Number.isInteger(size) || size < 500 || size > 9000) return;
         settings.chunkSize = size;
