@@ -3,6 +3,7 @@ import { buildChunks, playbackRateFromRateSetting, resolveLang } from "./core/he
 import { notify } from "./core/notify";
 import { loadTtsSettings } from "./core/settings";
 import { AudioVaultSettingsTab } from "./obsidian/settings";
+import { attachMediaSession } from "./playback/media-session";
 import { CARTESIA_API_VERSION, CARTESIA_KEY_STORAGE, CARTESIA_MODEL, CARTESIA_MP3, CARTESIA_VOICES, CartesiaTtsProvider } from "./tts/cartesia-provider";
 import { downloadPart } from "./tts/download-part";
 import { openPendingAudio } from "./tts/pending-audio";
@@ -100,7 +101,7 @@ export default class AudioVaultPlugin extends Plugin {
           }
           for (const path of links) {
             signal.throwIfAborted();
-            await this.playBytes(await this.app.vault.adapter.readBinary(path), settings.rate);
+            await this.playBytes(await this.app.vault.adapter.readBinary(path), settings.rate, file.basename);
           }
           return;
         }
@@ -143,7 +144,7 @@ export default class AudioVaultPlugin extends Plugin {
         const bytes = result.data;
         assembler.append(new Uint8Array(bytes));
         if (index + 1 < chunks.length) current = pending = start(index + 1);
-        if (play) await this.playBytes(bytes, settings.rate);
+        if (play) await this.playBytes(bytes, settings.rate, file.basename);
       }
 
       await publishAudio(this.app, file, folder, buildPartialSnapshot(assembler), signal);
@@ -164,7 +165,7 @@ export default class AudioVaultPlugin extends Plugin {
     }
   }
 
-  private async playBytes(bytes: ArrayBuffer, rate: string): Promise<void> {
+  private async playBytes(bytes: ArrayBuffer, rate: string, title: string): Promise<void> {
     const job = this.job;
     if (!job) return;
     const { signal } = job.abort;
@@ -173,6 +174,9 @@ export default class AudioVaultPlugin extends Plugin {
     const audio = new Audio(url);
     audio.playbackRate = playbackRateFromRateSetting(rate);
     job.audio = audio;
+    const detachMediaSession = attachMediaSession(audio, title, () => {
+      notify(this.settings, "Could not resume audio.", true);
+    });
     let cleanup = () => {};
     try {
       await new Promise<void>((resolve, reject) => {
@@ -190,6 +194,7 @@ export default class AudioVaultPlugin extends Plugin {
       });
     } finally {
       cleanup();
+      detachMediaSession();
       audio.pause();
       audio.removeAttribute("src");
       audio.load();
