@@ -1,11 +1,11 @@
 import type { DataAdapter } from "obsidian";
+import { sha256Hex } from "../utils/crypto";
 
 type Storage = Pick<DataAdapter, "exists" | "mkdir" | "readBinary" | "writeBinary" | "rename" | "remove">;
 
 /** Completed parts of an unpublished recording; no transcript or API key is stored. */
 export async function openPendingAudio(adapter: Storage, folder: string, identity: readonly unknown[]) {
-  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(identity)));
-  const id = Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const id = await sha256Hex(JSON.stringify(identity));
   if (!await adapter.exists(folder)) await adapter.mkdir(folder);
   const partPath = (index: number) => `${folder}/${id}-${index}.mp3`;
   const touched = new Set<string>();

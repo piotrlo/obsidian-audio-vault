@@ -1,7 +1,36 @@
-import type { App, TFile } from "obsidian";
+import type { App, DataAdapter, TFile } from "obsidian";
+import { sha256Hex } from "./crypto";
 import { toSafeBase } from "./safe-name";
+import { sanitizeNoteForTts } from "./sanitize";
 
 const generatedLink = /^Generated audio: \[\[([^\][\r\n|#]+\.mp3)\]\][ \t]*$/i;
+const publishedSuffix = /-av1-([a-f0-9]{64})-(\d+)\.mp3$/i;
+
+type RecordingStorage = Pick<DataAdapter, "stat">;
+export type OfflineAudioStatus = "none" | "ready" | "outdated" | "unavailable" | "legacy";
+
+export function noteAudioFingerprint(raw: string): Promise<string> {
+  // Unlike the resumable job identity, this must be stable across devices and note moves.
+  return sha256Hex(sanitizeNoteForTts(raw));
+}
+
+export async function hasLocalRecording(adapter: RecordingStorage, path: string, pendingFolder: string): Promise<boolean> {
+  if (/\.partial\.mp3$/i.test(path) || path.toLowerCase().startsWith(`${pendingFolder.toLowerCase()}/`)) return false;
+  const stat = await adapter.stat(path).catch(() => null);
+  const expected = publishedSuffix.exec(path)?.[2];
+  return stat?.type === "file" && stat.size > 0 && (expected === undefined || stat.size === Number(expected));
+}
+
+export async function offlineAudioStatus(raw: string, adapter: RecordingStorage, pendingFolder: string): Promise<OfflineAudioStatus> {
+  const paths = linkedAudioPaths(raw);
+  if (!paths.length) return "none";
+  for (const path of paths) {
+    if (!await hasLocalRecording(adapter, path, pendingFolder)) return "unavailable";
+  }
+  const fingerprint = paths.length === 1 ? publishedSuffix.exec(paths[0])?.[1] : undefined;
+  if (!fingerprint) return "legacy";
+  return fingerprint.toLowerCase() === await noteAudioFingerprint(raw) ? "ready" : "outdated";
+}
 
 function noteLines(note: string) {
   let fence: string | undefined;
@@ -53,9 +82,9 @@ export function normalizeAudioFolder(value: string): string {
   return folder;
 }
 
-export async function publishAudio(app: App, file: TFile, folder: string, data: ArrayBuffer, signal: AbortSignal): Promise<string> {
+export async function publishAudio(app: App, file: TFile, folder: string, data: ArrayBuffer, signal: AbortSignal, fingerprint: string): Promise<string> {
   if (!data.byteLength) throw new Error("No audio to save.");
-  const path = `${normalizeAudioFolder(folder)}/${await audioFileStem(file.path)}-${crypto.randomUUID()}.mp3`;
+  const path = `${normalizeAudioFolder(folder)}/${await audioFileStem(file.path)}-${crypto.randomUUID()}-av1-${fingerprint}-${data.byteLength}.mp3`;
   signal.throwIfAborted();
   const output = await app.vault.createBinary(path, data);
   try {

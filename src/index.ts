@@ -1,4 +1,4 @@
-import { Platform, Plugin } from "obsidian";
+import { Platform, Plugin, setTooltip } from "obsidian";
 import { buildChunks, playbackRateFromRateSetting, resolveLang } from "./core/helpers";
 import { notify } from "./core/notify";
 import { loadTtsSettings } from "./core/settings";
@@ -10,14 +10,32 @@ import { openPendingAudio } from "./tts/pending-audio";
 import type { TtsSettings } from "./types";
 import { setDebugLogging } from "./utils/logger";
 import { buildPartialSnapshot, Mp3Assembler } from "./utils/mp3";
-import { linkedAudioPaths, normalizeAudioFolder, publishAudio } from "./utils/note-audio";
+import { hasLocalRecording, linkedAudioPaths, normalizeAudioFolder, noteAudioFingerprint, offlineAudioStatus, publishAudio } from "./utils/note-audio";
+import type { OfflineAudioStatus } from "./utils/note-audio";
 import { sanitizeNoteForTts } from "./utils/sanitize";
 
 type PartResult = { ok: true; data: ArrayBuffer } | { ok: false; error: unknown };
+type AudioJob = {
+  path: string;
+  abort: AbortController;
+  audio?: HTMLAudioElement;
+  progress?: { completed: number; total: number };
+};
+const ribbonTitle = "Play/Pause current note";
+const offlineLabels: Record<OfflineAudioStatus, string> = {
+  none: "",
+  ready: "Ready offline",
+  outdated: "Outdated audio (still playable offline)",
+  unavailable: "Audio unavailable locally (check sync)",
+  legacy: "Saved audio (note version unknown)",
+};
 
 export default class AudioVaultPlugin extends Plugin {
   settings!: TtsSettings;
-  private job: { path: string; abort: AbortController; audio?: HTMLAudioElement } | null = null;
+  private job: AudioJob | null = null;
+  private ribbon?: HTMLElement;
+  private statusTimer?: ReturnType<typeof setTimeout>;
+  private statusRevision = 0;
 
   async onload(): Promise<void> {
     this.settings = loadTtsSettings(await this.loadData());
@@ -26,12 +44,70 @@ export default class AudioVaultPlugin extends Plugin {
     this.addCommand({ id: "stop", name: "Stop", callback: () => this.stopPlayback() });
     this.addCommand({ id: "restart", name: "Regenerate and play current note", callback: () => void this.readCurrentNote(true) });
     this.addCommand({ id: "download", name: "Download audio (no playback)", callback: () => void this.downloadCurrentNote() });
-    this.addRibbonIcon("headphones", "Play/Pause current note", () => this.playOrStart());
+    this.ribbon = this.addRibbonIcon("headphones", ribbonTitle, () => this.playOrStart());
+    const { vault, workspace } = this.app;
+    this.registerEvent(workspace.on("file-open", () => {
+      this.setRibbonStatus("");
+      this.refreshAudioStatus();
+    }));
+    this.registerEvent(workspace.on("editor-change", () => this.refreshAudioStatus()));
+    const onFileUpdate = ({ path }: { path: string }) => {
+      if (path === workspace.getActiveFile()?.path || /\.mp3$/i.test(path)) this.refreshAudioStatus();
+    };
+    this.registerEvent(vault.on("create", onFileUpdate));
+    this.registerEvent(vault.on("modify", onFileUpdate));
+    this.registerEvent(vault.on("delete", () => this.refreshAudioStatus()));
+    this.registerEvent(vault.on("rename", () => this.refreshAudioStatus()));
+    this.refreshAudioStatus();
     this.addSettingTab(new AudioVaultSettingsTab(this.app, this));
   }
 
   onunload(): void {
+    this.ribbon = undefined;
+    this.statusRevision++;
+    clearTimeout(this.statusTimer);
     this.stopPlayback();
+  }
+
+  private pendingAudioFolder(): string {
+    return `${this.app.vault.configDir}/plugins/${this.manifest.id}/pending-audio`;
+  }
+
+  private setRibbonStatus(status: string): void {
+    if (!this.ribbon) return;
+    const label = status ? `${ribbonTitle} — ${status}` : ribbonTitle;
+    this.ribbon.setAttribute("aria-label", label);
+    setTooltip(this.ribbon, label);
+  }
+
+  private refreshAudioStatus(): void {
+    if (!this.ribbon) return;
+    const revision = ++this.statusRevision;
+    clearTimeout(this.statusTimer);
+    const { vault, workspace } = this.app;
+    const file = workspace.getActiveFile();
+    if (!file || file.extension !== "md") {
+      this.setRibbonStatus("");
+      return;
+    }
+    const progress = this.job?.path === file.path && !this.job.abort.signal.aborted ? this.job.progress : undefined;
+    if (progress) {
+      const { completed, total } = progress;
+      this.setRibbonStatus(completed < total
+        ? `Generating audio (${completed}/${total} parts)`
+        : "All audio parts generated (MP3 not saved yet)");
+      return;
+    }
+    this.statusTimer = setTimeout(async () => {
+      const editor = workspace.activeEditor;
+      const status = await (async () => {
+        const raw = (editor?.file === file ? editor.editor?.getValue() : undefined) ?? await vault.cachedRead(file);
+        return offlineAudioStatus(raw, vault.adapter, this.pendingAudioFolder());
+      })().catch((): OfflineAudioStatus => "unavailable");
+      if (revision === this.statusRevision && file === workspace.getActiveFile()) {
+        this.setRibbonStatus(offlineLabels[status]);
+      }
+    }, 200);
   }
 
   getCartesiaKey(): string {
@@ -49,6 +125,7 @@ export default class AudioVaultPlugin extends Plugin {
 
   stopPlayback(): void {
     this.job?.abort.abort();
+    this.refreshAudioStatus();
   }
 
   playOrStart(): void {
@@ -83,7 +160,7 @@ export default class AudioVaultPlugin extends Plugin {
       return;
     }
 
-    const job = { path: file.path, abort: new AbortController() };
+    const job: AudioJob = { path: file.path, abort: new AbortController() };
     this.job = job;
     const { signal } = job.abort;
     const settings = { ...this.settings };
@@ -91,12 +168,13 @@ export default class AudioVaultPlugin extends Plugin {
     let checkpoint: Awaited<ReturnType<typeof openPendingAudio>> | undefined;
     try {
       const raw = await this.app.vault.cachedRead(file);
+      const pendingFolder = this.pendingAudioFolder();
       if (play && !regenerate) {
         const links = linkedAudioPaths(raw);
         if (links.length) {
           for (const path of links) {
-            if (!await this.app.vault.adapter.exists(path)) {
-              throw new Error("A linked MP3 is missing. Sync the audio file or use “Regenerate and play current note”.");
+            if (!await hasLocalRecording(this.app.vault.adapter, path, pendingFolder)) {
+              throw new Error("A linked MP3 is missing or incomplete. Sync the audio file or use “Regenerate and play current note”.");
             }
           }
           for (const path of links) {
@@ -121,8 +199,10 @@ export default class AudioVaultPlugin extends Plugin {
       const voice = settings.cartesiaVoiceId ?? CARTESIA_VOICES[0].shortName;
       const provider = new CartesiaTtsProvider(key, voice);
       const assembler = new Mp3Assembler();
+      const progress = job.progress = { completed: 0, total: chunks.length };
+      this.refreshAudioStatus();
       const cache = checkpoint = await openPendingAudio(this.app.vault.adapter,
-        `${this.app.vault.configDir}/plugins/${this.manifest.id}/pending-audio`,
+        pendingFolder,
         [file.path, CARTESIA_API_VERSION, CARTESIA_MODEL, CARTESIA_MP3, voice, lang, chunks],
       );
 
@@ -130,7 +210,11 @@ export default class AudioVaultPlugin extends Plugin {
       const start = (index: number): Promise<PartResult> => cache.getOrGenerate(index, () =>
         downloadPart((partSignal) => provider.synthesize(chunks[index], CARTESIA_MP3, lang, partSignal), signal),
       signal).then(
-        (data) => ({ ok: true, data }),
+        (data) => {
+          progress.completed++;
+          if (!signal.aborted) this.refreshAudioStatus();
+          return { ok: true, data };
+        },
         (error: unknown) => ({ ok: false, error }),
       );
       let current = pending = start(0);
@@ -147,7 +231,9 @@ export default class AudioVaultPlugin extends Plugin {
         if (play) await this.playBytes(bytes, settings.rate, file.basename);
       }
 
-      await publishAudio(this.app, file, folder, buildPartialSnapshot(assembler), signal);
+      await publishAudio(this.app, file, folder, buildPartialSnapshot(assembler), signal, await noteAudioFingerprint(raw));
+      job.progress = undefined;
+      this.refreshAudioStatus();
       await cache.clear();
       notify(this.settings, "Audio saved to the vault.", true);
     } catch (error) {
@@ -162,6 +248,7 @@ export default class AudioVaultPlugin extends Plugin {
       job.abort.abort();
       await pending;
       this.job = null;
+      this.refreshAudioStatus();
     }
   }
 
