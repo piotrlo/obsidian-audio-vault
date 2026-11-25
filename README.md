@@ -51,7 +51,7 @@ Voice browsing sends the search and language filter directly to Cartesia, not th
  - **Auto-clean**: Content is sanitized before TTS (images/HTML/code removed), keeping only readable text.
 
 ### Controls
-- **Ribbon**: Always visible play/pause button
+- **Ribbon**: Play/pause button. Its label shows generation progress and whether the recorded MP3 is ready offline, outdated, or unavailable locally. Outdated audio still plays; use Regenerate to update it. Older recordings remain playable but do not have a note version to compare.
 - **Commands**: Play, Stop, Restart, Download
 - **Settings**: Voice, playback speed, language and audio folder
 

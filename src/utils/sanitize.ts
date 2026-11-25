@@ -70,12 +70,12 @@ export function sanitizeNoteForTts(input: string): string {
     (s: string) => applyReplace(s, patterns.htmlImg),
     (s: string) => applyReplace(s, patterns.mdImage),
     (s: string) => applyReplace(s, patterns.wikiImage),
+    removeGeneratedAudioLines,
     (s: string) => applyReplace(s, patterns.mdLink),
     convertWikiLinks,
     (s: string) => applyReplace(s, patterns.angleAutolink),
     (s: string) => applyReplace(s, patterns.bareUrl),
     (s: string) => applyReplace(s, patterns.anyHtmlTag),
-    removeGeneratedAudioLines,
     (s: string) => applyReplace(s, patterns.spaces),
     (s: string) => applyReplace(s, patterns.nbsp),
     (s: string) => applyReplace(s, patterns.aroundNewlines),
@@ -85,4 +85,3 @@ export function sanitizeNoteForTts(input: string): string {
 
   return transformations.reduce((acc, transform) => transform(acc), String(input || ""));
 }
-
