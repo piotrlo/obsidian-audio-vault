@@ -1,93 +1,86 @@
-# AudioVault 🎧
+# AudioVault
 
-**Transform your Obsidian notes into high-quality audio. Listen to your knowledge vault on the go.**
+Save a note now. Listen offline later.
 
-[![Obsidian Plugin](https://img.shields.io/badge/Obsidian-Plugin-7C3AED)](https://obsidian.md)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+AudioVault saves Obsidian notes as MP3s in your vault. Use **Download audio (no playback)** to prepare a note for later, or tap the headphones icon in the ribbon to listen now.
 
-## ✨ First audio in 1 click
+AudioVault is a free [MIT-licensed](LICENSE) plugin. Generating audio requires your own Cartesia account and API key. The plugin sends the readable text of the open note directly to Cartesia over the internet. Playing a saved MP3 needs no account or connection and uses no credits.
 
-1. **Open** any note in your vault
-2. **Click** the play button in the ribbon
-3. **Listen** when the first part is ready
+![Desktop Obsidian showing the AudioVault headphones button, a saved MP3 link in the sample Lisbon note, and the “Audio saved to the vault” notice.](./docs/assets/audiovault-desktop.png)
 
-AudioVault generates speech with Cartesia Sonic 3.6 and saves audio in your vault for later playback.
+## Getting started
 
-## 🚀 Features
+1. [Install AudioVault](#installation) and add your [Cartesia API key](https://play.cartesia.ai/keys) in Settings → AudioVault.
+2. Open a note and run **Download audio (no playback)** from the command palette. Wait for AudioVault to save and link the MP3.
+3. To listen later, open the note and tap the headphones icon. If you're switching devices, sync the note and the MP3 first.
 
-- **Text to speech**: Cartesia Sonic 3.6 with an English default voice and optional Polish voices
-- **Fast start**: Playback starts after the first part; the next part is prepared in the background
-- **Offline playback**: A single MP3 is saved when the generation completes; older recordings stay available as files
-- **Multi-language**: English, Polish and more with automatic detection
-- **Mobile playback**: Sync the generated MP3 alongside its note before going offline
-- **Local audio files**: Generated audio is saved in your vault
+## Commands
 
-## Cartesia setup and costs
+| Command (palette) | What it does |
+| --- | --- |
+| **Play/Pause current note** | Plays the saved MP3 if available or starts generation and playback; run again to pause or resume |
+| **Download audio (no playback)** | Saves an MP3 without starting playback |
+| **Regenerate and play current note** | Generates new audio and plays it |
+| **Stop** | Cancels generation and playback |
 
-1. Create your own API key in [Cartesia](https://play.cartesia.ai/). Keep **overages disabled** in your Cartesia subscription if you want generation to stop when credits run out.
-2. Open **Settings → AudioVault** and paste the key. Jacqueline is the default voice; Marcin and Agnieszka are available for Polish.
-3. Open a note and click the headphones icon. Use **Download audio (no playback)** to prepare audio in advance.
+The headphones button shows generation progress (for example, `3/8 parts`) and whether the MP3 is ready, outdated, or missing.
 
-Cartesia charges your account according to its [pricing](https://www.cartesia.ai/pricing). AudioVault does not include shared credits or retry failed synthesis automatically. The key is stored per vault on this device outside synced plugin settings; it is not stored in a system keychain. Azure and the old AudioVault proxy are not used by this build. To force Polish, enter `pl-PL` in **Language (optional override)**.
+## Cartesia pricing
 
-Use **Browse voices** to search the voices available to your Cartesia account by name, description, or ID. Filter by language (`pl`, `fr`) or accent (`en-GB`) and use **Load more** to browse additional results. **Recommended** prioritizes native accent matches and AudioVault's built-in picks among loaded results, not Cartesia popularity. You can also sort by name or keep Cartesia's order. Selecting a catalog voice uses its language or accent for new synthesis unless you set a language override.
+New audio uses credits from your Cartesia account. If you choose a paid plan, Cartesia bills you directly.
 
-Voice browsing sends the search and language filter directly to Cartesia, not the note. Browsing does not synthesize audio, and saved MP3 playback does not need the catalog.
+- Free: 20,000 credits per month at $0/month.
+- Pro: 100,000 credits per month at $5/month.
 
-## 🔧 Installation
+See [Cartesia pricing](https://cartesia.ai/pricing) for current plans and terms.
 
-1. Download `main.js` and `manifest.json` from the [releases page](https://github.com/piotrlo/obsidian-audio-vault/releases).
-2. Copy both files into `.obsidian/plugins/audio-vault` in your vault.
-3. Restart Obsidian. In **Settings → Community plugins**, enable AudioVault.
+## Installation
 
-**Upgrading from a manual install of 1.0.2 or earlier:** Disable the old AudioVault plugin before enabling the new one. Its folder was `.obsidian/plugins/obsidian-audiovault`. Your notes and MP3s stay in the vault and existing audio links still work. Review your settings, reassign any custom hotkeys, and re-enter your Cartesia key locally if prompted.
+**From the community store** (once approved): Settings → Community plugins → Browse → AudioVault → Install → Enable.
 
-## 📱 Usage
+**Manual installation:**
 
-### Quick Start
-- **Play current note**: Click the play button in the ribbon
-- **Download only**: Use "Download audio (no playback)" command
-- **Voice settings**: Configure in Settings → AudioVault
- - **Auto-clean**: Content is sanitized before TTS (images/HTML/code removed), keeping only readable text.
+1. Download `main.js` and `manifest.json` from the [latest release](https://github.com/piotrlo/obsidian-audio-vault/releases/latest).
+2. Put both files in `.obsidian/plugins/audio-vault` inside your vault.
+3. Restart Obsidian, then enable AudioVault in **Settings → Community plugins**.
 
-### Controls
-- **Ribbon**: Play/pause button. Its label shows generation progress and whether the recorded MP3 is ready offline, outdated, or unavailable locally. Outdated audio still plays; use Regenerate to update it. Older recordings remain playable but do not have a note version to compare.
-- **Commands**: Play, Stop, Restart, Download
-- **Settings**: Voice, playback speed, language and audio folder
+**Via BRAT:** add `piotrlo/obsidian-audio-vault` as a beta plugin.
 
-## 🔒 Privacy & Network
+Then open **Settings → AudioVault**, create an API key at [play.cartesia.ai/keys](https://play.cartesia.ai/keys), and paste it. Jacqueline is the default English voice; Marcin and Agnieszka are available for Polish. **Browse voices** searches the voices your own Cartesia account can use and filters by language (`pl`, `fr`) or accent (`en-GB`). To force a language, enter e.g. `pl-PL` in **Language (optional override)**.
 
-**Network usage**: When you generate audio, AudioVault sends the readable text of the active note to Cartesia. See Cartesia's [privacy policy](https://www.cartesia.ai/privacy) before generating audio from sensitive notes.
+**Upgrading from a manual install of 1.0.2 or earlier:** disable the old plugin first — its folder was `.obsidian/plugins/obsidian-audiovault`. Notes, MP3s and `Generated audio` links keep working. Re-enter your Cartesia key if prompted.
 
-**Offline mode**: Generated audio files are stored locally in your vault's `Audio/` folder and can be played without internet connection.
+## Offline playback
 
-## 🎯 Perfect for
+By default, AudioVault saves MP3s in an `Audio/` folder next to the note. If you use Obsidian Sync or another sync tool, check that it includes MP3 files before you go offline. Where supported, Media Session shows the note title and adds play/pause to system media controls.
 
-- **Students**: Listen to study materials and research notes
-- **Professionals**: Review documents and reports hands-free
-- **Researchers**: Absorb large amounts of text while multitasking
-- **Accessibility**: Support for users with reading difficulties
-- **Productivity**: Maximize time during commutes and workouts
+For generation on iOS the text is split into smaller parts; keep Obsidian open while it works, because background generation is not guaranteed.
 
-## 🛠️ Technical Details
+## Playback and interrupted downloads
 
-- **Format**: MP3 only (high quality, small file size)
-- **Playback pipeline**: Buffered parts with one part prepared ahead. Only a completed MP3 is linked to the note.
-- **Interrupted generation**: Run the same command again without changing the note text, voice, language, or chunk size. AudioVault reuses fully downloaded parts saved under the plugin's `pending-audio` folder. AudioVault never retries automatically. A failed transfer can still consume credits; check Cartesia usage before resuming. If regenerating a note that already has a recording, use **Regenerate and play current note** again; ordinary Play still plays the existing recording.
-- **Chunking**: Splits long notes at sentence boundaries where possible. The default is 500 characters per part. Existing saved values are kept; change yours under **Advanced options → Chunk size (characters)**.
-- **Compatibility**: Previously generated MP3s remain playable from the note's `Generated audio` links.
+- **Fast start:** playback begins after the first part; the next part is prepared in the background.
+- **One MP3 only:** the note is linked to a file once generation completes. Until then, parts live in the plugin's `pending-audio` folder.
+- **Resume:** run the same command again without changing the note text, voice, language, or chunk size. Fully downloaded parts are reused instead of paid for twice. AudioVault never retries on its own; a failed transfer can still consume credits, so check Cartesia usage before resuming.
+- **Chunking:** sentences are split where possible, 500 characters per part by default (**Advanced options → Chunk size**).
+- **Sanitizing:** images, HTML, code blocks and front matter are stripped before synthesis; only readable text is sent.
 
-## 📄 License
+## Privacy and network use
 
-MIT License - see [LICENSE](LICENSE) file for details.
+- Generating audio requires a Cartesia account. AudioVault sends the readable text of the active note directly to Cartesia. See Cartesia's [privacy policy](https://cartesia.ai/legal/privacy) before converting sensitive notes.
+- The API key is stored per vault, per device, in local storage — outside synced plugin settings, and not in a system keychain.
+- Voice browsing sends only your search query and language filter to Cartesia, never note content.
+- AudioVault has no telemetry, ads, or proxy and does not update itself. Saved MP3s are plain files in your vault.
 
-## 🤝 Support
+## Technical details
 
-- **Issues**: [GitHub Issues](https://github.com/piotrlo/obsidian-audio-vault/issues)
-- **Community**: [Obsidian Forum](https://forum.obsidian.md)
+- **Format:** MP3 only.
+- **Pipeline:** buffered parts with one part prepared ahead; the vault file is written once the job finishes.
+- **Interrupted jobs:** partial parts stay under `pending-audio` for a later resume.
+- **Compatibility:** older generated MP3s stay playable from their `Generated audio` links, without a note version to compare against.
 
----
+## License and support
 
-## Offline use on mobile
+MIT — see [LICENSE](LICENSE).
 
-Sync the note and its MP3 before going offline. No Cartesia key is required to play an existing recording. For generation on iOS, the text is split into smaller parts. Keep Obsidian open while generating; background generation is not guaranteed.
+- **Issues:** [GitHub Issues](https://github.com/piotrlo/obsidian-audio-vault/issues)
+- **Site:** [audio-vault.app](https://audio-vault.app)
