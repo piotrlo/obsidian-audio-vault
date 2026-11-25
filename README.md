@@ -52,6 +52,8 @@ Replaying a saved MP3 costs nothing and needs no key. Keep **overages disabled**
 
 Then open **Settings → AudioVault**, create an API key at [play.cartesia.ai/keys](https://play.cartesia.ai/keys), and paste it. Jacqueline is the default English voice; Marcin and Agnieszka are available for Polish. **Browse voices** searches the voices your own Cartesia account can use and filters by language (`pl`, `fr`) or accent (`en-GB`). To force a language, enter e.g. `pl-PL` in **Language (optional override)**.
 
+> **Disclosure:** generating audio requires a Cartesia account and sends note text to Cartesia over the network. A free Cartesia plan is enough for normal note use. Playing an already-saved MP3 requires no account, no key and no network. AudioVault has no telemetry, no ads, and never updates itself.
+
 **Upgrading from a manual install of 1.0.2 or earlier:** disable the old plugin first — its folder was `.obsidian/plugins/obsidian-audiovault`. Notes, MP3s and `Generated audio` links keep working. Re-enter your Cartesia key if prompted.
 
 ## 📱 The actual use case
