@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bunx esbuild src/index.ts --bundle --format=cjs --platform=browser --outfile=main.js --external:obsidian",
+    "build": "esbuild src/index.ts --bundle --format=cjs --platform=browser --outfile=main.js --external:obsidian",
     "build:watch": "bunx esbuild src/index.ts --bundle --format=cjs --platform=browser --outfile=main.js --sourcemap --watch --external:obsidian",
     "dev": "bunx esbuild src/index.ts --bundle --format=cjs --platform=browser --outfile=main.js --sourcemap --watch --external:obsidian",
     "copy:once": "bash -lc 'set -euo pipefail; : ${VAULT_PATH:?Set VAULT_PATH to your vault path}; plugin=$(bun -p \"require(\\\"./manifest.json\\\").id\"); DEST=\"$VAULT_PATH/.obsidian/plugins/$plugin\"; mkdir -p \"$DEST\"; rsync -a --delete --include \"manifest.json\" --include \"main.js\" --include \"styles.css\" --exclude \"*\" ./ \"$DEST/\"; echo Copied to \"$DEST\"'",
