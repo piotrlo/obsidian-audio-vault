@@ -1,8 +1,8 @@
 # AudioVault
 
-Save a note now. Listen offline later.
+Tap the headphones. Hear your note.
 
-AudioVault saves Obsidian notes as MP3s in your vault. Use **Download audio (no playback)** to prepare a note for later, or tap the headphones icon in the ribbon to listen now.
+AudioVault reads your Obsidian notes aloud. Open a note and tap the headphones icon to start listening without downloading an MP3 first. You can also save a note as an MP3 for offline listening.
 
 AudioVault is a free [MIT-licensed](LICENSE) plugin. Generating audio requires your own Cartesia account and API key. The plugin sends the readable text of the open note directly to Cartesia over the internet. Playing a saved MP3 needs no account or connection and uses no credits.
 
@@ -11,8 +11,7 @@ AudioVault is a free [MIT-licensed](LICENSE) plugin. Generating audio requires y
 ## Getting started
 
 1. [Install AudioVault](#installation) and add your [Cartesia API key](https://play.cartesia.ai/keys) in Settings → AudioVault.
-2. Open a note and run **Download audio (no playback)** from the command palette. Wait for AudioVault to save and link the MP3.
-3. To listen later, open the note and tap the headphones icon. If you're switching devices, sync the note and the MP3 first.
+2. Open a note and tap the headphones icon in the ribbon. Playback starts as soon as the first part is ready, or uses the MP3 if it's already saved.
 
 ## Commands
 
@@ -51,6 +50,8 @@ Then open **Settings → AudioVault**, create an API key at [play.cartesia.ai/ke
 **Upgrading from a manual install of 1.0.2 or earlier:** disable the old plugin first — its folder was `.obsidian/plugins/obsidian-audiovault`. Notes, MP3s and `Generated audio` links keep working. Re-enter your Cartesia key if prompted.
 
 ## Offline playback
+
+To save audio without playing it, run **Download audio (no playback)** from the command palette. Once the file is saved, open the note and tap the headphones icon to listen offline.
 
 By default, AudioVault saves MP3s in an `Audio/` folder next to the note. If you use Obsidian Sync or another sync tool, check that it includes MP3 files before you go offline. Where supported, Media Session shows the note title and adds play/pause to system media controls.
 
