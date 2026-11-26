@@ -14,7 +14,7 @@ type DeclarativeControl =
 
 type DeclarativeSettingItem =
   | { name: string; desc?: string; control?: DeclarativeControl; render?: (setting: Setting) => void }
-  | { type: "group"; heading?: string; items: DeclarativeSettingItem[] };
+  | { type: "group"; heading?: string; visible?: boolean | (() => boolean); items: DeclarativeSettingItem[] };
 
 function refreshSettingsTab(tab: PluginSettingTab & { update?: () => void }): void {
   if (typeof tab.update === "function") tab.update();
@@ -34,16 +34,19 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
       heading: "AudioVault",
       items: [
         {
+          name: "TTS provider",
+          desc: "Cartesia Sonic 3.6 (Azure is disabled).",
+        },
+        {
           name: "Cartesia API key",
-          desc: "Stored on this device, outside synced plugin settings.",
+          desc: "Stored on this device, outside synced plugin settings. Generating audio sends note text to Cartesia and uses your credits. Keep overages off in your Cartesia account.",
           render: (setting: Setting) => {
-            setting.setDesc("Stored on this device, outside synced plugin settings.")
-              .addText((text) => {
-                text.inputEl.type = "password";
-                text.inputEl.autocomplete = "off";
-                text.setPlaceholder("Cartesia API key").setValue(this.plugin.getCartesiaKey())
-                  .onChange((value) => this.plugin.setCartesiaKey(value));
-              });
+            setting.addText((text) => {
+              text.inputEl.type = "password";
+              text.inputEl.autocomplete = "off";
+              text.setPlaceholder("Cartesia API key").setValue(this.plugin.getCartesiaKey())
+                .onChange((value) => this.plugin.setCartesiaKey(value));
+            });
           },
         },
         {
@@ -99,8 +102,20 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
           control: { type: "folder", key: "audioFolder", defaultValue: DEFAULT_SETTINGS.audioFolder },
         },
         {
+          name: "Advanced options",
+          desc: "Toggle advanced settings.",
+          render: (setting: Setting) => {
+            setting.addButton((button) => button.setButtonText(this.advancedVisible ? "Hide" : "Show")
+              .onClick(() => {
+                this.advancedVisible = !this.advancedVisible;
+                refreshSettingsTab(this);
+              }));
+          },
+        },
+        {
           type: "group",
           heading: "Advanced options",
+          visible: () => this.advancedVisible,
           items: [
             {
               name: "Chunk size (characters)",
