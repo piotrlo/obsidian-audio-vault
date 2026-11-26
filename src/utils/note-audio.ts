@@ -95,7 +95,7 @@ export async function publishAudio(app: App, file: TFile, folder: string, data: 
     });
     return path;
   } catch (error) {
-    await app.vault.delete(output).catch(() => {});
+    await app.fileManager.trashFile(output).catch(() => undefined);
     throw error;
   }
 }
