@@ -35,7 +35,7 @@ See [Cartesia pricing](https://cartesia.ai/pricing) for current plans and terms.
 
 ## Installation
 
-**From the community store** (once approved): Settings → Community plugins → Browse → AudioVault → Install → Enable.
+**From Obsidian Community:** Open [AudioVault in the plugin directory](https://community.obsidian.md/plugins/audio-vault) and select **Add to Obsidian**. In Obsidian, select **Install**, then **Enable**. You can also find AudioVault under **Settings → Community plugins → Browse**.
 
 **Manual installation:**
 
