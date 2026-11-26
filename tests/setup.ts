@@ -1,6 +1,10 @@
 // Minimal globals/mocks for browser APIs used in plugin tests
 // Note: we don't set MediaSource by default so tests can check for missing MSE.
 
+if (typeof window === "undefined") {
+  Object.defineProperty(globalThis, "window", { value: globalThis, configurable: true });
+}
+
 if (!(globalThis as any).Audio) {
   (globalThis as any).Audio = class {
     src = "";
