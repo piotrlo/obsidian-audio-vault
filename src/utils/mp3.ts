@@ -78,7 +78,7 @@ export async function flushPartial(
     try {
       await app.vault.adapter.writeBinary(tmpPath, snapshot);
       await app.vault.adapter.rename(tmpPath, partialPath);
-    } catch (renameError) {
+    } catch {
       // Fallback: direct write and cleanup temp
       await app.vault.adapter.writeBinary(partialPath, snapshot);
       try {
@@ -151,7 +151,7 @@ export async function finalizeMerge(
     try {
       await app.vault.adapter.writeBinary(tmpPath, finalData);
       await app.vault.adapter.rename(tmpPath, finalPath);
-    } catch (renameError) {
+    } catch {
       // Fallback: direct write and cleanup temp
       await app.vault.adapter.writeBinary(finalPath, finalData);
       try {

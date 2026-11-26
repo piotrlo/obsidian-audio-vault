@@ -17,7 +17,7 @@ import { safeParseManifest, createValidManifest } from "../schema";
 export async function ensureFolder(app: App, folder: string): Promise<void> {
   const exists = await app.vault.adapter.exists(folder);
   if (!exists) {
-    try { await app.vault.createFolder(folder); } catch (_) {}
+    try { await app.vault.createFolder(folder); } catch {}
   }
 }
 
@@ -107,7 +107,6 @@ export async function replaceAudioReferencesWithSingle(app: App, file: TFile, re
   for (const l of lines) {
     if (!l.startsWith(prefix)) kept.push(l);
   }
-  const needsNewline = kept.length > 0 && !kept[kept.length - 1].endsWith("\n");
   const body = kept.join("\n");
   const maybeNl = body.endsWith("\n") || body.length === 0 ? "" : "\n";
   const single = `${prefix}${relPath}]]`;
