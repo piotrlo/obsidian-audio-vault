@@ -9,7 +9,6 @@ import { AudioSessionManager, type AudioSessionEventListener, type AudioSessionC
 import { synthesisInput } from "../tts/input";
 import { fileExtFromFormat, playbackRateFromRateSetting } from "../core/helpers";
 import { captureToBlob, waitForEndOrAbort } from "../core/audio";
-import { cleanupSessionResources as cleanupSessionResourcesHelper } from "./session";
 import { notify as notifyUtil } from "../core/notify";
 import { debug, warn, error as logError } from "../utils/logger";
 import { Platform } from "obsidian";
@@ -419,10 +418,6 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
         sessionManager.dispose();
         sessionManager = null;
       }
-    } catch { void 0; }
-    
-    try {
-      await cleanupSessionResourcesHelper(null, true);
     } catch { void 0; }
     
     setSession(null);
