@@ -42,7 +42,7 @@ export class AzureTtsProvider implements TtsProvider {
       const t = res.text;
       throw new Error(`Voice list failed: ${res.status}${t ? ` - ${t}` : ""}`);
     }
-    const data = JSON.parse(res.text) as unknown;
+    const data: unknown = JSON.parse(res.text);
     const raw = Array.isArray(data) ? data : [];
     const out: Voice[] = [];
     for (const value of raw) {

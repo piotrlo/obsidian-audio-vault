@@ -396,7 +396,7 @@ audio.addEventListener('error', (event) => {
         debug('Audio error after cleanup (empty src) — ignoring');
         return;
       }
-      const mediaError = audio.error || { code: 0, message: 'Unknown audio error' } as MediaError;
+      const mediaError = audio.error || { code: 0, message: 'Unknown audio error' };
       const error = new Error(mediaError.message || `Media error (code: ${mediaError.code})`);
       logError('Audio error event:', mediaError);
       this.handleError(error);

@@ -5,7 +5,7 @@
 
 import type { App, TFile } from "obsidian";
 import type { PlaybackSession, TtsProvider, TtsSettings, PrefetchResult } from "../types";
-import { AudioSessionManager, type AudioSessionEventListener } from "./session";
+import { AudioSessionManager, type AudioSessionEventListener, type AudioSessionConfig } from "./session";
 import { synthesisInput } from "../tts/input";
 import { fileExtFromFormat, playbackRateFromRateSetting } from "../core/helpers";
 import { captureToBlob, waitForEndOrAbort } from "../core/audio";
@@ -107,10 +107,10 @@ const config: Required<EnhancedBufferedConfig> = {
     } catch { void 0; }
     
     // Audio session configuration
-    const sessionConfig = {
+    const sessionConfig: AudioSessionConfig = {
       playbackRate: playbackRateFromRateSetting(settings.rate),
       volume: 1.0,
-      preload: 'auto' as const,
+      preload: 'auto',
     };
     
     // Session event handlers
@@ -153,7 +153,7 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
               const partPath = `${folder}/${base}_part_${idx + 1}.${ext}`;
               try {
                 const data = await app.vault.adapter.readBinary(partPath);
-                const ab = data as ArrayBuffer;
+                const ab = data;
                 const mime = /(wav|riff)/i.test(settings.outputFormat) ? "audio/wav" : "audio/mpeg";
                 debug(`Loaded part ${idx + 1} from disk due to empty prefetch buffer`);
                 return { buffer: ab, mime, idx };

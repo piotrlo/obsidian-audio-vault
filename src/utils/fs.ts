@@ -128,9 +128,9 @@ export async function readManifest(app: App, folder: string, base: string): Prom
     const exists = await app.vault.adapter.exists(path);
     if (!exists) return null;
     const raw = await app.vault.adapter.read(path);
-    const parsed = JSON.parse(raw) as AudioManifest;
-    if (!parsed || typeof parsed !== "object") return null;
-    return parsed;
+    const parsed: unknown = JSON.parse(raw);
+    const result = safeParseManifest(parsed);
+    return result.success ? result.data : null;
   } catch {
     return null;
   }
