@@ -1,25 +1,38 @@
+/**
+ * AudioVault logger.
+ *
+ * `debug` and `info` stay silent unless the user enables "Debug logs" in the
+ * plugin settings; `warn` and `error` always reach the console so support
+ * reports keep their evidence.
+ */
+
+let debugEnabled = false;
+let infoEnabled = false;
+
 export function setDebugLogging(enabled: boolean): void {
-  void enabled;
+  debugEnabled = !!enabled;
 }
 
 export function setInfoLogging(enabled: boolean): void {
-  void enabled;
+  infoEnabled = !!enabled;
 }
 
 export function debug(...args: unknown[]): void {
-  void args;
+  if (!debugEnabled) return;
+  console.debug("[AudioVault:DEBUG]", ...args);
 }
 
 export function info(...args: unknown[]): void {
-  void args;
+  if (!infoEnabled) return;
+  console.info("[AudioVault:INFO]", ...args);
 }
 
 export function warn(...args: unknown[]): void {
-  void args;
+  console.warn("[AudioVault:WARN]", ...args);
 }
 
 export function error(...args: unknown[]): void {
-  void args;
+  console.error("[AudioVault:ERROR]", ...args);
 }
 
 export function log(...args: unknown[]): void {
