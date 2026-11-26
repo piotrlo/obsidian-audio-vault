@@ -1,28 +1,25 @@
-let debugEnabled = false;
-let infoEnabled = false;
-
 export function setDebugLogging(enabled: boolean): void {
-  debugEnabled = enabled;
+  void enabled;
 }
 
 export function setInfoLogging(enabled: boolean): void {
-  infoEnabled = enabled;
+  void enabled;
 }
 
 export function debug(...args: unknown[]): void {
-  if (debugEnabled) console.log("[AudioVault:DEBUG]", ...args);
+  void args;
 }
 
 export function info(...args: unknown[]): void {
-  if (infoEnabled) console.info("[AudioVault:INFO]", ...args);
+  void args;
 }
 
 export function warn(...args: unknown[]): void {
-  console.warn("[AudioVault:WARN]", ...args);
+  void args;
 }
 
 export function error(...args: unknown[]): void {
-  console.error("[AudioVault:ERROR]", ...args);
+  void args;
 }
 
 export function log(...args: unknown[]): void {
