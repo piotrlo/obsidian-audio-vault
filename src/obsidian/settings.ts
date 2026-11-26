@@ -11,9 +11,13 @@ type DeclarativeControl =
   | { type: "number"; key: string; defaultValue?: number; min?: number; max?: number; step?: number | "any"; validate?: (value: number) => string | void | Promise<string | void> }
   | { type: "toggle"; key: string; defaultValue?: boolean };
 
-type DeclarativeSettingItem =
-  | { name: string; desc?: string; control?: DeclarativeControl; render?: (setting: Setting) => void }
-  | { type: "group"; heading?: string; visible?: boolean | (() => boolean); items: DeclarativeSettingItem[] };
+type DeclarativeSetting = { name: string; desc?: string; control?: DeclarativeControl; render?: (setting: Setting) => void };
+type DeclarativeSettingItem = DeclarativeSetting | {
+  type: "group";
+  heading?: string;
+  visible?: boolean | (() => boolean);
+  items: DeclarativeSetting[];
+};
 
 function refreshSettingsTab(tab: PluginSettingTab & { update?: () => void }): void {
   if (typeof tab.update === "function") tab.update();
@@ -28,10 +32,11 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
   }
 
   getSettingDefinitions(): DeclarativeSettingItem[] {
-    return [{
-      type: "group",
-      heading: "AudioVault",
-      items: [
+    return [
+      {
+        type: "group",
+        heading: "AudioVault",
+        items: [
         {
           name: "TTS provider",
           desc: "Cartesia Sonic 3.6 (Azure is disabled).",
@@ -111,7 +116,9 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
               }));
           },
         },
-        {
+        ],
+      },
+      {
           type: "group",
           heading: "Advanced options",
           visible: () => this.advancedVisible,
@@ -151,9 +158,8 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
               },
             },
           ],
-        },
-      ],
-    }];
+      },
+    ];
   }
 
   getControlValue(key: string): unknown {
