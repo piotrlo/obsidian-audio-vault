@@ -120,26 +120,22 @@ export class CartesiaVoiceBrowser extends Modal {
       new Setting(this.results).setName(voice.name)
         .setDesc([locale, voice.tagline || voice.description].filter(Boolean).join(" · ").slice(0, 250))
         .addButton((button) => button.setButtonText(active ? "Selected" : "Use voice")
-          .setDisabled(active).onClick(async () => {
+          .setDisabled(active).onClick(() => {
             if (this.selecting) return;
             this.selecting = true;
             button.setDisabled(true);
-            try {
-              await this.choose(voice, locale);
-              this.close();
-            } catch {
+            void this.choose(voice, locale).then(() => this.close()).catch(() => {
               this.status.setText("Could not save your voice selection. Try again.");
               button.setDisabled(false);
-            } finally {
+            }).finally(() => {
               this.selecting = false;
-            }
+            });
           }));
     }
     const next = this.next;
-    if (next) new Setting(this.results).addButton((button) => button.setButtonText("Load more").onClick(async () => {
+    if (next) new Setting(this.results).addButton((button) => button.setButtonText("Load more").onClick(() => {
       button.setDisabled(true);
-      await this.load(next);
-      button.setDisabled(false);
+      void this.load(next).finally(() => button.setDisabled(false));
     }));
   }
 }

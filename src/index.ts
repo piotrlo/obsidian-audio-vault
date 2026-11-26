@@ -98,15 +98,17 @@ export default class AudioVaultPlugin extends Plugin {
         : "All audio parts generated (MP3 not saved yet)");
       return;
     }
-    this.statusTimer = window.setTimeout(async () => {
-      const editor = workspace.activeEditor;
-      const status = await (async () => {
-        const raw = (editor?.file === file ? editor.editor?.getValue() : undefined) ?? await vault.cachedRead(file);
-        return offlineAudioStatus(raw, vault.adapter, this.pendingAudioFolder());
-      })().catch((): OfflineAudioStatus => "unavailable");
-      if (revision === this.statusRevision && file === workspace.getActiveFile()) {
-        this.setRibbonStatus(offlineLabels[status]);
-      }
+    this.statusTimer = window.setTimeout(() => {
+      void (async () => {
+        const editor = workspace.activeEditor;
+        const status = await (async () => {
+          const raw = (editor?.file === file ? editor.editor?.getValue() : undefined) ?? await vault.cachedRead(file);
+          return offlineAudioStatus(raw, vault.adapter, this.pendingAudioFolder());
+        })().catch((): OfflineAudioStatus => "unavailable");
+        if (revision === this.statusRevision && file === workspace.getActiveFile()) {
+          this.setRibbonStatus(offlineLabels[status]);
+        }
+      })();
     }, 200);
   }
 

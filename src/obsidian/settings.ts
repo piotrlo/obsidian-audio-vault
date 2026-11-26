@@ -207,14 +207,11 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
           dropdown.addOption("catalog", (settings.cartesiaVoiceLabel || "Saved Cartesia voice").slice(0, 48));
           dropdown.setValue("catalog");
         } else dropdown.setValue(id);
-        dropdown.onChange(async (value) => {
+        dropdown.onChange((value) => {
           if (value === "catalog") return;
-          try {
-            await this.selectVoice(value);
-          } catch {
+          void this.selectVoice(value).catch(() => {
             new Notice("Could not save your voice selection. Try again.");
-          }
-          this.display();
+          }).finally(() => this.display());
         });
       })
       .addButton((button) => button.setButtonText("Browse voices").onClick(() => {
@@ -232,23 +229,23 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
     new Setting(content)
       .setName("Playback speed")
       .setDesc("Playback-only adjustment, e.g. +10%. Does not regenerate audio.")
-      .addText((text) => text.setValue(settings.rate).onChange(async (value) => {
+      .addText((text) => text.setValue(settings.rate).onChange((value) => {
         if (!/^[+-]?\d+%$/.test(value.trim())) return;
         settings.rate = value.trim();
-        await this.plugin.saveSettings();
+        void this.plugin.saveSettings();
       }));
     new Setting(content)
       .setName("Language (optional override)")
       .setDesc("BCP-47 code, e.g. pl-PL. Leave blank to use the catalog voice’s language or detect Polish or English.")
-      .addText((text) => text.setValue(settings.languageOverride ?? "").onChange(async (value) => {
+      .addText((text) => text.setValue(settings.languageOverride ?? "").onChange((value) => {
         settings.languageOverride = value.trim();
-        await this.plugin.saveSettings();
+        void this.plugin.saveSettings();
       }));
     new Setting(content)
       .setName("Audio folder")
-      .addText((text) => text.setValue(settings.audioFolder).onChange(async (value) => {
+      .addText((text) => text.setValue(settings.audioFolder).onChange((value) => {
         settings.audioFolder = value.trim() || "Audio";
-        await this.plugin.saveSettings();
+        void this.plugin.saveSettings();
       }));
 
     const advancedToggle = new Setting(content).setName("Advanced options");
@@ -263,25 +260,26 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
         button.setIcon(this.advancedVisible ? "chevron-up" : "chevron-down");
       }));
     new Setting(advanced).setName("Chunk size (characters)").setDesc(`500–9000 characters (default: ${DEFAULT_CHUNK_SIZE}); iOS uses 500.`)
-      .addText((text) => text.setValue(String(settings.chunkSize ?? DEFAULT_CHUNK_SIZE)).onChange(async (value) => {
+      .addText((text) => text.setValue(String(settings.chunkSize ?? DEFAULT_CHUNK_SIZE)).onChange((value) => {
         const size = Number(value);
         if (!Number.isInteger(size) || size < 500 || size > 9000) return;
         settings.chunkSize = size;
-        await this.plugin.saveSettings();
+        void this.plugin.saveSettings();
       }));
     new Setting(advanced).setName("Debug logs")
-      .addToggle((toggle) => toggle.setValue(!!settings.debugLogs).onChange(async (value) => {
+      .addToggle((toggle) => toggle.setValue(!!settings.debugLogs).onChange((value) => {
         settings.debugLogs = value;
         setDebugLogging(value);
-        await this.plugin.saveSettings();
+        void this.plugin.saveSettings();
       }));
     new Setting(advanced).setName("Restore defaults").setDesc("Keeps your Cartesia API key.")
-      .addButton((button) => button.setButtonText("Reset").onClick(async () => {
+      .addButton((button) => button.setButtonText("Reset").onClick(() => {
         this.plugin.settings = { ...DEFAULT_SETTINGS };
         setDebugLogging(false);
-        await this.plugin.saveSettings();
-        new Notice("Settings restored");
-        this.display();
+        void this.plugin.saveSettings().then(() => {
+          new Notice("Settings restored");
+          this.display();
+        });
       }));
   }
 
