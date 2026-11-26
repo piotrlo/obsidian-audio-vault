@@ -10,7 +10,8 @@ export async function requestUrlWithAbort(
   throwIfAborted(signal);
 
   let rejectAbort: ((reason: Error) => void) | undefined;
-  const aborted = new Promise<never>((_resolve, reject) => {
+  const aborted = new Promise<never>((resolve, reject) => {
+    void resolve;
     rejectAbort = reject;
   });
   const onAbort = () => rejectAbort?.(
