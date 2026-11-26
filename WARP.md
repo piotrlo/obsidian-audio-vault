@@ -27,7 +27,7 @@ Commands (Bun-first)
 
 High-level architecture
 - Entry/plugin lifecycle (src/index.ts)
-  - Exports default Plugin subclass. On load: reads settings, registers commands, and optionally renders a floating control panel.
+  - Exports the default Plugin subclass. On load: reads settings, registers commands, and adds the headphones ribbon icon.
   - Core command readCurrentNote():
     - Validates required settings (Azure API key, region, voice, format).
     - Reads active note, splits into chunks (<= 5000 chars) using utils/chunk.ts.
