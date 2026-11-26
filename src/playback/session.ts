@@ -5,6 +5,7 @@
 
 import type { PlaybackSession } from "../types";
 import { debug, warn, error as logError } from "../utils/logger";
+import { toError } from "../utils/errors";
 
 /**
  * Audio session states for finite state machine.
@@ -222,7 +223,7 @@ export class AudioSessionManager {
       const message = error instanceof Error ? error.message : String(error);
       logError('Audio play failed:', message);
       this.handleError(new Error(`Play failed: ${message}`));
-      throw error;
+      throw toError(error);
     }
   }
   
@@ -447,7 +448,7 @@ audio.addEventListener('error', (event) => {
       const onError = () => {
         window.clearTimeout(timeout);
         const error = this.audioElement?.error || new Error('Audio load failed');
-        reject(error);
+        reject(toError(error));
       };
       
       if (this.audioElement && this.audioElement.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) {

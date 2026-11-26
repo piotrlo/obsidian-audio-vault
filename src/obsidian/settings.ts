@@ -4,6 +4,7 @@ import { CARTESIA_VOICES } from "../tts/cartesia-provider";
 import { setDebugLogging } from "../utils/logger";
 import type AudioVaultPlugin from "../index";
 import { CartesiaVoiceBrowser } from "./voice-browser";
+import { toError } from "../utils/errors";
 
 type DeclarativeControl =
   | { type: "text"; key: string; defaultValue?: string; validate?: (value: string) => string | void | Promise<string | void> }
@@ -290,7 +291,7 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
       await this.plugin.saveSettings();
     } catch (error) {
       this.plugin.settings = previous;
-      throw error;
+      throw toError(error);
     }
   }
 }

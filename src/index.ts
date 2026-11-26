@@ -13,6 +13,7 @@ import { buildPartialSnapshot, Mp3Assembler } from "./utils/mp3";
 import { hasLocalRecording, linkedAudioPaths, normalizeAudioFolder, noteAudioFingerprint, offlineAudioStatus, publishAudio } from "./utils/note-audio";
 import type { OfflineAudioStatus } from "./utils/note-audio";
 import { sanitizeNoteForTts } from "./utils/sanitize";
+import { throwIfAborted } from "./utils/errors";
 
 type PartResult = { ok: true; data: ArrayBuffer } | { ok: false; error: unknown };
 type AudioJob = {
@@ -180,7 +181,7 @@ export default class AudioVaultPlugin extends Plugin {
             }
           }
           for (const path of links) {
-            signal.throwIfAborted();
+            throwIfAborted(signal);
             await this.playBytes(await this.app.vault.adapter.readBinary(path), settings.rate, file.basename);
           }
           return;
@@ -222,7 +223,7 @@ export default class AudioVaultPlugin extends Plugin {
       let current = pending = start(0);
       for (let index = 0; index < chunks.length; index++) {
         const result = await current;
-        signal.throwIfAborted();
+        throwIfAborted(signal);
         if (!result.ok) {
           const reason = result.error instanceof Error ? result.error.message : "Could not generate audio.";
           throw new Error(`Part ${index + 1}/${chunks.length}: ${reason}`);
@@ -258,7 +259,7 @@ export default class AudioVaultPlugin extends Plugin {
     const job = this.job;
     if (!job) return;
     const { signal } = job.abort;
-    signal.throwIfAborted();
+    throwIfAborted(signal);
     const url = URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" }));
     const audio = new Audio(url);
     audio.playbackRate = playbackRateFromRateSetting(rate);

@@ -1,4 +1,5 @@
 import { requestUrl, type RequestUrlParam, type RequestUrlResponse } from "obsidian";
+import { throwIfAborted, toError } from "../utils/errors";
 
 export async function requestUrlWithAbort(
   request: RequestUrlParam,
@@ -6,14 +7,14 @@ export async function requestUrlWithAbort(
 ): Promise<RequestUrlResponse> {
   const params = { ...request, throw: false };
   if (!signal) return requestUrl(params);
-  if (signal.aborted) throw signal.reason instanceof Error ? signal.reason : new Error(String(signal.reason));
+  throwIfAborted(signal);
 
   let rejectAbort: ((reason: Error) => void) | undefined;
   const aborted = new Promise<never>((_resolve, reject) => {
     rejectAbort = reject;
   });
   const onAbort = () => rejectAbort?.(
-    signal.reason instanceof Error ? signal.reason : new Error(String(signal.reason)),
+    toError(signal.reason),
   );
   signal.addEventListener("abort", onAbort, { once: true });
   if (signal.aborted) onAbort();

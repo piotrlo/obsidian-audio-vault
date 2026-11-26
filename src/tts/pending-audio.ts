@@ -1,5 +1,6 @@
 import type { DataAdapter } from "obsidian";
 import { sha256Hex } from "../utils/crypto";
+import { throwIfAborted } from "../utils/errors";
 
 type Storage = Pick<DataAdapter, "exists" | "mkdir" | "readBinary" | "writeBinary" | "rename" | "remove">;
 
@@ -12,7 +13,7 @@ export async function openPendingAudio(adapter: Storage, folder: string, identit
 
   return {
     async getOrGenerate(index: number, generate: () => Promise<ArrayBuffer>, signal: AbortSignal) {
-      signal.throwIfAborted();
+      throwIfAborted(signal);
       const path = partPath(index);
       if (await adapter.exists(path)) {
         const data = await adapter.readBinary(path);
@@ -20,7 +21,7 @@ export async function openPendingAudio(adapter: Storage, folder: string, identit
         touched.add(path);
         return data;
       }
-      signal.throwIfAborted();
+      throwIfAborted(signal);
       const data = await generate();
       if (!data.byteLength) throw new Error("Cartesia returned empty audio.");
       // Persist a fully received part even if playback was stopped in the meantime.
@@ -41,3 +42,4 @@ export async function openPendingAudio(adapter: Storage, folder: string, identit
     },
   };
 }
+

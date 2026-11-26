@@ -1,11 +1,13 @@
+import { throwIfAborted, toError } from "../utils/errors";
+
 export async function downloadPart(
   synthesize: (signal: AbortSignal) => Promise<ReadableStream<Uint8Array>>,
   signal: AbortSignal,
   idleMs = 30_000,
 ): Promise<ArrayBuffer> {
-  signal.throwIfAborted();
+  throwIfAborted(signal);
   const part = new AbortController();
-  const cancel = () => part.abort(signal.reason);
+  const cancel = () => part.abort(toError(signal.reason));
   signal.addEventListener("abort", cancel, { once: true });
   let phase = "waiting for Cartesia";
   let timer: number | undefined;
@@ -27,7 +29,7 @@ export async function downloadPart(
       let size = 0;
       while (true) {
         const { done, value } = await reader.read();
-        part.signal.throwIfAborted();
+        throwIfAborted(part.signal);
         if (done) break;
         if (!value.byteLength) continue;
         resetTimeout();
@@ -47,11 +49,11 @@ export async function downloadPart(
       reader.releaseLock();
     }
   } catch (error) {
-    if (part.signal.aborted) throw part.signal.reason;
+    if (part.signal.aborted) throw toError(part.signal.reason);
     if (error instanceof TypeError || (error instanceof Error && error.name === "NetworkError")) {
       throw new Error(`Connection failed while ${phase}. Cartesia may have processed the request; check usage before retrying.`);
     }
-    throw error;
+    throw toError(error);
   } finally {
     window.clearTimeout(timer);
     signal.removeEventListener("abort", cancel);

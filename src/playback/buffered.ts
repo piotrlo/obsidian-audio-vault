@@ -13,6 +13,7 @@ import { cleanupSessionResources as cleanupSessionResourcesHelper } from "./sess
 import { notify as notifyUtil } from "../core/notify";
 import { debug, warn, error as logError } from "../utils/logger";
 import { Platform } from "obsidian";
+import { toError } from "../utils/errors";
 
 /**
  * Configuration for enhanced buffered playback.
@@ -157,7 +158,7 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
                 debug(`Loaded part ${idx + 1} from disk due to empty prefetch buffer`);
                 return { buffer: ab, mime, idx };
               } catch (error) {
-                if (provider.noSynthesisRetry) throw error;
+                if (provider.noSynthesisRetry) throw toError(error);
                 // If not found on disk, fall back to synthesizing now
                 debug(`Prefetch buffer empty and file missing; fallback synthesis for part ${idx + 1}`);
                 const input = synthesisInput(provider, chunks[idx], settings, lang);
@@ -171,7 +172,7 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
             return { buffer: r.buffer, mime: r.mime, idx };
           })
           .catch(async (error) => {
-            if (provider.noSynthesisRetry) throw error;
+            if (provider.noSynthesisRetry) throw toError(error);
             debug(`Fallback synthesis for part ${idx + 1}`);
             const input = synthesisInput(provider, chunks[idx], settings, lang);
             const stream = await provider.synthesize(input, settings.outputFormat, lang, abortAll.signal);
@@ -249,7 +250,7 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
               // First part failed; surface a clearer message
               const msg = error instanceof Error ? error.message : String(error);
               warn(`First part timed out after ${timeoutMs}ms; aborting start`, msg);
-              throw error;
+              throw toError(error);
             }
           });
           
@@ -397,7 +398,7 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
         
         // Try to continue with next part unless it's the first
         if (partIdx === startIndex || provider.noSynthesisRetry) {
-          throw error; // Can't continue if first part fails
+          throw toError(error); // Can't continue if first part fails
         }
         
         partIdx += 1;

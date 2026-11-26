@@ -2,6 +2,7 @@ import type { App, DataAdapter, TFile } from "obsidian";
 import { sha256Hex } from "./crypto";
 import { toSafeBase } from "./safe-name";
 import { sanitizeNoteForTts } from "./sanitize";
+import { throwIfAborted, toError } from "./errors";
 
 const generatedLink = /^Generated audio: \[\[([^\][\r\n|#]+\.mp3)\]\][ \t]*$/i;
 const publishedSuffix = /-av1-([a-f0-9]{64})-(\d+)\.mp3$/i;
@@ -85,17 +86,17 @@ export function normalizeAudioFolder(value: string): string {
 export async function publishAudio(app: App, file: TFile, folder: string, data: ArrayBuffer, signal: AbortSignal, fingerprint: string): Promise<string> {
   if (!data.byteLength) throw new Error("No audio to save.");
   const path = `${normalizeAudioFolder(folder)}/${await audioFileStem(file.path)}-${crypto.randomUUID()}-av1-${fingerprint}-${data.byteLength}.mp3`;
-  signal.throwIfAborted();
+  throwIfAborted(signal);
   const output = await app.vault.createBinary(path, data);
   try {
-    signal.throwIfAborted();
+    throwIfAborted(signal);
     await app.vault.process(file, (latest) => {
-      signal.throwIfAborted();
+      throwIfAborted(signal);
       return audioLink(latest, path);
     });
     return path;
   } catch (error) {
     await app.fileManager.trashFile(output).catch(() => undefined);
-    throw error;
+    throw toError(error);
   }
 }
