@@ -18,7 +18,7 @@ export function attachMediaSession(
   audio: Pick<HTMLAudioElement, "paused" | "ended" | "play" | "pause" | "addEventListener" | "removeEventListener">,
   title: string,
   onResumeError: () => void,
-  session: Pick<MediaSession, "metadata" | "playbackState" | "setActionHandler"> | null | undefined = globalThis.navigator?.mediaSession,
+  session: Pick<MediaSession, "metadata" | "playbackState" | "setActionHandler"> | null | undefined = window.navigator?.mediaSession,
   createMetadata = (init: MediaMetadataInit) => new MediaMetadata(init),
 ): () => void {
   if (!session) return () => {};
