@@ -96,7 +96,12 @@ export async function publishAudio(app: App, file: TFile, folder: string, data: 
     });
     return path;
   } catch (error) {
-    await app.fileManager.trashFile(output).catch(() => undefined);
+    const trashFile = (app.fileManager as { trashFile?: (file: TFile) => Promise<void> }).trashFile;
+    if (typeof trashFile === "function") {
+      await trashFile.call(app.fileManager, output).catch(() => undefined);
+    } else {
+      await app.vault.adapter.remove(output.path).catch(() => undefined);
+    }
     throw toError(error);
   }
 }

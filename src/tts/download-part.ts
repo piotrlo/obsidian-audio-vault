@@ -4,21 +4,26 @@ export async function downloadPart(
   synthesize: (signal: AbortSignal) => Promise<ReadableStream<Uint8Array>>,
   signal: AbortSignal,
   idleMs = 30_000,
+  waitMs = 120_000,
 ): Promise<ArrayBuffer> {
   throwIfAborted(signal);
   const part = new AbortController();
   const cancel = () => part.abort(toError(signal.reason));
   signal.addEventListener("abort", cancel, { once: true });
   let phase = "waiting for Cartesia";
+  // The buffered transport reports no progress, so this is a whole-request
+  // deadline rather than an idle timeout; it must stay generous.
+  let phaseMs = waitMs;
   let timer: number | undefined;
   const resetTimeout = () => {
     window.clearTimeout(timer);
-    timer = window.setTimeout(() => part.abort(new Error(`Timed out while ${phase} (no progress).`)), idleMs);
+    timer = window.setTimeout(() => part.abort(new Error(`Timed out while ${phase}.`)), phaseMs);
   };
   resetTimeout();
   try {
     const stream = await synthesize(part.signal);
     phase = "downloading audio from Cartesia";
+    phaseMs = idleMs;
     resetTimeout();
     const reader = stream.getReader();
     const cancelRead = () => void reader.cancel().catch(() => undefined);
