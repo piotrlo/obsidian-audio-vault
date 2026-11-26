@@ -4,6 +4,47 @@
  */
 
 import type { Result, AudioVaultError } from "../types";
+import { requestUrlWithAbort } from "./request";
+import type { RequestUrlParam } from "obsidian";
+
+async function toRequestUrlParam(input: RequestInfo | URL, init?: RequestInit): Promise<RequestUrlParam> {
+  const request = input instanceof Request ? input : undefined;
+  const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+  const headers = new Headers(request?.headers);
+  new Headers(init?.headers).forEach((value, key) => headers.set(key, value));
+  let body: BodyInit | null | undefined = init?.body;
+  if (body === undefined && request?.body) body = request.clone().body;
+
+  let requestBody: string | ArrayBuffer | undefined;
+  if (typeof body === "string") {
+    requestBody = body;
+    if (!headers.has("content-type")) headers.set("content-type", "text/plain;charset=UTF-8");
+  } else if (body instanceof URLSearchParams) {
+    requestBody = body.toString();
+    if (!headers.has("content-type")) headers.set("content-type", "application/x-www-form-urlencoded;charset=UTF-8");
+  } else if (body !== null && body !== undefined) {
+    requestBody = await new Response(body).arrayBuffer();
+  }
+
+  const requestHeaders: Record<string, string> = {};
+  headers.forEach((value, key) => {
+    requestHeaders[key] = value;
+  });
+  return {
+    url,
+    method: init?.method ?? request?.method,
+    headers: requestHeaders,
+    body: requestBody,
+  };
+}
+
+function toResponse(response: Awaited<ReturnType<typeof requestUrlWithAbort>>): Response {
+  const bodylessStatus = response.status === 204 || response.status === 205 || response.status === 304;
+  return new Response(bodylessStatus ? null : response.arrayBuffer, {
+    status: response.status,
+    headers: response.headers,
+  });
+}
 
 /**
  * Options for fetchWithRetry function.
@@ -208,10 +249,9 @@ export async function fetchWithRetry(
     
     try {
       // Make the request
-      const response = await fetch(input, {
-        ...init,
-        signal: controller.signal,
-      });
+      const request = await toRequestUrlParam(input, init);
+      const result = await requestUrlWithAbort(request, controller.signal);
+      const response = toResponse(result);
       
       cleanup();
       
