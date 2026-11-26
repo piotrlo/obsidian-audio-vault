@@ -11,7 +11,7 @@ export class CartesiaVoiceBrowser extends Modal {
   private voices: CatalogVoice[] = [];
   private next?: string;
   private request?: AbortController;
-  private timer?: ReturnType<typeof setTimeout>;
+  private timer?: number;
   private results!: HTMLElement;
   private status!: HTMLElement;
   private selecting = false;
@@ -63,19 +63,19 @@ export class CartesiaVoiceBrowser extends Modal {
   onClose(): void {
     this.request?.abort();
     this.request = undefined;
-    clearTimeout(this.timer);
+    window.clearTimeout(this.timer);
     this.contentEl.empty();
   }
 
   private schedule(): void {
-    clearTimeout(this.timer);
+    window.clearTimeout(this.timer);
     this.request?.abort();
     this.request = undefined;
     this.voices = [];
     this.next = undefined;
     this.render();
     this.status.setText("Searching…");
-    this.timer = setTimeout(() => void this.load(), 350);
+    this.timer = window.setTimeout(() => void this.load(), 350);
   }
 
   private async load(cursor?: string): Promise<void> {
@@ -88,7 +88,7 @@ export class CartesiaVoiceBrowser extends Modal {
     const request = new AbortController();
     this.request = request;
     this.status.setText("Loading voices…");
-    const timeout = setTimeout(() => request.abort(), 12_000);
+    const timeout = window.setTimeout(() => request.abort(), 12_000);
     try {
       const page = await fetchCatalogPage(this.key, { query: this.query, language: language ?? "", cursor, signal: request.signal });
       if (request.signal.aborted) return;
@@ -107,7 +107,7 @@ export class CartesiaVoiceBrowser extends Modal {
         void this.load();
       }));
     } finally {
-      clearTimeout(timeout);
+      window.clearTimeout(timeout);
     }
   }
 

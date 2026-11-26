@@ -180,13 +180,13 @@ export class AudioSessionManager {
     }
     
     return new Promise((resolve) => {
-      const timeout = setTimeout(() => {
+      const timeout = window.setTimeout(() => {
         resolve(false);
       }, timeoutMs);
       
       const checkReady = () => {
         if (this.currentState === 'playing' || this.currentState === 'ended') {
-          clearTimeout(timeout);
+          window.clearTimeout(timeout);
           resolve(true);
         }
       };
@@ -435,24 +435,24 @@ audio.addEventListener('error', (event) => {
     }
     
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
+      const timeout = window.setTimeout(() => {
         reject(new Error(`Audio load timeout after ${timeoutMs}ms`));
       }, timeoutMs);
       
       const onCanPlay = () => {
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
         resolve();
       };
       
       const onError = () => {
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
         const error = this.audioElement?.error || new Error('Audio load failed');
         reject(error);
       };
       
       if (this.audioElement && this.audioElement.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) {
         // Already ready
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
         resolve();
         return;
       }

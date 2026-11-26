@@ -238,7 +238,7 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
           const partData = await Promise.race([
             tasks[partIdx],
             new Promise<never>((_, reject) => {
-              setTimeout(() => reject(new Error(`Part timeout (${timeoutMs}ms)`)), timeoutMs);
+              window.setTimeout(() => reject(new Error(`Part timeout (${timeoutMs}ms)`)), timeoutMs);
             })
           ]).catch(async (error) => {
             if (partIdx > startIndex && !provider.noSynthesisRetry) {
@@ -350,7 +350,7 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
           if (nextPartIdx < tasks.length) {
             const isNextReady = await Promise.race([
               tasks[nextPartIdx].then(() => true),
-              new Promise<boolean>(resolve => setTimeout(() => resolve(false), config.waitBackoffMs))
+              new Promise<boolean>(resolve => window.setTimeout(() => resolve(false), config.waitBackoffMs))
             ]);
             
             if (!isNextReady && config.showBufferingUI) {
@@ -364,11 +364,11 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
               const startWait = Date.now();
               
               while (waitTime <= maxWait && !stopRequested() && !abortAll.signal.aborted) {
-                await new Promise(resolve => setTimeout(resolve, waitTime));
+                await new Promise(resolve => window.setTimeout(resolve, waitTime));
                 
                 const isNowReady = await Promise.race([
                   tasks[nextPartIdx].then(() => true),
-                  new Promise<boolean>(resolve => setTimeout(() => resolve(false), 50))
+                  new Promise<boolean>(resolve => window.setTimeout(() => resolve(false), 50))
                 ]);
                 
                 if (isNowReady) {

@@ -160,7 +160,7 @@ function createTimeoutController(timeoutMs: number, parentSignal?: AbortSignal):
   }
   
   // Set up timeout
-  const timeoutId = setTimeout(() => {
+  const timeoutId = window.setTimeout(() => {
     controller.abort();
   }, timeoutMs);
   
@@ -174,7 +174,7 @@ function createTimeoutController(timeoutMs: number, parentSignal?: AbortSignal):
   }
   
   const cleanup = () => {
-    clearTimeout(timeoutId);
+    window.clearTimeout(timeoutId);
     if (parentSignal) {
       parentSignal.removeEventListener('abort', onParentAbort);
     }
@@ -249,7 +249,7 @@ export async function fetchWithRetry(
       const retryAfterDelay = getRetryAfterDelay(response);
       const delay = retryAfterDelay ?? calculateDelay(attempt, baseDelayMs, maxDelayMs, jitter);
       
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise(resolve => window.setTimeout(resolve, delay));
       
     } catch (error) {
       cleanup();
@@ -275,7 +275,7 @@ export async function fetchWithRetry(
       }
       
       const delay = calculateDelay(attempt, baseDelayMs, maxDelayMs, jitter);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise(resolve => window.setTimeout(resolve, delay));
     }
   }
   

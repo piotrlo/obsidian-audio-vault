@@ -8,10 +8,10 @@ export async function downloadPart(
   const cancel = () => part.abort(signal.reason);
   signal.addEventListener("abort", cancel, { once: true });
   let phase = "waiting for Cartesia";
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timer: number | undefined;
   const resetTimeout = () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => part.abort(new Error(`Timed out while ${phase} (no progress).`)), idleMs);
+    window.clearTimeout(timer);
+    timer = window.setTimeout(() => part.abort(new Error(`Timed out while ${phase} (no progress).`)), idleMs);
   };
   resetTimeout();
   try {
@@ -53,7 +53,7 @@ export async function downloadPart(
     }
     throw error;
   } finally {
-    clearTimeout(timer);
+    window.clearTimeout(timer);
     signal.removeEventListener("abort", cancel);
   }
 }

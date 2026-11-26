@@ -367,7 +367,7 @@ async function synthesizeWithRetry(
     const onAbort = () => { try { controller.abort(); } catch {} };
     if (abortSignal.aborted) controller.abort();
     else abortSignal.addEventListener('abort', onAbort, { once: true });
-    const timeout = setTimeout(() => { try { controller.abort(); } catch {} }, timeoutMs);
+    const timeout = window.setTimeout(() => { try { controller.abort(); } catch {} }, timeoutMs);
 
     try {
       const stream = await provider.synthesize(input, outputFormat, lang, controller.signal);
@@ -376,7 +376,7 @@ async function synthesizeWithRetry(
       const mime = blob.type || (/wav|riff/i.test(outputFormat) ? "audio/wav" : "audio/mpeg");
       return { ok: true, value: { buffer, mime } };
     } finally {
-      clearTimeout(timeout);
+      window.clearTimeout(timeout);
       try { abortSignal.removeEventListener('abort', onAbort as any); } catch {}
     }
   } catch (error) {

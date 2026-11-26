@@ -34,7 +34,7 @@ export default class AudioVaultPlugin extends Plugin {
   settings!: TtsSettings;
   private job: AudioJob | null = null;
   private ribbon?: HTMLElement;
-  private statusTimer?: ReturnType<typeof setTimeout>;
+  private statusTimer?: number;
   private statusRevision = 0;
 
   async onload(): Promise<void> {
@@ -65,7 +65,7 @@ export default class AudioVaultPlugin extends Plugin {
   onunload(): void {
     this.ribbon = undefined;
     this.statusRevision++;
-    clearTimeout(this.statusTimer);
+    window.clearTimeout(this.statusTimer);
     this.stopPlayback();
   }
 
@@ -83,7 +83,7 @@ export default class AudioVaultPlugin extends Plugin {
   private refreshAudioStatus(): void {
     if (!this.ribbon) return;
     const revision = ++this.statusRevision;
-    clearTimeout(this.statusTimer);
+    window.clearTimeout(this.statusTimer);
     const { vault, workspace } = this.app;
     const file = workspace.getActiveFile();
     if (!file || file.extension !== "md") {
@@ -98,7 +98,7 @@ export default class AudioVaultPlugin extends Plugin {
         : "All audio parts generated (MP3 not saved yet)");
       return;
     }
-    this.statusTimer = setTimeout(async () => {
+    this.statusTimer = window.setTimeout(async () => {
       const editor = workspace.activeEditor;
       const status = await (async () => {
         const raw = (editor?.file === file ? editor.editor?.getValue() : undefined) ?? await vault.cachedRead(file);
