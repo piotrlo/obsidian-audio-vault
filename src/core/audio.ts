@@ -24,10 +24,10 @@ export function waitForEndOrAbort(audioEl: HTMLAudioElement, abortSignal: AbortS
     };
     const cleanup = () => {
       audioEl.removeEventListener("ended", onEnded);
-      abortSignal.removeEventListener("abort", onAbort as any);
+      abortSignal.removeEventListener("abort", onAbort);
     };
     audioEl.addEventListener("ended", onEnded, { once: true });
-    abortSignal.addEventListener("abort", onAbort as any, { once: true });
+    abortSignal.addEventListener("abort", onAbort, { once: true });
   });
 }
 
@@ -38,7 +38,7 @@ export function waitForEndOrAbort(audioEl: HTMLAudioElement, abortSignal: AbortS
 export function canStream(outputFormat: string): { supported: boolean; mime: string } {
   const mime = mimeFromFormat(outputFormat);
   const supported = typeof MediaSource !== "undefined"
-    && (MediaSource as any).isTypeSupported
+    && typeof MediaSource.isTypeSupported === "function"
     && MediaSource.isTypeSupported(mime);
   return { supported, mime };
 }

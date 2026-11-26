@@ -58,8 +58,8 @@ function isTransientError(error: unknown, attempt: number, abortSignal?: AbortSi
   }
   
   // If we have a response, check status code
-  if (error && typeof error === 'object' && 'status' in error && typeof (error as any).status === 'number') {
-    const status = (error as any).status;
+  if (error && typeof error === 'object' && 'status' in error && typeof error.status === 'number') {
+    const status = error.status;
     
     // 5xx server errors are transient
     if (status >= 500 && status < 600) {

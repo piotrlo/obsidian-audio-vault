@@ -1,3 +1,10 @@
+import type { DataAdapter } from "obsidian";
+
+type Mp3App = {
+  vault: {
+    adapter: Pick<DataAdapter, "exists" | "readBinary" | "remove" | "rename" | "writeBinary">;
+  };
+};
 /**
  * MP3 helpers for merging multiple MP3 chunks into a single file without re-encoding.
  */
@@ -19,7 +26,7 @@ export function stripId3v2(input: Uint8Array): Uint8Array {
  * Simple in-memory assembler that collects raw MP3 frame bytes and produces a single Uint8Array.
  */
 export class Mp3Assembler {
-  private readonly parts: Uint8Array[] = [];
+  protected readonly parts: Uint8Array[] = [];
 
   append(chunk: Uint8Array): void {
     const cleaned = stripId3v2(chunk);
@@ -62,7 +69,7 @@ export function buildPartialSnapshot(assembler: Mp3Assembler): ArrayBuffer {
  * @returns Result indicating success/failure with merged count
  */
 export async function flushPartial(
-  app: any, // App type from obsidian
+  app: Mp3App,
   folder: string,
   base: string,
   assembler: Mp3Assembler,
@@ -125,7 +132,7 @@ export async function flushPartial(
  * @returns Result with final file path or error
  */
 export async function finalizeMerge(
-  app: any, // App type from obsidian
+  app: Mp3App,
   folder: string,
   base: string,
   assembler: Mp3Assembler,
@@ -243,7 +250,7 @@ export class EnhancedMp3Assembler extends Mp3Assembler {
    * Reset the assembler state.
    */
   reset(): void {
-    (this as any).parts.length = 0; // Access private parts array
+    this.parts.length = 0;
     this._mergedUntilPart = 0;
   }
   

@@ -377,7 +377,7 @@ async function synthesizeWithRetry(
       return { ok: true, value: { buffer, mime } };
     } finally {
       window.clearTimeout(timeout);
-      try { abortSignal.removeEventListener('abort', onAbort as any); } catch {}
+      try { abortSignal.removeEventListener('abort', onAbort); } catch {}
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

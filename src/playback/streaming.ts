@@ -41,7 +41,7 @@ export async function playStreamedPartAndSave(params: {
   // Fallback path when MSE is unavailable or unsupported: capture entire blob, optionally save, no MSE playback.
   if (!mseSupported) {
     const blob = await captureToBlob(stream, undefined, streamFormat);
-    const session: PlaybackSession = { abort, audioEl: null, mediaSource: null, sourceBuffer: null, lastBlob: blob, fileBase: base } as any;
+    const session: PlaybackSession = { abort, audioEl: null, mediaSource: null, sourceBuffer: null, lastBlob: blob, fileBase: base };
     setSession(session);
     // When merging is enabled, append entire blob bytes to the assembler.
     if (appendToMerged) {
