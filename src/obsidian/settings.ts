@@ -5,11 +5,182 @@ import { setDebugLogging } from "../utils/logger";
 import type AudioVaultPlugin from "../index";
 import { CartesiaVoiceBrowser } from "./voice-browser";
 
+type DeclarativeControl =
+  | { type: "text"; key: string; defaultValue?: string; validate?: (value: string) => string | void | Promise<string | void> }
+  | { type: "folder"; key: string; defaultValue?: string }
+  | { type: "number"; key: string; defaultValue?: number; min?: number; max?: number; step?: number | "any"; validate?: (value: number) => string | void | Promise<string | void> }
+  | { type: "toggle"; key: string; defaultValue?: boolean };
+
+type DeclarativeSettingItem =
+  | { name: string; desc?: string; control?: DeclarativeControl; render?: (setting: Setting) => void }
+  | { type: "group"; heading?: string; items: DeclarativeSettingItem[] };
+
+function refreshSettingsTab(tab: PluginSettingTab & { update?: () => void }): void {
+  if (typeof tab.update === "function") tab.update();
+  else tab.display();
+}
+
 export class AudioVaultSettingsTab extends PluginSettingTab {
   private advancedVisible = false;
 
   constructor(app: App, private readonly plugin: AudioVaultPlugin) {
     super(app, plugin);
+  }
+
+  getSettingDefinitions(): DeclarativeSettingItem[] {
+    return [{
+      type: "group",
+      heading: "AudioVault",
+      items: [
+        {
+          name: "Cartesia API key",
+          desc: "Stored on this device, outside synced plugin settings.",
+          render: (setting: Setting) => {
+            setting.setDesc("Stored on this device, outside synced plugin settings.")
+              .addText((text) => {
+                text.inputEl.type = "password";
+                text.inputEl.autocomplete = "off";
+                text.setPlaceholder("Cartesia API key").setValue(this.plugin.getCartesiaKey())
+                  .onChange((value) => this.plugin.setCartesiaKey(value));
+              });
+          },
+        },
+        {
+          name: "Voice",
+          desc: "Cartesia voice used for generated audio.",
+          render: (setting: Setting) => {
+            const settings = this.plugin.settings;
+            setting.addDropdown((dropdown) => {
+              for (const voice of CARTESIA_VOICES) dropdown.addOption(voice.shortName, voice.name);
+              const id = settings.cartesiaVoiceId ?? CARTESIA_VOICES[0].shortName;
+              if (settings.cartesiaVoiceLabel || !CARTESIA_VOICES.some((voice) => voice.shortName === id)) {
+                dropdown.addOption("catalog", (settings.cartesiaVoiceLabel || "Saved Cartesia voice").slice(0, 48));
+                dropdown.setValue("catalog");
+              } else dropdown.setValue(id);
+              dropdown.onChange((value) => {
+                if (value === "catalog") return;
+                void this.selectVoice(value).catch(() => {
+                  new Notice("Could not save your voice selection. Try again.");
+                }).finally(() => refreshSettingsTab(this));
+              });
+            }).addButton((button) => button.setButtonText("Browse voices").onClick(() => {
+              const key = this.plugin.getCartesiaKey().trim();
+              if (!key) {
+                new Notice("Add your Cartesia API key before browsing voices.");
+                return;
+              }
+              new CartesiaVoiceBrowser(this.app, key, { id: settings.cartesiaVoiceId, locale: settings.cartesiaVoiceLocale },
+                async (voice, locale) => {
+                  await this.selectVoice(voice.id, voice.name, locale);
+                  refreshSettingsTab(this);
+                }).open();
+            }));
+          },
+        },
+        {
+          name: "Playback speed",
+          desc: "Playback-only adjustment, e.g. +10%. Does not regenerate audio.",
+          control: {
+            type: "text",
+            key: "rate",
+            defaultValue: DEFAULT_SETTINGS.rate,
+            validate: (value: string) => /^[+-]?\d+%$/.test(value.trim()) ? undefined : "Enter a percentage such as +10%.",
+          },
+        },
+        {
+          name: "Language (optional override)",
+          desc: "BCP-47 code; leave blank to detect the language or use the selected voice.",
+          control: { type: "text", key: "languageOverride", defaultValue: "" },
+        },
+        {
+          name: "Audio folder",
+          desc: "Vault folder where generated audio is saved.",
+          control: { type: "folder", key: "audioFolder", defaultValue: DEFAULT_SETTINGS.audioFolder },
+        },
+        {
+          type: "group",
+          heading: "Advanced options",
+          items: [
+            {
+              name: "Chunk size (characters)",
+              desc: `500–9000 characters (default: ${DEFAULT_CHUNK_SIZE}); iOS uses 500.`,
+              control: {
+                type: "number",
+                key: "chunkSize",
+                defaultValue: DEFAULT_CHUNK_SIZE,
+                min: 500,
+                max: 9000,
+                step: 1,
+                validate: (value: number) => Number.isInteger(value) && value >= 500 && value <= 9000
+                  ? undefined
+                  : "Enter a whole number from 500 to 9000.",
+              },
+            },
+            {
+              name: "Debug logs",
+              desc: "Enable diagnostic logging.",
+              control: { type: "toggle", key: "debugLogs", defaultValue: false },
+            },
+            {
+              name: "Restore defaults",
+              desc: "Keeps your Cartesia API key.",
+              render: (setting: Setting) => {
+                setting.addButton((button) => button.setButtonText("Reset").onClick(() => {
+                  this.plugin.settings = { ...DEFAULT_SETTINGS };
+                  setDebugLogging(false);
+                  void this.plugin.saveSettings().then(() => {
+                    new Notice("Settings restored");
+                    refreshSettingsTab(this);
+                  });
+                }));
+              },
+            },
+          ],
+        },
+      ],
+    }];
+  }
+
+  getControlValue(key: string): unknown {
+    switch (key) {
+      case "rate": return this.plugin.settings.rate;
+      case "languageOverride": return this.plugin.settings.languageOverride ?? "";
+      case "audioFolder": return this.plugin.settings.audioFolder;
+      case "chunkSize": return this.plugin.settings.chunkSize ?? DEFAULT_CHUNK_SIZE;
+      case "debugLogs": return !!this.plugin.settings.debugLogs;
+      default: return undefined;
+    }
+  }
+
+  async setControlValue(key: string, value: unknown): Promise<void> {
+    switch (key) {
+      case "rate":
+        if (typeof value !== "string" || !/^[+-]?\d+%$/.test(value.trim())) throw new Error("Invalid playback speed.");
+        this.plugin.settings.rate = value.trim();
+        break;
+      case "languageOverride":
+        if (typeof value !== "string") throw new Error("Invalid language override.");
+        this.plugin.settings.languageOverride = value.trim();
+        break;
+      case "audioFolder":
+        if (typeof value !== "string") throw new Error("Invalid audio folder.");
+        this.plugin.settings.audioFolder = value.trim() || "Audio";
+        break;
+      case "chunkSize":
+        if (typeof value !== "number" || !Number.isInteger(value) || value < 500 || value > 9000) {
+          throw new Error("Invalid chunk size.");
+        }
+        this.plugin.settings.chunkSize = value;
+        break;
+      case "debugLogs":
+        if (typeof value !== "boolean") throw new Error("Invalid debug logs setting.");
+        this.plugin.settings.debugLogs = value;
+        setDebugLogging(value);
+        break;
+      default:
+        throw new Error(`Unknown AudioVault setting: ${key}`);
+    }
+    await this.plugin.saveSettings();
   }
 
   display(): void {
