@@ -17,7 +17,7 @@ import { safeParseManifest, createValidManifest } from "../schema";
 export async function ensureFolder(app: App, folder: string): Promise<void> {
   const exists = await app.vault.adapter.exists(folder);
   if (!exists) {
-    try { await app.vault.createFolder(folder); } catch (_) {}
+    try { await app.vault.createFolder(folder); } catch { void 0; }
   }
 }
 
@@ -51,9 +51,9 @@ export async function deleteExistingParts(app: App, folder: string, base: string
     const suffix = `.${ext}`;
     const targets = files.filter(f => f.path.startsWith(prefix) && f.path.endsWith(suffix));
     for (const f of targets) {
-      await app.vault.adapter.remove(f.path).catch(() => {});
+      await app.vault.adapter.remove(f.path).catch(() => undefined);
     }
-  } catch {}
+  } catch { void 0; }
 }
 
 /**
@@ -107,7 +107,6 @@ export async function replaceAudioReferencesWithSingle(app: App, file: TFile, re
   for (const l of lines) {
     if (!l.startsWith(prefix)) kept.push(l);
   }
-  const needsNewline = kept.length > 0 && !kept[kept.length - 1].endsWith("\n");
   const body = kept.join("\n");
   const maybeNl = body.endsWith("\n") || body.length === 0 ? "" : "\n";
   const single = `${prefix}${relPath}]]`;
@@ -129,9 +128,9 @@ export async function readManifest(app: App, folder: string, base: string): Prom
     const exists = await app.vault.adapter.exists(path);
     if (!exists) return null;
     const raw = await app.vault.adapter.read(path);
-    const parsed = JSON.parse(raw) as AudioManifest;
-    if (!parsed || typeof parsed !== "object") return null;
-    return parsed;
+    const parsed: unknown = JSON.parse(raw);
+    const result = safeParseManifest(parsed);
+    return result.success ? result.data : null;
   } catch {
     return null;
   }
@@ -153,9 +152,9 @@ export async function writeManifest(app: App, folder: string, base: string, data
   try {
     await app.vault.adapter.rename(tmp, path);
   } catch {
-    try { await app.vault.adapter.remove(path); } catch {}
+    try { await app.vault.adapter.remove(path); } catch { void 0; }
     await app.vault.adapter.write(path, body);
-    try { await app.vault.adapter.remove(tmp); } catch {}
+    try { await app.vault.adapter.remove(tmp); } catch { void 0; }
   }
 }
 
@@ -170,12 +169,12 @@ export async function safeRename(app: App, oldPath: string, newPath: string): Pr
   try {
     await app.vault.adapter.rename(oldPath, newPath);
     return;
-  } catch {}
+  } catch { void 0; }
   try {
     const data = await app.vault.adapter.read(oldPath);
     await app.vault.adapter.write(newPath, data);
     await app.vault.adapter.remove(oldPath);
-  } catch {}
+  } catch { void 0; }
 }
 
 /**
@@ -234,11 +233,11 @@ export async function writeFileAtomic(
     try {
       await app.vault.adapter.rename(tmpPath, path);
       return { ok: true, value: undefined };
-    } catch (renameError) {
+    } catch {
       // Fallback: remove target and rename temp
       try {
         await app.vault.adapter.remove(path);
-      } catch {}
+      } catch { void 0; }
       
       if (typeof data === 'string') {
         await app.vault.adapter.write(path, data);
@@ -249,7 +248,7 @@ export async function writeFileAtomic(
       // Clean up temp file
       try {
         await app.vault.adapter.remove(tmpPath);
-      } catch {}
+      } catch { void 0; }
       
       return { ok: true, value: undefined };
     }
@@ -257,7 +256,7 @@ export async function writeFileAtomic(
     // Clean up temp file on failure
     try {
       await app.vault.adapter.remove(tmpPath);
-    } catch {}
+    } catch { void 0; }
     
     const message = error instanceof Error ? error.message : String(error);
     return {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CARTESIA_API_VERSION, CARTESIA_VOICES } from "./cartesia-provider";
+import { isSuccessfulResponse, parseJson, requestUrlWithAbort } from "../network/request";
 
 const voiceId = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const locale = z.string().regex(/^[a-z]{2,3}(?:-[a-z]{2})?$/i);
@@ -64,15 +65,14 @@ export async function fetchCatalogPage(key: string, options: {
   if (options.query.trim()) params.set("q", options.query.trim());
   if (options.language) params.set("language", options.language);
   if (options.cursor) params.set("starting_after", options.cursor);
-  const response = await fetch(`https://api.cartesia.ai/voices?${params}`, {
-    redirect: "error",
+  const response = await requestUrlWithAbort({
+    url: `https://api.cartesia.ai/voices?${params}`,
     headers: { Authorization: `Bearer ${key.trim()}`, "Cartesia-Version": CARTESIA_API_VERSION },
-    signal: options.signal,
-  });
+  }, options.signal);
   if (response.status === 401 || response.status === 403) throw new Error("Cartesia rejected the API key. Check it in AudioVault settings.");
   if (response.status === 429) throw new Error("Cartesia is rate limiting voice searches. Try again shortly.");
-  if (!response.ok) throw new Error(`Could not load voices from Cartesia (HTTP ${response.status}).`);
-  const parsed = pageSchema.safeParse(await response.json().catch(() => null));
+  if (!isSuccessfulResponse(response.status)) throw new Error(`Could not load voices from Cartesia (HTTP ${response.status}).`);
+  const parsed = pageSchema.safeParse(parseJson(response.text));
   if (!parsed.success) throw new Error("Cartesia returned an unexpected voice list.");
   const { data, has_more, next_page } = parsed.data;
   const next = has_more ? next_page || data.at(-1)?.id : undefined;

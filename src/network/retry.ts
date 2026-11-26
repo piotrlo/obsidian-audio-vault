@@ -4,6 +4,47 @@
  */
 
 import type { Result, AudioVaultError } from "../types";
+import { requestUrlWithAbort } from "./request";
+import type { RequestUrlParam } from "obsidian";
+
+async function toRequestUrlParam(input: RequestInfo | URL, init?: RequestInit): Promise<RequestUrlParam> {
+  const request = input instanceof Request ? input : undefined;
+  const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+  const headers = new Headers(request?.headers);
+  new Headers(init?.headers).forEach((value, key) => headers.set(key, value));
+  let body: BodyInit | null | undefined = init?.body;
+  if (body === undefined && request?.body) body = request.clone().body;
+
+  let requestBody: string | ArrayBuffer | undefined;
+  if (typeof body === "string") {
+    requestBody = body;
+    if (!headers.has("content-type")) headers.set("content-type", "text/plain;charset=UTF-8");
+  } else if (body instanceof URLSearchParams) {
+    requestBody = body.toString();
+    if (!headers.has("content-type")) headers.set("content-type", "application/x-www-form-urlencoded;charset=UTF-8");
+  } else if (body !== null && body !== undefined) {
+    requestBody = await new Response(body).arrayBuffer();
+  }
+
+  const requestHeaders: Record<string, string> = {};
+  headers.forEach((value, key) => {
+    requestHeaders[key] = value;
+  });
+  return {
+    url,
+    method: init?.method ?? request?.method,
+    headers: requestHeaders,
+    body: requestBody,
+  };
+}
+
+function toResponse(response: Awaited<ReturnType<typeof requestUrlWithAbort>>): Response {
+  const bodylessStatus = response.status === 204 || response.status === 205 || response.status === 304;
+  return new Response(bodylessStatus ? null : response.arrayBuffer, {
+    status: response.status,
+    headers: response.headers,
+  });
+}
 
 /**
  * Options for fetchWithRetry function.
@@ -58,8 +99,8 @@ function isTransientError(error: unknown, attempt: number, abortSignal?: AbortSi
   }
   
   // If we have a response, check status code
-  if (error && typeof error === 'object' && 'status' in error && typeof (error as any).status === 'number') {
-    const status = (error as any).status;
+  if (error && typeof error === 'object' && 'status' in error && typeof error.status === 'number') {
+    const status = error.status;
     
     // 5xx server errors are transient
     if (status >= 500 && status < 600) {
@@ -160,7 +201,7 @@ function createTimeoutController(timeoutMs: number, parentSignal?: AbortSignal):
   }
   
   // Set up timeout
-  const timeoutId = setTimeout(() => {
+  const timeoutId = window.setTimeout(() => {
     controller.abort();
   }, timeoutMs);
   
@@ -174,7 +215,7 @@ function createTimeoutController(timeoutMs: number, parentSignal?: AbortSignal):
   }
   
   const cleanup = () => {
-    clearTimeout(timeoutId);
+    window.clearTimeout(timeoutId);
     if (parentSignal) {
       parentSignal.removeEventListener('abort', onParentAbort);
     }
@@ -208,10 +249,9 @@ export async function fetchWithRetry(
     
     try {
       // Make the request
-      const response = await fetch(input, {
-        ...init,
-        signal: controller.signal,
-      });
+      const request = await toRequestUrlParam(input, init);
+      const result = await requestUrlWithAbort(request, controller.signal);
+      const response = toResponse(result);
       
       cleanup();
       
@@ -249,7 +289,7 @@ export async function fetchWithRetry(
       const retryAfterDelay = getRetryAfterDelay(response);
       const delay = retryAfterDelay ?? calculateDelay(attempt, baseDelayMs, maxDelayMs, jitter);
       
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise(resolve => window.setTimeout(resolve, delay));
       
     } catch (error) {
       cleanup();
@@ -275,7 +315,7 @@ export async function fetchWithRetry(
       }
       
       const delay = calculateDelay(attempt, baseDelayMs, maxDelayMs, jitter);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise(resolve => window.setTimeout(resolve, delay));
     }
   }
   

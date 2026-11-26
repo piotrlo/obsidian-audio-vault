@@ -1,11 +1,14 @@
 import { describe, it, expect, mock } from "bun:test";
 import { playBufferedPrefetch } from "../../src/playback/buffered";
+import { Notice, requestUrl } from "../__mocks__/obsidian";
 
 // Mock Obsidian Platform
 mock.module("obsidian", () => ({
   Platform: {
     isIosApp: false,
-  }
+  },
+  Notice,
+  requestUrl,
 }));
 
 function makeEnv(){

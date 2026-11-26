@@ -25,7 +25,9 @@ test("removes only the new file if the note link cannot be committed", async () 
     vault: {
       async createBinary(path: string) { files.add(path); return { path }; },
       async process() { throw new Error("note write failed"); },
-      async delete(file: TFile) { files.delete(file.path); },
+    },
+    fileManager: {
+      async trashFile(file: TFile) { files.delete(file.path); },
     },
   } as unknown as App;
   await expect(publishAudio(app, note, "Audio", new ArrayBuffer(3), new AbortController().signal, await noteAudioFingerprint("Plan"))).rejects.toThrow("note write failed");

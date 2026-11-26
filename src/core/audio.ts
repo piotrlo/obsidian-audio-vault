@@ -10,7 +10,7 @@ import { mimeFromFormat } from "../core/helpers";
 export function waitForEndOrAbort(audioEl: HTMLAudioElement, abortSignal: AbortSignal): Promise<void> {
   return new Promise<void>((resolve) => {
     if (abortSignal.aborted) {
-      try { audioEl.pause(); } catch {}
+      try { audioEl.pause(); } catch { void 0; }
       return resolve();
     }
     const onEnded = () => {
@@ -18,16 +18,16 @@ export function waitForEndOrAbort(audioEl: HTMLAudioElement, abortSignal: AbortS
       resolve();
     };
     const onAbort = () => {
-      try { audioEl.pause(); } catch {}
+      try { audioEl.pause(); } catch { void 0; }
       cleanup();
       resolve();
     };
     const cleanup = () => {
       audioEl.removeEventListener("ended", onEnded);
-      abortSignal.removeEventListener("abort", onAbort as any);
+      abortSignal.removeEventListener("abort", onAbort);
     };
     audioEl.addEventListener("ended", onEnded, { once: true });
-    abortSignal.addEventListener("abort", onAbort as any, { once: true });
+    abortSignal.addEventListener("abort", onAbort, { once: true });
   });
 }
 
@@ -38,7 +38,7 @@ export function waitForEndOrAbort(audioEl: HTMLAudioElement, abortSignal: AbortS
 export function canStream(outputFormat: string): { supported: boolean; mime: string } {
   const mime = mimeFromFormat(outputFormat);
   const supported = typeof MediaSource !== "undefined"
-    && (MediaSource as any).isTypeSupported
+    && typeof MediaSource.isTypeSupported === "function"
     && MediaSource.isTypeSupported(mime);
   return { supported, mime };
 }

@@ -1,13 +1,16 @@
 import { test, expect, mock } from "bun:test";
 import { playBufferedPrefetch } from "../../src/playback/buffered";
 import type { TtsProvider, Voice } from "../../src/types";
+import { Notice, requestUrl } from "../__mocks__/obsidian";
 
 // Mock the obsidian module
 mock.module("obsidian", () => {
   return {
     Platform: {
       isIosApp: false,
-    }
+    },
+    Notice,
+    requestUrl,
   };
 });
 

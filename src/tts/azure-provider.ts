@@ -1,5 +1,6 @@
 import type { TtsProvider, Voice } from "../types";
 import { mimeFromFormat } from "../core/helpers";
+import { byteStream, isSuccessfulResponse, requestUrlWithAbort } from "../network/request";
 
 export class AzureTtsProvider implements TtsProvider {
   private readonly apiKey: string;
@@ -13,7 +14,8 @@ export class AzureTtsProvider implements TtsProvider {
   async synthesize(ssml: string, outputFormat: string, _lang: string, abortSignal: AbortSignal): Promise<ReadableStream<Uint8Array>> {
     const url = `https://${this.region}.tts.speech.microsoft.com/cognitiveservices/v1`;
     const fmt = outputFormat && outputFormat.trim() ? outputFormat.trim() : "audio-24khz-48kbitrate-mono-mp3";
-    const res = await fetch(url, {
+    const res = await requestUrlWithAbort({
+      url,
       method: "POST",
       headers: {
         accept: "audio/*",
@@ -23,32 +25,31 @@ export class AzureTtsProvider implements TtsProvider {
         "X-Microsoft-OutputFormat": fmt
       },
       body: ssml,
-      signal: abortSignal
-    });
-    if (!res.ok || !res.body) {
-      let detail = "";
-      try { detail = await res.text(); } catch {}
+    }, abortSignal);
+    if (!isSuccessfulResponse(res.status)) {
+      const detail = res.text;
       throw new Error(`TTS stream failed: ${res.status}${detail ? ` - ${detail}` : ""}`);
     }
-    return res.body as ReadableStream<Uint8Array>;
+    return byteStream(res.arrayBuffer);
   }
 
   async listVoices(region?: string, apiKey?: string): Promise<Voice[]> {
     const r = (region && region.trim()) || this.region;
     const k = (apiKey && apiKey.trim()) || this.apiKey;
     const url = `https://${r}.tts.speech.microsoft.com/cognitiveservices/voices/list`;
-    const res = await fetch(url, { headers: { "Ocp-Apim-Subscription-Key": k } });
-    if (!res.ok) {
-      let t = ""; try { t = await res.text(); } catch {}
+    const res = await requestUrlWithAbort({ url, headers: { "Ocp-Apim-Subscription-Key": k } });
+    if (!isSuccessfulResponse(res.status)) {
+      const t = res.text;
       throw new Error(`Voice list failed: ${res.status}${t ? ` - ${t}` : ""}`);
     }
-    const data = await res.json();
-    const raw: Array<{ ShortName?: string; Name?: string }> = Array.isArray(data) ? data : [];
+    const data: unknown = JSON.parse(res.text);
+    const raw = Array.isArray(data) ? data : [];
     const out: Voice[] = [];
-    for (const v of raw) {
-      const name = v.Name || v.ShortName || "";
-      const shortName = v.ShortName || v.Name || "";
-      if (name && shortName) out.push({ name, shortName });
+    for (const value of raw) {
+      if (value === null || typeof value !== "object") continue;
+      const name = Reflect.get(value, "Name") || Reflect.get(value, "ShortName") || "";
+      const shortName = Reflect.get(value, "ShortName") || Reflect.get(value, "Name") || "";
+      if (name && shortName) out.push({ name: String(name), shortName: String(shortName) });
     }
     return out;
   }

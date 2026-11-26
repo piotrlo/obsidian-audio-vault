@@ -41,8 +41,7 @@ test("searches Cartesia directly with a language filter and pagination cursor", 
     const [endpoint, query] = address.split("?");
     expect(endpoint).toBe("https://api.cartesia.ai/voices");
     expect(Object.fromEntries(new URLSearchParams(query))).toEqual({ limit: "20", q: "A & B", language: "pl", starting_after: "voice-previous" });
-    expect(init.redirect).toBe("error");
-    expect(init.signal).toBe(signal);
+    expect(init.signal).toBeUndefined();
     expect(init.body).toBeUndefined();
     expect(new Headers(init.headers).get("Authorization")).toBe("Bearer test-key");
   } finally {

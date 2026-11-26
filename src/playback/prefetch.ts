@@ -116,7 +116,7 @@ export async function prefetchAllParts(params: PrefetchOptions): Promise<Prefetc
       mergedUntil: 0,
       updatedAt: Date.now(),
     });
-    missingParts = Array.from({ length: totalParts }, (_, i) => i + 1);
+    missingParts = Array.from(Array(totalParts).keys(), (index) => index + 1);
     debug("Force regenerate: starting with empty manifest");
   } else {
     // Try to load existing manifest
@@ -171,7 +171,7 @@ export async function prefetchAllParts(params: PrefetchOptions): Promise<Prefetc
     }
     
     // Determine missing parts
-    const allParts = Array.from({ length: totalParts }, (_, i) => i + 1);
+    const allParts = Array.from(Array(totalParts).keys(), (index) => index + 1);
     missingParts = allParts.filter(part => !manifest.fetchedParts.includes(part));
   }
   
@@ -364,10 +364,10 @@ async function synthesizeWithRetry(
   try {
     // Compose abort with timeout
     const controller = new AbortController();
-    const onAbort = () => { try { controller.abort(); } catch {} };
+    const onAbort = () => { try { controller.abort(); } catch { void 0; } };
     if (abortSignal.aborted) controller.abort();
     else abortSignal.addEventListener('abort', onAbort, { once: true });
-    const timeout = setTimeout(() => { try { controller.abort(); } catch {} }, timeoutMs);
+    const timeout = window.setTimeout(() => { try { controller.abort(); } catch { void 0; } }, timeoutMs);
 
     try {
       const stream = await provider.synthesize(input, outputFormat, lang, controller.signal);
@@ -376,8 +376,8 @@ async function synthesizeWithRetry(
       const mime = blob.type || (/wav|riff/i.test(outputFormat) ? "audio/wav" : "audio/mpeg");
       return { ok: true, value: { buffer, mime } };
     } finally {
-      clearTimeout(timeout);
-      try { abortSignal.removeEventListener('abort', onAbort as any); } catch {}
+      window.clearTimeout(timeout);
+      try { abortSignal.removeEventListener('abort', onAbort); } catch { void 0; }
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

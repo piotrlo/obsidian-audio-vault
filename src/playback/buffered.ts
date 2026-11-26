@@ -5,14 +5,14 @@
 
 import type { App, TFile } from "obsidian";
 import type { PlaybackSession, TtsProvider, TtsSettings, PrefetchResult } from "../types";
-import { AudioSessionManager, type AudioSessionEventListener } from "./session";
+import { AudioSessionManager, type AudioSessionEventListener, type AudioSessionConfig } from "./session";
 import { synthesisInput } from "../tts/input";
 import { fileExtFromFormat, playbackRateFromRateSetting } from "../core/helpers";
 import { captureToBlob, waitForEndOrAbort } from "../core/audio";
-import { cleanupSessionResources as cleanupSessionResourcesHelper } from "./session";
 import { notify as notifyUtil } from "../core/notify";
 import { debug, warn, error as logError } from "../utils/logger";
 import { Platform } from "obsidian";
+import { toError } from "../utils/errors";
 
 /**
  * Configuration for enhanced buffered playback.
@@ -103,13 +103,13 @@ const config: Required<EnhancedBufferedConfig> = {
     debug(`Starting enhanced buffered prefetch playback (${chunks.length} parts, iOS=${isiOS})`);
     try { 
       notifyUtil(settings, `Starting enhanced playback (${chunks.length} part(s))...`); 
-    } catch {}
+    } catch { void 0; }
     
     // Audio session configuration
-    const sessionConfig = {
+    const sessionConfig: AudioSessionConfig = {
       playbackRate: playbackRateFromRateSetting(settings.rate),
       volume: 1.0,
-      preload: 'auto' as const,
+      preload: 'auto',
     };
     
     // Session event handlers
@@ -119,20 +119,20 @@ const config: Required<EnhancedBufferedConfig> = {
         if (state === 'stalled' && config.showBufferingUI) {
           try {
             notifyUtil(settings, "Buffering...", true);
-          } catch {}
+          } catch { void 0; }
         }
       },
       onError: (error) => {
         logError('Audio session error:', error);
         try {
           notifyUtil(settings, `Playback error: ${error.message}`);
-        } catch {}
+        } catch { void 0; }
       },
       onBuffering: (isBuffering) => {
         if (isBuffering && config.showBufferingUI) {
           try {
             notifyUtil(settings, "Buffering...", true);
-          } catch {}
+          } catch { void 0; }
         }
       },
     };
@@ -152,12 +152,12 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
               const partPath = `${folder}/${base}_part_${idx + 1}.${ext}`;
               try {
                 const data = await app.vault.adapter.readBinary(partPath);
-                const ab = data as ArrayBuffer;
+                const ab = data;
                 const mime = /(wav|riff)/i.test(settings.outputFormat) ? "audio/wav" : "audio/mpeg";
                 debug(`Loaded part ${idx + 1} from disk due to empty prefetch buffer`);
                 return { buffer: ab, mime, idx };
               } catch (error) {
-                if (provider.noSynthesisRetry) throw error;
+                if (provider.noSynthesisRetry) throw toError(error);
                 // If not found on disk, fall back to synthesizing now
                 debug(`Prefetch buffer empty and file missing; fallback synthesis for part ${idx + 1}`);
                 const input = synthesisInput(provider, chunks[idx], settings, lang);
@@ -171,7 +171,7 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
             return { buffer: r.buffer, mime: r.mime, idx };
           })
           .catch(async (error) => {
-            if (provider.noSynthesisRetry) throw error;
+            if (provider.noSynthesisRetry) throw toError(error);
             debug(`Fallback synthesis for part ${idx + 1}`);
             const input = synthesisInput(provider, chunks[idx], settings, lang);
             const stream = await provider.synthesize(input, settings.outputFormat, lang, abortAll.signal);
@@ -237,8 +237,9 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
           const timeoutMs = (partIdx === startIndex) ? config.firstPartTimeoutMs : config.maxWaitForNext;
           const partData = await Promise.race([
             tasks[partIdx],
-            new Promise<never>((_, reject) => {
-              setTimeout(() => reject(new Error(`Part timeout (${timeoutMs}ms)`)), timeoutMs);
+            new Promise<never>((resolve, reject) => {
+              void resolve;
+              window.setTimeout(() => reject(new Error(`Part timeout (${timeoutMs}ms)`)), timeoutMs);
             })
           ]).catch(async (error) => {
             if (partIdx > startIndex && !provider.noSynthesisRetry) {
@@ -249,7 +250,7 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
               // First part failed; surface a clearer message
               const msg = error instanceof Error ? error.message : String(error);
               warn(`First part timed out after ${timeoutMs}ms; aborting start`, msg);
-              throw error;
+              throw toError(error);
             }
           });
           
@@ -289,7 +290,7 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
               try {
                 notifyUtil(settings, `Playback started`, true);
                 debug(`First part playback started after ${Date.now() - startDelay}ms`);
-              } catch {}
+              } catch { void 0; }
               isFirstPart = false;
             }
           }
@@ -298,13 +299,13 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
           logError(`Audio play failed for part ${partIdx + 1}:`, msg);
           try {
             notifyUtil(settings, `Audio play failed: ${msg}`);
-          } catch {}
+          } catch { void 0; }
           
           // Clean up blob URL if we created one
           if (audioPath?.startsWith('blob:')) {
             try {
               URL.revokeObjectURL(audioPath);
-            } catch {}
+            } catch { void 0; }
           }
           
           // Try to continue with next part
@@ -350,13 +351,13 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
           if (nextPartIdx < tasks.length) {
             const isNextReady = await Promise.race([
               tasks[nextPartIdx].then(() => true),
-              new Promise<boolean>(resolve => setTimeout(() => resolve(false), config.waitBackoffMs))
+              new Promise<boolean>(resolve => window.setTimeout(() => resolve(false), config.waitBackoffMs))
             ]);
             
             if (!isNextReady && config.showBufferingUI) {
               try {
                 notifyUtil(settings, "Buffering next part...", true);
-              } catch {}
+              } catch { void 0; }
               
               // Wait with exponential backoff up to cap
               let waitTime = config.waitBackoffMs;
@@ -364,11 +365,11 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
               const startWait = Date.now();
               
               while (waitTime <= maxWait && !stopRequested() && !abortAll.signal.aborted) {
-                await new Promise(resolve => setTimeout(resolve, waitTime));
+                await new Promise(resolve => window.setTimeout(resolve, waitTime));
                 
                 const isNowReady = await Promise.race([
                   tasks[nextPartIdx].then(() => true),
-                  new Promise<boolean>(resolve => setTimeout(() => resolve(false), 50))
+                  new Promise<boolean>(resolve => window.setTimeout(() => resolve(false), 50))
                 ]);
                 
                 if (isNowReady) {
@@ -386,7 +387,7 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
         if (audioPath?.startsWith('blob:')) {
           try {
             URL.revokeObjectURL(audioPath);
-          } catch {}
+          } catch { void 0; }
         }
         
         if (stopRequested() || abortAll.signal.aborted) break;
@@ -397,7 +398,7 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
         
         // Try to continue with next part unless it's the first
         if (partIdx === startIndex || provider.noSynthesisRetry) {
-          throw error; // Can't continue if first part fails
+          throw toError(error); // Can't continue if first part fails
         }
         
         partIdx += 1;
@@ -410,18 +411,14 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
     try {
       debug('Cleaning up enhanced buffered playback');
       abortAll.abort();
-    } catch {}
+    } catch { void 0; }
     
     try {
       if (sessionManager) {
         sessionManager.dispose();
         sessionManager = null;
       }
-    } catch {}
-    
-    try {
-      await cleanupSessionResourcesHelper(null, true);
-    } catch {}
+    } catch { void 0; }
     
     setSession(null);
   }

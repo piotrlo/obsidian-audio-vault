@@ -1,6 +1,7 @@
 /**
  * Azure TTS over HTTPS streaming and helpers.
  */
+import { byteStream, isSuccessfulResponse, requestUrlWithAbort } from "../network/request";
 
 /**
  * Resolve a MIME type based on Azure output format string.
@@ -24,7 +25,8 @@ export async function fetchTtsAudio(
 ): Promise<{ buffer: ArrayBuffer; mime: string }> {
   const url = `https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`;
   const fmt = outputFormat && outputFormat.trim() ? outputFormat.trim() : "audio-24khz-48kbitrate-mono-mp3";
-  const res = await fetch(url, {
+  const res = await requestUrlWithAbort({
+    url,
     method: "POST",
     headers: {
       accept: "audio/*",
@@ -34,14 +36,12 @@ export async function fetchTtsAudio(
       "X-Microsoft-OutputFormat": fmt
     },
     body: ssml,
-    signal: abortSignal
-  });
-  if (!res.ok) {
-    let detail = "";
-    try { detail = await res.text(); } catch {}
+  }, abortSignal);
+  if (!isSuccessfulResponse(res.status)) {
+    const detail = res.text;
     throw new Error(`TTS fetch failed: ${res.status}${detail ? ` - ${detail}` : ""}`);
   }
-  const buffer = await res.arrayBuffer();
+  const buffer = res.arrayBuffer;
   const mime = mimeFromFormat(fmt);
   return { buffer, mime };
 }
@@ -65,7 +65,8 @@ export async function startHttpStream(
 ): Promise<ReadableStream<Uint8Array>> {
   const url = `https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`;
   const fmt = outputFormat && outputFormat.trim() ? outputFormat.trim() : "audio-24khz-48kbitrate-mono-mp3";
-  const res = await fetch(url, {
+  const res = await requestUrlWithAbort({
+    url,
     method: "POST",
     headers: {
       accept: "audio/*",
@@ -75,14 +76,12 @@ export async function startHttpStream(
       "X-Microsoft-OutputFormat": fmt
     },
     body: ssml,
-    signal: abortSignal
-  });
-  if (!res.ok || !res.body) {
-    let detail = "";
-    try { detail = await res.text(); } catch {}
+  }, abortSignal);
+  if (!isSuccessfulResponse(res.status)) {
+    const detail = res.text;
     throw new Error(`TTS stream failed: ${res.status}${detail ? ` - ${detail}` : ""}`);
   }
-  return res.body as ReadableStream<Uint8Array>;
+  return byteStream(res.arrayBuffer);
 }
 
 /**

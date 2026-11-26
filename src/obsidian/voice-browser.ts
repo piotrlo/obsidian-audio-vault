@@ -11,7 +11,7 @@ export class CartesiaVoiceBrowser extends Modal {
   private voices: CatalogVoice[] = [];
   private next?: string;
   private request?: AbortController;
-  private timer?: ReturnType<typeof setTimeout>;
+  private timer?: number;
   private results!: HTMLElement;
   private status!: HTMLElement;
   private selecting = false;
@@ -63,19 +63,19 @@ export class CartesiaVoiceBrowser extends Modal {
   onClose(): void {
     this.request?.abort();
     this.request = undefined;
-    clearTimeout(this.timer);
+    window.clearTimeout(this.timer);
     this.contentEl.empty();
   }
 
   private schedule(): void {
-    clearTimeout(this.timer);
+    window.clearTimeout(this.timer);
     this.request?.abort();
     this.request = undefined;
     this.voices = [];
     this.next = undefined;
     this.render();
     this.status.setText("Searching…");
-    this.timer = setTimeout(() => void this.load(), 350);
+    this.timer = window.setTimeout(() => void this.load(), 350);
   }
 
   private async load(cursor?: string): Promise<void> {
@@ -88,7 +88,7 @@ export class CartesiaVoiceBrowser extends Modal {
     const request = new AbortController();
     this.request = request;
     this.status.setText("Loading voices…");
-    const timeout = setTimeout(() => request.abort(), 12_000);
+    const timeout = window.setTimeout(() => request.abort(), 12_000);
     try {
       const page = await fetchCatalogPage(this.key, { query: this.query, language: language ?? "", cursor, signal: request.signal });
       if (request.signal.aborted) return;
@@ -107,7 +107,7 @@ export class CartesiaVoiceBrowser extends Modal {
         void this.load();
       }));
     } finally {
-      clearTimeout(timeout);
+      window.clearTimeout(timeout);
     }
   }
 
@@ -120,26 +120,22 @@ export class CartesiaVoiceBrowser extends Modal {
       new Setting(this.results).setName(voice.name)
         .setDesc([locale, voice.tagline || voice.description].filter(Boolean).join(" · ").slice(0, 250))
         .addButton((button) => button.setButtonText(active ? "Selected" : "Use voice")
-          .setDisabled(active).onClick(async () => {
+          .setDisabled(active).onClick(() => {
             if (this.selecting) return;
             this.selecting = true;
             button.setDisabled(true);
-            try {
-              await this.choose(voice, locale);
-              this.close();
-            } catch {
+            void this.choose(voice, locale).then(() => this.close()).catch(() => {
               this.status.setText("Could not save your voice selection. Try again.");
               button.setDisabled(false);
-            } finally {
+            }).finally(() => {
               this.selecting = false;
-            }
+            });
           }));
     }
     const next = this.next;
-    if (next) new Setting(this.results).addButton((button) => button.setButtonText("Load more").onClick(async () => {
+    if (next) new Setting(this.results).addButton((button) => button.setButtonText("Load more").onClick(() => {
       button.setDisabled(true);
-      await this.load(next);
-      button.setDisabled(false);
+      void this.load(next).finally(() => button.setDisabled(false));
     }));
   }
 }

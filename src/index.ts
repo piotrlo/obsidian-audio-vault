@@ -13,6 +13,7 @@ import { buildPartialSnapshot, Mp3Assembler } from "./utils/mp3";
 import { hasLocalRecording, linkedAudioPaths, normalizeAudioFolder, noteAudioFingerprint, offlineAudioStatus, publishAudio } from "./utils/note-audio";
 import type { OfflineAudioStatus } from "./utils/note-audio";
 import { sanitizeNoteForTts } from "./utils/sanitize";
+import { throwIfAborted } from "./utils/errors";
 
 type PartResult = { ok: true; data: ArrayBuffer } | { ok: false; error: unknown };
 type AudioJob = {
@@ -34,7 +35,7 @@ export default class AudioVaultPlugin extends Plugin {
   settings!: TtsSettings;
   private job: AudioJob | null = null;
   private ribbon?: HTMLElement;
-  private statusTimer?: ReturnType<typeof setTimeout>;
+  private statusTimer?: number;
   private statusRevision = 0;
 
   async onload(): Promise<void> {
@@ -65,7 +66,7 @@ export default class AudioVaultPlugin extends Plugin {
   onunload(): void {
     this.ribbon = undefined;
     this.statusRevision++;
-    clearTimeout(this.statusTimer);
+    window.clearTimeout(this.statusTimer);
     this.stopPlayback();
   }
 
@@ -83,7 +84,7 @@ export default class AudioVaultPlugin extends Plugin {
   private refreshAudioStatus(): void {
     if (!this.ribbon) return;
     const revision = ++this.statusRevision;
-    clearTimeout(this.statusTimer);
+    window.clearTimeout(this.statusTimer);
     const { vault, workspace } = this.app;
     const file = workspace.getActiveFile();
     if (!file || file.extension !== "md") {
@@ -98,15 +99,17 @@ export default class AudioVaultPlugin extends Plugin {
         : "All audio parts generated (MP3 not saved yet)");
       return;
     }
-    this.statusTimer = setTimeout(async () => {
-      const editor = workspace.activeEditor;
-      const status = await (async () => {
-        const raw = (editor?.file === file ? editor.editor?.getValue() : undefined) ?? await vault.cachedRead(file);
-        return offlineAudioStatus(raw, vault.adapter, this.pendingAudioFolder());
-      })().catch((): OfflineAudioStatus => "unavailable");
-      if (revision === this.statusRevision && file === workspace.getActiveFile()) {
-        this.setRibbonStatus(offlineLabels[status]);
-      }
+    this.statusTimer = window.setTimeout(() => {
+      void (async () => {
+        const editor = workspace.activeEditor;
+        const status = await (async () => {
+          const raw = (editor?.file === file ? editor.editor?.getValue() : undefined) ?? await vault.cachedRead(file);
+          return offlineAudioStatus(raw, vault.adapter, this.pendingAudioFolder());
+        })().catch((): OfflineAudioStatus => "unavailable");
+        if (revision === this.statusRevision && file === workspace.getActiveFile()) {
+          this.setRibbonStatus(offlineLabels[status]);
+        }
+      })();
     }, 200);
   }
 
@@ -178,7 +181,7 @@ export default class AudioVaultPlugin extends Plugin {
             }
           }
           for (const path of links) {
-            signal.throwIfAborted();
+            throwIfAborted(signal);
             await this.playBytes(await this.app.vault.adapter.readBinary(path), settings.rate, file.basename);
           }
           return;
@@ -220,7 +223,7 @@ export default class AudioVaultPlugin extends Plugin {
       let current = pending = start(0);
       for (let index = 0; index < chunks.length; index++) {
         const result = await current;
-        signal.throwIfAborted();
+        throwIfAborted(signal);
         if (!result.ok) {
           const reason = result.error instanceof Error ? result.error.message : "Could not generate audio.";
           throw new Error(`Part ${index + 1}/${chunks.length}: ${reason}`);
@@ -256,7 +259,7 @@ export default class AudioVaultPlugin extends Plugin {
     const job = this.job;
     if (!job) return;
     const { signal } = job.abort;
-    signal.throwIfAborted();
+    throwIfAborted(signal);
     const url = URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" }));
     const audio = new Audio(url);
     audio.playbackRate = playbackRateFromRateSetting(rate);

@@ -1,4 +1,5 @@
 import type { TtsProvider, Voice } from "../types";
+import { byteStream, getResponseHeader, isSuccessfulResponse, requestUrlWithAbort } from "../network/request";
 
 export const CARTESIA_VOICES: readonly Voice[] = [
   { name: "Jacqueline (English)", shortName: "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc" },
@@ -24,9 +25,9 @@ export class CartesiaTtsProvider implements TtsProvider {
   async synthesize(text: string, _format: string, lang: string, signal: AbortSignal): Promise<ReadableStream<Uint8Array>> {
     const key = this.apiKey.trim();
     if (!key) throw new Error("Add your Cartesia API key in AudioVault settings to generate audio.");
-    const response = await fetch("https://api.cartesia.ai/tts/bytes", {
+    const response = await requestUrlWithAbort({
+      url: "https://api.cartesia.ai/tts/bytes",
       method: "POST",
-      redirect: "error",
       headers: {
         Authorization: `Bearer ${key}`,
         "Cartesia-Version": CARTESIA_API_VERSION,
@@ -39,18 +40,17 @@ export class CartesiaTtsProvider implements TtsProvider {
         language: lang,
         output_format: { container: "mp3", sample_rate: 24000, bit_rate: 64000 },
       }),
-      signal,
-    });
+    }, signal);
     if (response.status === 401 || response.status === 403) {
       throw new Error("Cartesia rejected the API key or this voice is not available to your account.");
     }
     if (response.status === 402 || response.status === 429) {
       throw new Error(`Cartesia declined the request (${response.status}). Check your credits and rate limits.`);
     }
-    if (!response.ok) throw new Error(`Cartesia synthesis failed (HTTP ${response.status}).`);
-    if (!response.body || !/^audio\/(?:mpeg|mp3)\b/i.test(response.headers.get("content-type") ?? "")) {
+    if (!isSuccessfulResponse(response.status)) throw new Error(`Cartesia synthesis failed (HTTP ${response.status}).`);
+    if (!/^audio\/(?:mpeg|mp3)\b/i.test(getResponseHeader(response.headers, "content-type") ?? "")) {
       throw new Error("Cartesia did not return MP3 audio.");
     }
-    return response.body;
+    return byteStream(response.arrayBuffer);
   }
 }

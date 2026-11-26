@@ -49,7 +49,7 @@ test("fetchWithRetry succeeds on first attempt", async () => {
   expect(result.ok).toBe(true);
   expect(mockFetch).toHaveBeenCalledTimes(1);
   if (result.ok) {
-    expect(result.value).toBe(mockResponse);
+    expect(await result.value.text()).toBe("success");
   }
 });
 

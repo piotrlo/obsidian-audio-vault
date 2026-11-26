@@ -5,6 +5,7 @@
 
 import type { PlaybackSession } from "../types";
 import { debug, warn, error as logError } from "../utils/logger";
+import { toError } from "../utils/errors";
 
 /**
  * Audio session states for finite state machine.
@@ -180,13 +181,13 @@ export class AudioSessionManager {
     }
     
     return new Promise((resolve) => {
-      const timeout = setTimeout(() => {
+      const timeout = window.setTimeout(() => {
         resolve(false);
       }, timeoutMs);
       
       const checkReady = () => {
         if (this.currentState === 'playing' || this.currentState === 'ended') {
-          clearTimeout(timeout);
+          window.clearTimeout(timeout);
           resolve(true);
         }
       };
@@ -222,7 +223,7 @@ export class AudioSessionManager {
       const message = error instanceof Error ? error.message : String(error);
       logError('Audio play failed:', message);
       this.handleError(new Error(`Play failed: ${message}`));
-      throw error;
+      throw toError(error);
     }
   }
   
@@ -395,7 +396,7 @@ audio.addEventListener('error', (event) => {
         debug('Audio error after cleanup (empty src) — ignoring');
         return;
       }
-      const mediaError = audio.error || { code: 0, message: 'Unknown audio error' } as MediaError;
+      const mediaError = audio.error || { code: 0, message: 'Unknown audio error' };
       const error = new Error(mediaError.message || `Media error (code: ${mediaError.code})`);
       logError('Audio error event:', mediaError);
       this.handleError(error);
@@ -435,24 +436,24 @@ audio.addEventListener('error', (event) => {
     }
     
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
+      const timeout = window.setTimeout(() => {
         reject(new Error(`Audio load timeout after ${timeoutMs}ms`));
       }, timeoutMs);
       
       const onCanPlay = () => {
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
         resolve();
       };
       
       const onError = () => {
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
         const error = this.audioElement?.error || new Error('Audio load failed');
-        reject(error);
+        reject(toError(error));
       };
       
       if (this.audioElement && this.audioElement.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) {
         // Already ready
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
         resolve();
         return;
       }
@@ -471,7 +472,7 @@ audio.addEventListener('error', (event) => {
       try {
         this.audioElement.pause();
         this.audioElement.currentTime = 0;
-      } catch {}
+      } catch { void 0; }
       
       // Explicitly remove all event listeners to prevent memory leaks
       const eventTypes = ['canplay', 'playing', 'waiting', 'stalled', 'ended', 'error', 'suspend', 'timeupdate', 'canplaythrough'];
@@ -497,7 +498,7 @@ audio.addEventListener('error', (event) => {
       try {
         URL.revokeObjectURL(this.currentUrl);
         debug(`Revoked object URL: ${this.currentUrl}`);
-      } catch {}
+      } catch { void 0; }
     }
     this.currentUrl = null;
   }
@@ -509,17 +510,17 @@ audio.addEventListener('error', (event) => {
  */
 export async function cleanupSessionResources(session: PlaybackSession | null, setNull: boolean = false): Promise<PlaybackSession | null> {
   if (!session) return null;
-  try { session.audioEl?.pause(); } catch {}
+  try { session.audioEl?.pause(); } catch { void 0; }
   try {
     if (session.mediaSource && session.mediaSource.readyState === "open") {
       session.mediaSource.endOfStream();
     }
-  } catch {}
+  } catch { void 0; }
   try {
     if (session.objectUrl) {
       URL.revokeObjectURL(session.objectUrl);
     }
-  } catch {}
+  } catch { void 0; }
   return setNull ? null : session;
 }
 

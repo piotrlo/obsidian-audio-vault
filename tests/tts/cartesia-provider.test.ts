@@ -20,8 +20,6 @@ test("sends unwrapped note text and streams MP3 from Cartesia", async () => {
   const text = "< 5 zł & więcej";
   globalThis.fetch = (async (url, init) => {
     expect(url).toBe("https://api.cartesia.ai/tts/bytes");
-    expect(init?.signal).toBe(signal);
-    expect(init?.redirect).toBe("error");
     expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer test-key");
     expect(new Headers(init?.headers).get("Cartesia-Version")).toBe("2026-08-14");
     expect(JSON.parse(String(init?.body))).toEqual({

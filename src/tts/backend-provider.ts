@@ -1,4 +1,37 @@
 import type { TtsProvider, Voice } from "../types";
+import {
+  byteStream, isSuccessfulResponse, parseJson, requestUrlWithAbort,
+} from "../network/request";
+import type { RequestUrlResponse } from "obsidian";
+
+function field(value: unknown, key: string): unknown {
+  if (value === null || typeof value !== "object") return undefined;
+  return Reflect.get(value, key);
+}
+
+function responseDetails(response: RequestUrlResponse): unknown {
+  const parsed = parseJson(response.text);
+  return parsed === undefined ? response.text || null : parsed;
+}
+
+class BackendHttpError extends Error {
+  constructor(message: string, readonly status: number, readonly body: unknown) {
+    super(message);
+    this.name = "BackendHttpError";
+  }
+
+  get code(): unknown {
+    return field(this.body, "error_code") || field(this.body, "code");
+  }
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === "number" ? value : undefined;
+}
 
 /**
  * Backend provider proxying synthesis and voices via Cloudflare Workers (Hono API).
@@ -21,24 +54,21 @@ export class BackendTtsProvider implements TtsProvider {
     const useKey = !!(this.licenseKey && this.licenseKey.trim());
     const url = useKey ? `${this.backendUrl}/v1/auth/validate` : `${this.backendUrl}/v1/auth/activate-free`;
     const body = useKey ? { license_key: this.licenseKey, client_id: this.clientId } : { client_id: this.clientId };
-    const res = await fetch(url, {
+    const res = await requestUrlWithAbort({
+      url,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
     });
-    if (!res.ok) {
-      let detail: any = null;
-      try { detail = await res.json(); } catch { try { detail = await res.text(); } catch {}
-      }
-      const err = new Error(`License validation failed: ${res.status}`);
-      (err as any).status = res.status;
-      (err as any).code = (detail && typeof detail === 'object') ? (detail.error_code || detail.code) : undefined;
-      (err as any).body = detail;
-      throw err;
+    if (!isSuccessfulResponse(res.status)) {
+      const detail = responseDetails(res);
+      throw new BackendHttpError(`License validation failed: ${res.status}`, res.status, detail);
     }
-    const data = await res.json();
-    this.jwtToken = data?.data?.token || null;
-    const expiresIn = Number(data?.data?.expires_in) || 0;
+    const payload = parseJson(res.text);
+    const data = field(payload, "data");
+    const token = stringValue(field(data, "token"));
+    this.jwtToken = token ?? null;
+    const expiresIn = Number(field(data, "expires_in")) || 0;
     this.tokenExpiry = Date.now() + expiresIn * 1000;
     if (!this.jwtToken) throw new Error("No token in validation response");
     return this.jwtToken;
@@ -51,32 +81,29 @@ export class BackendTtsProvider implements TtsProvider {
     const useKey = !!(this.licenseKey && this.licenseKey.trim());
     const url = useKey ? `${this.backendUrl}/v1/auth/validate` : `${this.backendUrl}/v1/auth/activate-free`;
     const body = useKey ? { license_key: this.licenseKey, client_id: this.clientId } : { client_id: this.clientId };
-    const res = await fetch(url, {
+    const res = await requestUrlWithAbort({
+      url,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
     });
-    if (!res.ok) {
-      let detail: any = null;
-      try { detail = await res.json(); } catch { try { detail = await res.text(); } catch {} }
-      const err = new Error(`License validation failed: ${res.status}`);
-      (err as any).status = res.status;
-      (err as any).code = (detail && typeof detail === 'object') ? (detail.error_code || detail.code) : undefined;
-      (err as any).body = detail;
-      throw err;
+    if (!isSuccessfulResponse(res.status)) {
+      const detail = responseDetails(res);
+      throw new BackendHttpError(`License validation failed: ${res.status}`, res.status, detail);
     }
-    const payload = await res.json();
-    const token = payload?.data?.token as string | undefined;
-    const expiresIn = Number(payload?.data?.expires_in) || 0;
-    this.jwtToken = token || null;
+    const payload = parseJson(res.text);
+    const data = field(payload, "data");
+    const token = stringValue(field(data, "token"));
+    const expiresIn = Number(field(data, "expires_in")) || 0;
+    this.jwtToken = token ?? null;
     this.tokenExpiry = Date.now() + expiresIn * 1000;
     if (!token) throw new Error("No token in validation response");
     return {
       token,
       expiresAtMs: this.tokenExpiry,
-      plan: payload?.data?.plan,
-      quota_remaining: payload?.data?.quota_remaining,
-      quota_limit: payload?.data?.quota_limit
+      plan: stringValue(field(data, "plan")),
+      quota_remaining: numberValue(field(data, "quota_remaining")),
+      quota_limit: numberValue(field(data, "quota_limit"))
     };
   }
 
@@ -85,30 +112,35 @@ export class BackendTtsProvider implements TtsProvider {
    */
   async fetchUsage(): Promise<{ plan?: string; chars_used?: number; quota_remaining?: number; quota_limit?: number; period?: string }> {
     const token = await this.getValidToken();
-    const res = await fetch(`${this.backendUrl}/v1/auth/usage`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) {
-      let detail: any = null;
-      try { detail = await res.json(); } catch { try { detail = await res.text(); } catch {} }
-      const err = new Error(`Usage fetch failed: ${res.status}`);
-      (err as any).status = res.status;
-      (err as any).code = (detail && typeof detail === 'object') ? (detail.error_code || detail.code) : undefined;
-      (err as any).body = detail;
-      throw err;
+    const res = await requestUrlWithAbort({
+      url: `${this.backendUrl}/v1/auth/usage`,
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!isSuccessfulResponse(res.status)) {
+      const detail = responseDetails(res);
+      throw new BackendHttpError(`Usage fetch failed: ${res.status}`, res.status, detail);
     }
-    const payload = await res.json();
-    return payload?.data || {};
+    const payload = parseJson(res.text);
+    const data = field(payload, "data");
+    return {
+      plan: stringValue(field(data, "plan")),
+      chars_used: numberValue(field(data, "chars_used")),
+      quota_remaining: numberValue(field(data, "quota_remaining")),
+      quota_limit: numberValue(field(data, "quota_limit")),
+      period: stringValue(field(data, "period"))
+    };
   }
 
   async synthesize(ssml: string, outputFormat: string, _lang: string, abortSignal: AbortSignal): Promise<ReadableStream<Uint8Array>> {
-    const makeReq = async (jwt: string) => fetch(`${this.backendUrl}/v1/tts`, {
+    const makeReq = async (jwt: string) => requestUrlWithAbort({
+      url: `${this.backendUrl}/v1/tts`,
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${jwt}`
       },
       body: JSON.stringify({ ssml, outputFormat, language: _lang }),
-      signal: abortSignal
-    });
+    }, abortSignal);
 
     let token = await this.getValidToken();
     let res = await makeReq(token);
@@ -118,29 +150,29 @@ export class BackendTtsProvider implements TtsProvider {
         this.tokenExpiry = 0;
         token = await this.getValidToken();
         res = await makeReq(token);
-      } catch {}
+      } catch { void 0; }
     }
-    if (!res.ok || !res.body) {
-      let detail: any = null;
-      try { detail = await res.json(); } catch { try { detail = await res.text(); } catch {} }
-      const err = new Error(`TTS request failed: ${res.status}`);
-      (err as any).status = res.status;
-      (err as any).code = (detail && typeof detail === 'object') ? (detail.error_code || detail.code) : undefined;
-      (err as any).body = detail;
-      throw err;
+    if (!isSuccessfulResponse(res.status)) {
+      const detail = responseDetails(res);
+      throw new BackendHttpError(`TTS request failed: ${res.status}`, res.status, detail);
     }
-    return res.body as ReadableStream<Uint8Array>;
+    return byteStream(res.arrayBuffer);
   }
 
   async listVoices(): Promise<Voice[]> {
-    const res = await fetch(`${this.backendUrl}/v1/voices`);
-    if (!res.ok) {
-      let t = ""; try { t = await res.text(); } catch {}
-      throw new Error(`Failed to fetch voices: ${res.status}${t ? ` - ${t}` : ""}`);
+    const res = await requestUrlWithAbort({ url: `${this.backendUrl}/v1/voices` });
+    if (!isSuccessfulResponse(res.status)) {
+      const text = res.text;
+      throw new Error(`Failed to fetch voices: ${res.status}${text ? ` - ${text}` : ""}`);
     }
-    const payload = await res.json();
-    const items: Array<{ name?: string; shortName?: string }> = Array.isArray(payload?.data) ? payload.data : [];
-    return items.filter(v => !!v?.name && !!v?.shortName).map(v => ({ name: String(v.name), shortName: String(v.shortName) }));
+    const payload = parseJson(res.text);
+    const items = field(payload, "data");
+    if (!Array.isArray(items)) return [];
+    return items.flatMap((item): Voice[] => {
+      const name = field(item, "name");
+      const shortName = field(item, "shortName");
+      if (!name || !shortName) return [];
+      return [{ name: String(name), shortName: String(shortName) }];
+    });
   }
 }
-
