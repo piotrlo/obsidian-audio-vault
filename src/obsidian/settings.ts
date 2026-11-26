@@ -8,7 +8,6 @@ import { toError } from "../utils/errors";
 
 type DeclarativeControl =
   | { type: "text"; key: string; defaultValue?: string; validate?: (value: string) => string | void | Promise<string | void> }
-  | { type: "folder"; key: string; defaultValue?: string }
   | { type: "number"; key: string; defaultValue?: number; min?: number; max?: number; step?: number | "any"; validate?: (value: number) => string | void | Promise<string | void> }
   | { type: "toggle"; key: string; defaultValue?: boolean };
 
@@ -99,7 +98,7 @@ export class AudioVaultSettingsTab extends PluginSettingTab {
         {
           name: "Audio folder",
           desc: "Vault folder where generated audio is saved.",
-          control: { type: "folder", key: "audioFolder", defaultValue: DEFAULT_SETTINGS.audioFolder },
+          control: { type: "text", key: "audioFolder", defaultValue: DEFAULT_SETTINGS.audioFolder },
         },
         {
           name: "Advanced options",
