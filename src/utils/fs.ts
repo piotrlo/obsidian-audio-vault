@@ -233,7 +233,7 @@ export async function writeFileAtomic(
     try {
       await app.vault.adapter.rename(tmpPath, path);
       return { ok: true, value: undefined };
-    } catch (renameError) {
+    } catch {
       // Fallback: remove target and rename temp
       try {
         await app.vault.adapter.remove(path);

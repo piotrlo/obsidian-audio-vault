@@ -238,7 +238,8 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
           const timeoutMs = (partIdx === startIndex) ? config.firstPartTimeoutMs : config.maxWaitForNext;
           const partData = await Promise.race([
             tasks[partIdx],
-            new Promise<never>((_, reject) => {
+            new Promise<never>((resolve, reject) => {
+              void resolve;
               window.setTimeout(() => reject(new Error(`Part timeout (${timeoutMs}ms)`)), timeoutMs);
             })
           ]).catch(async (error) => {

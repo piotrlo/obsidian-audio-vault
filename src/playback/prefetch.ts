@@ -116,7 +116,7 @@ export async function prefetchAllParts(params: PrefetchOptions): Promise<Prefetc
       mergedUntil: 0,
       updatedAt: Date.now(),
     });
-    missingParts = Array.from({ length: totalParts }, (_, i) => i + 1);
+    missingParts = Array.from(Array(totalParts).keys(), (index) => index + 1);
     debug("Force regenerate: starting with empty manifest");
   } else {
     // Try to load existing manifest
@@ -171,7 +171,7 @@ export async function prefetchAllParts(params: PrefetchOptions): Promise<Prefetc
     }
     
     // Determine missing parts
-    const allParts = Array.from({ length: totalParts }, (_, i) => i + 1);
+    const allParts = Array.from(Array(totalParts).keys(), (index) => index + 1);
     missingParts = allParts.filter(part => !manifest.fetchedParts.includes(part));
   }
   

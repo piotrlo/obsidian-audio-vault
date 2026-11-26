@@ -47,8 +47,8 @@ export function sanitizeNoteForTts(input: string): string {
     text.replace(pattern, replacement);
 
   const stripHeadingMarkers = (text: string) =>
-    text.replace(/^ {0,3}#{1,6}(?=[\t ]|$)([^\r\n]*)/gm, (_, title: string) =>
-      title.replace(/[\t ]+#+[\t ]*$/, "").trim());
+    text.replace(/^ {0,3}#{1,6}(?=[\t ]|$)[^\r\n]*/gm, (heading) =>
+      heading.replace(/^ {0,3}#{1,6}/, "").replace(/[\t ]+#+[\t ]*$/, "").trim());
 
   const removeGeneratedAudioLines = (text: string) =>
     text
@@ -57,8 +57,8 @@ export function sanitizeNoteForTts(input: string): string {
       .join("\n");
 
   const convertWikiLinks = (text: string) =>
-    text.replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, (_, p1: string) => 
-      (String(p1 || "").split("/").pop() || "").replace(/\.(md|markdown)$/i, ""));
+    text.replace(/\[\[[^\]|]+(?:\|[^\]]+)?\]\]/g, (link) =>
+      (link.slice(2).split(/[|\]]/, 1)[0].split("/").pop() || "").replace(/\.(md|markdown)$/i, ""));
 
   const transformations = [
     (s: string) => applyReplace(s, patterns.frontmatter),
