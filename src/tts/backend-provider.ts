@@ -147,7 +147,7 @@ export class BackendTtsProvider implements TtsProvider {
         this.tokenExpiry = 0;
         token = await this.getValidToken();
         res = await makeReq(token);
-      } catch {}
+      } catch { void 0; }
     }
     if (!res.ok || !res.body) {
       const detail = await responseDetails(res);

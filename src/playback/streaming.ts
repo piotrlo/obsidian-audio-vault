@@ -48,10 +48,10 @@ export async function playStreamedPartAndSave(params: {
       try {
         const ab = await blob.arrayBuffer();
         if (ab && ab.byteLength > 0) appendToMerged(new Uint8Array(ab));
-      } catch {}
+      } catch { void 0; }
     }
     // Invoke onCaptured hook early (e.g., to write merged file) without waiting for playback end.
-    try { await onCaptured?.(blob); } catch {}
+    try { await onCaptured?.(blob); } catch { void 0; }
     if (savePerPart !== false) {
       const arrayBuf = await blob.arrayBuffer();
       if (arrayBuf && arrayBuf.byteLength > 0) {
@@ -60,7 +60,7 @@ export async function playStreamedPartAndSave(params: {
         await writeBinary(app, audioPath, arrayBuf);
         await upsertAudioReferenceSorted(app, file, audioPath);
       } else {
-        try { notifyUtil(settings, `Skipped saving part ${part} (no data)`, true); } catch {}
+        try { notifyUtil(settings, `Skipped saving part ${part} (no data)`, true); } catch { void 0; }
       }
     }
     return;
@@ -71,7 +71,7 @@ export async function playStreamedPartAndSave(params: {
   const audioEl = new Audio(objectUrl);
   audioEl.playbackRate = playbackRateFromRateSetting(settings.rate);
 
-  try { notifyUtil(settings, `Starting playback (streaming) — part ${part}`, true); } catch {}
+  try { notifyUtil(settings, `Starting playback (streaming) — part ${part}`, true); } catch { void 0; }
 
   await new Promise<void>((res) => mediaSource.addEventListener("sourceopen", () => res(), { once: true }));
   const sourceBuffer = mediaSource.addSourceBuffer(streamMime);
@@ -97,27 +97,27 @@ export async function playStreamedPartAndSave(params: {
     if (!startedPlayback) {
       startedPlayback = true;
       audioEl.play().then(() => {
-        try { notifyUtil(settings, "Playback started", true); } catch {}
+        try { notifyUtil(settings, "Playback started", true); } catch { void 0; }
       }).catch((err) => {
         const msg = err instanceof Error ? err.message : String(err);
-        try { notifyUtil(settings, `Audio play failed (stream): ${msg}`); } catch {}
+        try { notifyUtil(settings, `Audio play failed (stream): ${msg}`); } catch { void 0; }
       });
     }
     drain();
   });
-  const onChunk = (u8: Uint8Array) => { queue.push(u8); drain(); try { appendToMerged?.(u8); } catch {} };
+  const onChunk = (u8: Uint8Array) => { queue.push(u8); drain(); try { appendToMerged?.(u8); } catch { void 0; } };
 
   const session: PlaybackSession = { abort, audioEl, mediaSource, sourceBuffer, lastBlob: null, fileBase: base, objectUrl };
   setSession(session);
 
   const blob = await captureToBlob(stream, onChunk, streamFormat);
   setSession({ ...session, lastBlob: blob });
-  if (mediaSource.readyState === "open") { try { mediaSource.endOfStream(); } catch {} }
+  if (mediaSource.readyState === "open") { try { mediaSource.endOfStream(); } catch { void 0; } }
 
   // If no data was received, skip saving and return immediately to avoid hanging on playback end.
   if (!blob || blob.size === 0) {
     if (savePerPart !== false) {
-      try { notifyUtil(settings, `Skipped saving part ${part} (no data)`, true); } catch {}
+      try { notifyUtil(settings, `Skipped saving part ${part} (no data)`, true); } catch { void 0; }
     }
     return;
   }
@@ -125,7 +125,7 @@ export async function playStreamedPartAndSave(params: {
   const wait = waitForEndOrAbort(audioEl, abort.signal);
 
   // Invoke onCaptured hook early (e.g., to write merged file) without waiting for playback end.
-  try { await onCaptured?.(blob); } catch {}
+  try { await onCaptured?.(blob); } catch { void 0; }
 
   if (savePerPart !== false) {
     const arrayBuf = await blob.arrayBuffer();
@@ -135,7 +135,7 @@ export async function playStreamedPartAndSave(params: {
       await writeBinary(app, audioPath, arrayBuf);
       await upsertAudioReferenceSorted(app, file, audioPath);
     } else {
-      try { notifyUtil(settings, `Skipped saving part ${part} (no data)`, true); } catch {}
+      try { notifyUtil(settings, `Skipped saving part ${part} (no data)`, true); } catch { void 0; }
     }
   }
 

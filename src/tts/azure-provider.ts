@@ -27,7 +27,7 @@ export class AzureTtsProvider implements TtsProvider {
     });
     if (!res.ok || !res.body) {
       let detail = "";
-      try { detail = await res.text(); } catch {}
+      try { detail = await res.text(); } catch { void 0; }
       throw new Error(`TTS stream failed: ${res.status}${detail ? ` - ${detail}` : ""}`);
     }
     return res.body as ReadableStream<Uint8Array>;
@@ -39,7 +39,7 @@ export class AzureTtsProvider implements TtsProvider {
     const url = `https://${r}.tts.speech.microsoft.com/cognitiveservices/voices/list`;
     const res = await fetch(url, { headers: { "Ocp-Apim-Subscription-Key": k } });
     if (!res.ok) {
-      let t = ""; try { t = await res.text(); } catch {}
+      let t = ""; try { t = await res.text(); } catch { void 0; }
       throw new Error(`Voice list failed: ${res.status}${t ? ` - ${t}` : ""}`);
     }
     const data = await res.json();

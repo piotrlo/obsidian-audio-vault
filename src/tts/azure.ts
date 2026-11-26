@@ -38,7 +38,7 @@ export async function fetchTtsAudio(
   });
   if (!res.ok) {
     let detail = "";
-    try { detail = await res.text(); } catch {}
+    try { detail = await res.text(); } catch { void 0; }
     throw new Error(`TTS fetch failed: ${res.status}${detail ? ` - ${detail}` : ""}`);
   }
   const buffer = await res.arrayBuffer();
@@ -79,7 +79,7 @@ export async function startHttpStream(
   });
   if (!res.ok || !res.body) {
     let detail = "";
-    try { detail = await res.text(); } catch {}
+    try { detail = await res.text(); } catch { void 0; }
     throw new Error(`TTS stream failed: ${res.status}${detail ? ` - ${detail}` : ""}`);
   }
   return res.body as ReadableStream<Uint8Array>;

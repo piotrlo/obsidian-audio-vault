@@ -29,7 +29,7 @@ export async function openPendingAudio(adapter: Storage, folder: string, identit
         await adapter.writeBinary(temporary, data);
         await adapter.rename(temporary, path);
       } catch {
-        await adapter.remove(temporary).catch(() => {});
+        await adapter.remove(temporary).catch(() => undefined);
         throw new Error("Could not save the generated part to the vault. Check free space and permissions before trying again.");
       }
       touched.add(path);
@@ -37,7 +37,7 @@ export async function openPendingAudio(adapter: Storage, folder: string, identit
     },
     get completed() { return touched.size; },
     async clear() {
-      for (const path of touched) await adapter.remove(path).catch(() => {});
+      for (const path of touched) await adapter.remove(path).catch(() => undefined);
     },
   };
 }

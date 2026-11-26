@@ -17,7 +17,7 @@ import { safeParseManifest, createValidManifest } from "../schema";
 export async function ensureFolder(app: App, folder: string): Promise<void> {
   const exists = await app.vault.adapter.exists(folder);
   if (!exists) {
-    try { await app.vault.createFolder(folder); } catch {}
+    try { await app.vault.createFolder(folder); } catch { void 0; }
   }
 }
 
@@ -51,9 +51,9 @@ export async function deleteExistingParts(app: App, folder: string, base: string
     const suffix = `.${ext}`;
     const targets = files.filter(f => f.path.startsWith(prefix) && f.path.endsWith(suffix));
     for (const f of targets) {
-      await app.vault.adapter.remove(f.path).catch(() => {});
+      await app.vault.adapter.remove(f.path).catch(() => undefined);
     }
-  } catch {}
+  } catch { void 0; }
 }
 
 /**
@@ -152,9 +152,9 @@ export async function writeManifest(app: App, folder: string, base: string, data
   try {
     await app.vault.adapter.rename(tmp, path);
   } catch {
-    try { await app.vault.adapter.remove(path); } catch {}
+    try { await app.vault.adapter.remove(path); } catch { void 0; }
     await app.vault.adapter.write(path, body);
-    try { await app.vault.adapter.remove(tmp); } catch {}
+    try { await app.vault.adapter.remove(tmp); } catch { void 0; }
   }
 }
 
@@ -169,12 +169,12 @@ export async function safeRename(app: App, oldPath: string, newPath: string): Pr
   try {
     await app.vault.adapter.rename(oldPath, newPath);
     return;
-  } catch {}
+  } catch { void 0; }
   try {
     const data = await app.vault.adapter.read(oldPath);
     await app.vault.adapter.write(newPath, data);
     await app.vault.adapter.remove(oldPath);
-  } catch {}
+  } catch { void 0; }
 }
 
 /**
@@ -237,7 +237,7 @@ export async function writeFileAtomic(
       // Fallback: remove target and rename temp
       try {
         await app.vault.adapter.remove(path);
-      } catch {}
+      } catch { void 0; }
       
       if (typeof data === 'string') {
         await app.vault.adapter.write(path, data);
@@ -248,7 +248,7 @@ export async function writeFileAtomic(
       // Clean up temp file
       try {
         await app.vault.adapter.remove(tmpPath);
-      } catch {}
+      } catch { void 0; }
       
       return { ok: true, value: undefined };
     }
@@ -256,7 +256,7 @@ export async function writeFileAtomic(
     // Clean up temp file on failure
     try {
       await app.vault.adapter.remove(tmpPath);
-    } catch {}
+    } catch { void 0; }
     
     const message = error instanceof Error ? error.message : String(error);
     return {

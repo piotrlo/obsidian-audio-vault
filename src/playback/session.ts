@@ -471,7 +471,7 @@ audio.addEventListener('error', (event) => {
       try {
         this.audioElement.pause();
         this.audioElement.currentTime = 0;
-      } catch {}
+      } catch { void 0; }
       
       // Explicitly remove all event listeners to prevent memory leaks
       const eventTypes = ['canplay', 'playing', 'waiting', 'stalled', 'ended', 'error', 'suspend', 'timeupdate', 'canplaythrough'];
@@ -497,7 +497,7 @@ audio.addEventListener('error', (event) => {
       try {
         URL.revokeObjectURL(this.currentUrl);
         debug(`Revoked object URL: ${this.currentUrl}`);
-      } catch {}
+      } catch { void 0; }
     }
     this.currentUrl = null;
   }
@@ -509,17 +509,17 @@ audio.addEventListener('error', (event) => {
  */
 export async function cleanupSessionResources(session: PlaybackSession | null, setNull: boolean = false): Promise<PlaybackSession | null> {
   if (!session) return null;
-  try { session.audioEl?.pause(); } catch {}
+  try { session.audioEl?.pause(); } catch { void 0; }
   try {
     if (session.mediaSource && session.mediaSource.readyState === "open") {
       session.mediaSource.endOfStream();
     }
-  } catch {}
+  } catch { void 0; }
   try {
     if (session.objectUrl) {
       URL.revokeObjectURL(session.objectUrl);
     }
-  } catch {}
+  } catch { void 0; }
   return setNull ? null : session;
 }
 

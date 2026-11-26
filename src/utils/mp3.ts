@@ -90,7 +90,7 @@ export async function flushPartial(
       await app.vault.adapter.writeBinary(partialPath, snapshot);
       try {
         await app.vault.adapter.remove(tmpPath);
-      } catch {}
+      } catch { void 0; }
     }
     
     return {
@@ -163,7 +163,7 @@ export async function finalizeMerge(
       await app.vault.adapter.writeBinary(finalPath, finalData);
       try {
         await app.vault.adapter.remove(tmpPath);
-      } catch {}
+      } catch { void 0; }
     }
     
     // Cleanup files (best effort - continue even if some fail)
@@ -176,7 +176,7 @@ export async function finalizeMerge(
         await app.vault.adapter.remove(partialPath);
         cleanedFiles.push(partialPath);
       }
-    } catch {}
+    } catch { void 0; }
     
     // Remove manifest
     try {
@@ -185,7 +185,7 @@ export async function finalizeMerge(
         await app.vault.adapter.remove(manifestPath);
         cleanedFiles.push(manifestPath);
       }
-    } catch {}
+    } catch { void 0; }
     
     // Remove individual part files if requested
     if (cleanupParts && totalParts > 0) {
@@ -197,7 +197,7 @@ export async function finalizeMerge(
             await app.vault.adapter.remove(partPath);
             cleanedFiles.push(partPath);
           }
-        } catch {}
+        } catch { void 0; }
       }
     }
     

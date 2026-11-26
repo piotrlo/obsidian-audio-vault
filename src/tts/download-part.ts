@@ -19,7 +19,7 @@ export async function downloadPart(
     phase = "downloading audio from Cartesia";
     resetTimeout();
     const reader = stream.getReader();
-    const cancelRead = () => void reader.cancel().catch(() => {});
+    const cancelRead = () => void reader.cancel().catch(() => undefined);
     part.signal.addEventListener("abort", cancelRead, { once: true });
     try {
       if (part.signal.aborted) cancelRead();

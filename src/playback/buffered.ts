@@ -103,7 +103,7 @@ const config: Required<EnhancedBufferedConfig> = {
     debug(`Starting enhanced buffered prefetch playback (${chunks.length} parts, iOS=${isiOS})`);
     try { 
       notifyUtil(settings, `Starting enhanced playback (${chunks.length} part(s))...`); 
-    } catch {}
+    } catch { void 0; }
     
     // Audio session configuration
     const sessionConfig = {
@@ -119,20 +119,20 @@ const config: Required<EnhancedBufferedConfig> = {
         if (state === 'stalled' && config.showBufferingUI) {
           try {
             notifyUtil(settings, "Buffering...", true);
-          } catch {}
+          } catch { void 0; }
         }
       },
       onError: (error) => {
         logError('Audio session error:', error);
         try {
           notifyUtil(settings, `Playback error: ${error.message}`);
-        } catch {}
+        } catch { void 0; }
       },
       onBuffering: (isBuffering) => {
         if (isBuffering && config.showBufferingUI) {
           try {
             notifyUtil(settings, "Buffering...", true);
-          } catch {}
+          } catch { void 0; }
         }
       },
     };
@@ -289,7 +289,7 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
               try {
                 notifyUtil(settings, `Playback started`, true);
                 debug(`First part playback started after ${Date.now() - startDelay}ms`);
-              } catch {}
+              } catch { void 0; }
               isFirstPart = false;
             }
           }
@@ -298,13 +298,13 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
           logError(`Audio play failed for part ${partIdx + 1}:`, msg);
           try {
             notifyUtil(settings, `Audio play failed: ${msg}`);
-          } catch {}
+          } catch { void 0; }
           
           // Clean up blob URL if we created one
           if (audioPath?.startsWith('blob:')) {
             try {
               URL.revokeObjectURL(audioPath);
-            } catch {}
+            } catch { void 0; }
           }
           
           // Try to continue with next part
@@ -356,7 +356,7 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
             if (!isNextReady && config.showBufferingUI) {
               try {
                 notifyUtil(settings, "Buffering next part...", true);
-              } catch {}
+              } catch { void 0; }
               
               // Wait with exponential backoff up to cap
               let waitTime = config.waitBackoffMs;
@@ -386,7 +386,7 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
         if (audioPath?.startsWith('blob:')) {
           try {
             URL.revokeObjectURL(audioPath);
-          } catch {}
+          } catch { void 0; }
         }
         
         if (stopRequested() || abortAll.signal.aborted) break;
@@ -410,18 +410,18 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
     try {
       debug('Cleaning up enhanced buffered playback');
       abortAll.abort();
-    } catch {}
+    } catch { void 0; }
     
     try {
       if (sessionManager) {
         sessionManager.dispose();
         sessionManager = null;
       }
-    } catch {}
+    } catch { void 0; }
     
     try {
       await cleanupSessionResourcesHelper(null, true);
-    } catch {}
+    } catch { void 0; }
     
     setSession(null);
   }

@@ -364,10 +364,10 @@ async function synthesizeWithRetry(
   try {
     // Compose abort with timeout
     const controller = new AbortController();
-    const onAbort = () => { try { controller.abort(); } catch {} };
+    const onAbort = () => { try { controller.abort(); } catch { void 0; } };
     if (abortSignal.aborted) controller.abort();
     else abortSignal.addEventListener('abort', onAbort, { once: true });
-    const timeout = window.setTimeout(() => { try { controller.abort(); } catch {} }, timeoutMs);
+    const timeout = window.setTimeout(() => { try { controller.abort(); } catch { void 0; } }, timeoutMs);
 
     try {
       const stream = await provider.synthesize(input, outputFormat, lang, controller.signal);
@@ -377,7 +377,7 @@ async function synthesizeWithRetry(
       return { ok: true, value: { buffer, mime } };
     } finally {
       window.clearTimeout(timeout);
-      try { abortSignal.removeEventListener('abort', onAbort); } catch {}
+      try { abortSignal.removeEventListener('abort', onAbort); } catch { void 0; }
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

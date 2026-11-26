@@ -35,18 +35,18 @@ export async function tryPlayExistingParts(params: {
         const abort = new AbortController();
         const session: PlaybackSession = { abort, audioEl, mediaSource: null, sourceBuffer: null, lastBlob: blob, fileBase: base, objectUrl: url };
         setSession(session);
-        try { notifyUtil(settings, "Starting playback of existing merged file", true); } catch {}
+        try { notifyUtil(settings, "Starting playback of existing merged file", true); } catch { void 0; }
         try { await audioEl.play(); } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          try { notifyUtil(settings, `Audio play failed (existing merged): ${msg}`); } catch {}
+          try { notifyUtil(settings, `Audio play failed (existing merged): ${msg}`); } catch { void 0; }
         }
         await waitForEndOrAbort(audioEl, abort.signal);
         await cleanupSessionResourcesHelper(session);
         setSession(null);
-        if (!stopRequested()) { try { notifyUtil(settings, "Finished playing existing audio."); } catch {} }
+        if (!stopRequested()) { try { notifyUtil(settings, "Finished playing existing audio."); } catch { void 0; } }
         return true;
       }
-    } catch {}
+    } catch { void 0; }
   }
 
   const extExisting = fileExtFromFormat(settings.outputFormat);
@@ -60,7 +60,7 @@ export async function tryPlayExistingParts(params: {
   if (!existingPaths.length) return false;
 
   try {
-    try { notifyUtil(settings, `Starting playback of existing files (${existingPaths.length} parts)...`, true); } catch {}
+    try { notifyUtil(settings, `Starting playback of existing files (${existingPaths.length} parts)...`, true); } catch { void 0; }
     for (let i = 0; i < existingPaths.length; i++) {
       if (stopRequested()) break;
       const p = existingPaths[i];
@@ -75,13 +75,13 @@ export async function tryPlayExistingParts(params: {
       setSession(session);
       try { await audioEl.play(); } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        try { notifyUtil(settings, `Audio play failed (existing): ${msg}`); } catch {}
+        try { notifyUtil(settings, `Audio play failed (existing): ${msg}`); } catch { void 0; }
       }
       await waitForEndOrAbort(audioEl, abort.signal);
       await cleanupSessionResourcesHelper(session);
       setSession(null);
     }
-    if (!stopRequested()) { try { notifyUtil(settings, "Finished playing existing audio."); } catch {} }
+    if (!stopRequested()) { try { notifyUtil(settings, "Finished playing existing audio."); } catch { void 0; } }
     return true;
   } catch {
     return false;
