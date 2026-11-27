@@ -2,6 +2,7 @@ import type { TtsProvider, Voice } from "../types";
 import { byteStream, getResponseHeader, isSuccessfulResponse, requestUrlWithAbort } from "../network/request";
 
 export const CARTESIA_VOICES: readonly Voice[] = [
+  { name: "Paige (English)", shortName: "86faee7e-bf54-4293-bd90-076138544609" },
   { name: "Jacqueline (English)", shortName: "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc" },
   { name: "Marcin (Polish)", shortName: "d358377a-cd1d-45c5-abd0-701314e36cbe" },
   { name: "Agnieszka (Polish)", shortName: "6bc7c014-022b-42ce-8b53-a5ec878a7ca7" },

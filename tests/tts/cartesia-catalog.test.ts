@@ -4,7 +4,7 @@ import { loadTtsSettings } from "../../src/core/settings";
 import { catalogVoiceLocale, fetchCatalogPage, sortCatalogVoices } from "../../src/tts/cartesia-catalog";
 import { CARTESIA_VOICES } from "../../src/tts/cartesia-provider";
 
-const curated = { id: CARTESIA_VOICES[0].shortName, name: "Jacqueline", language: "en" };
+const curated = { id: CARTESIA_VOICES[0].shortName, name: "Paige", language: "en" };
 const native = { id: "voice-native", name: "Zofia", accents: [{ locale: "pl-PL", is_native: true }] };
 const other = { id: "voice-other", name: "Anya", accents: [{ locale: "pl-PL", is_native: false }] };
 
