@@ -24,6 +24,7 @@ type AudioJob = {
   progress?: { completed: number; total: number };
 };
 const ribbonTitle = "Play/Pause current note";
+const firstListenStorageKey = "audio-vault:first-listen-offered";
 const offlineLabels: Record<OfflineAudioStatus, string> = {
   none: "",
   ready: "Ready offline",
@@ -265,13 +266,16 @@ export default class AudioVaultPlugin extends Plugin {
 
   private showFirstListen(file: TFile): void {
     if (this.firstListen) return;
+    const autoplay = this.app.loadLocalStorage(firstListenStorageKey) !== true;
     this.firstListen = new FirstListenModal(this.app, {
+      autoplay,
       saveKey: (key) => this.setCartesiaKey(key),
       listen: () => {
         void this.listenAfterSetup(file).catch(() => notify(this.settings, "Could not reopen the original note.", true));
       },
       closed: () => { this.firstListen = undefined; },
     });
+    if (autoplay) this.app.saveLocalStorage(firstListenStorageKey, true);
     this.firstListen.open();
   }
 

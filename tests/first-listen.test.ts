@@ -3,6 +3,7 @@ import type { App, PluginManifest } from "obsidian";
 import AudioVaultPlugin from "../src/index";
 import { DEFAULT_SETTINGS } from "../src/core/settings";
 import { FirstListenModal } from "../src/obsidian/first-listen";
+import welcome from "../src/obsidian/first-listen-audio.json";
 
 type SetupActions = ConstructorParameters<typeof FirstListenModal>[1];
 
@@ -43,10 +44,10 @@ test("first play without a key opens one setup and resumes the original note aft
   try {
     await plugin.readCurrentNote();
     await plugin.readCurrentNote();
-    expect(setups).toHaveLength(1);
+    expect(setups.map(({ autoplay }) => autoplay)).toEqual([true]);
     setups[0].closed();
     await plugin.readCurrentNote();
-    expect(setups).toHaveLength(2);
+    expect(setups.map(({ autoplay }) => autoplay)).toEqual([true, false]);
     expect(readBinary).not.toHaveBeenCalled();
 
     setups[1].saveKey("test-key");
@@ -80,4 +81,10 @@ test("a saved MP3 plays without opening setup or requiring a key", async () => {
   } finally {
     open.mockRestore();
   }
+});
+
+test("the offline guide is bundled as MP3 bytes", () => {
+  const bytes = Buffer.from(welcome.mp3Base64, "base64");
+  expect(bytes.length).toBeGreaterThan(1000);
+  expect(bytes.subarray(0, 3).toString()).toBe("ID3");
 });

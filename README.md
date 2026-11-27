@@ -11,7 +11,7 @@ AudioVault is a free [MIT-licensed](LICENSE) plugin. Generating audio requires y
 ## Getting started
 
 1. [Install AudioVault](#installation), open a note, and tap the headphones icon in the ribbon.
-2. If the note has a saved MP3, AudioVault plays it immediately. Otherwise, if you haven't added a key, follow the in-app setup to create a Cartesia account and add your key.
+2. If the note has a saved MP3, AudioVault plays it immediately. Otherwise, if you haven't added a key, follow the in-app setup to create a Cartesia account and add your key. The short spoken guide is included and plays offline without credits.
 3. Select **Listen to this note**. Playback starts as soon as the first part is ready.
 
 ## Commands
