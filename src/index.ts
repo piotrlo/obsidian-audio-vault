@@ -1,8 +1,9 @@
-import { Platform, Plugin, setTooltip } from "obsidian";
+import { Platform, Plugin, setTooltip, type TFile } from "obsidian";
 import { buildChunks, playbackRateFromRateSetting, resolveLang } from "./core/helpers";
 import { notify } from "./core/notify";
 import { loadTtsSettings } from "./core/settings";
 import { AudioVaultSettingsTab } from "./obsidian/settings";
+import { FirstListenModal } from "./obsidian/first-listen";
 import { attachMediaSession } from "./playback/media-session";
 import { CARTESIA_API_VERSION, CARTESIA_KEY_STORAGE, CARTESIA_MODEL, CARTESIA_MP3, CARTESIA_VOICES, CartesiaTtsProvider } from "./tts/cartesia-provider";
 import { downloadPart } from "./tts/download-part";
@@ -23,6 +24,7 @@ type AudioJob = {
   progress?: { completed: number; total: number };
 };
 const ribbonTitle = "Play/Pause current note";
+const firstListenStorageKey = "audio-vault:first-listen-offered";
 const offlineLabels: Record<OfflineAudioStatus, string> = {
   none: "",
   ready: "Ready offline",
@@ -34,6 +36,7 @@ const offlineLabels: Record<OfflineAudioStatus, string> = {
 export default class AudioVaultPlugin extends Plugin {
   settings!: TtsSettings;
   private job: AudioJob | null = null;
+  private firstListen?: FirstListenModal;
   private ribbon?: HTMLElement;
   private statusTimer?: number;
   private statusRevision = 0;
@@ -128,6 +131,7 @@ export default class AudioVaultPlugin extends Plugin {
 
   stopPlayback(): void {
     this.job?.abort.abort();
+    this.firstListen?.close();
     this.refreshAudioStatus();
   }
 
@@ -189,7 +193,12 @@ export default class AudioVaultPlugin extends Plugin {
       }
 
       const key = this.getCartesiaKey();
-      if (!key) throw new Error("Add your Cartesia API key in AudioVault settings to generate audio.");
+      if (!key) {
+        throwIfAborted(signal);
+        if (!play || regenerate) throw new Error("Add your Cartesia API key in AudioVault settings to generate audio.");
+        this.showFirstListen(file);
+        return;
+      }
       const text = sanitizeNoteForTts(raw);
       if (!text) throw new Error("This note has no readable text.");
       const chunks = buildChunks(text, settings, Platform.isIosApp);
@@ -253,6 +262,31 @@ export default class AudioVaultPlugin extends Plugin {
       this.job = null;
       this.refreshAudioStatus();
     }
+  }
+
+  private showFirstListen(file: TFile): void {
+    if (this.firstListen) return;
+    const autoplay = this.app.loadLocalStorage(firstListenStorageKey) !== true;
+    this.firstListen = new FirstListenModal(this.app, {
+      autoplay,
+      saveKey: (key) => this.setCartesiaKey(key),
+      listen: () => {
+        void this.listenAfterSetup(file).catch(() => notify(this.settings, "Could not reopen the original note.", true));
+      },
+      closed: () => { this.firstListen = undefined; },
+    });
+    if (autoplay) this.app.saveLocalStorage(firstListenStorageKey, true);
+    this.firstListen.open();
+  }
+
+  private async listenAfterSetup(file: TFile): Promise<void> {
+    const { vault, workspace } = this.app;
+    if (workspace.getActiveFile() !== file) {
+      if (vault.getAbstractFileByPath(file.path) !== file) throw new Error("The note no longer exists.");
+      await workspace.getLeaf(false).openFile(file);
+    }
+    if (workspace.getActiveFile() !== file) throw new Error("Could not activate the original note.");
+    await this.readCurrentNote();
   }
 
   private async playBytes(bytes: ArrayBuffer, rate: string, title: string): Promise<void> {
