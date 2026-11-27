@@ -31,7 +31,7 @@ export function sanitizeNoteForTts(input: string): string {
     inlineCode: [/`[^`]*`/g, " "],
     blockHtml: [new RegExp(`<(?:${blockTags.join("|")})\\b[\\s\\S]*?<\\/(?:${blockTags.join("|")})>`, "gi"), " "],
     htmlImg: [/<img\b[^>]*>/gi, " "],
-    mdImage: [/!\[[^\]]*\]\([^\)]*\)/g, " "],
+    mdImage: [/!\[[^\]]*\]\([^)]*\)/g, " "],
     wikiImage: [/!\[\[[^\]]*\]\]/g, " "],
     mdLink: [/\[([^\]]+)\]\(([^)]+)\)/g, "$1"],
     angleAutolink: [/<https?:[^>]+>/gi, " "],

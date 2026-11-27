@@ -43,12 +43,12 @@ export class AzureTtsProvider implements TtsProvider {
       throw new Error(`Voice list failed: ${res.status}${t ? ` - ${t}` : ""}`);
     }
     const data: unknown = JSON.parse(res.text);
-    const raw = Array.isArray(data) ? data : [];
+    const raw: unknown[] = Array.isArray(data) ? data : [];
     const out: Voice[] = [];
     for (const value of raw) {
       if (value === null || typeof value !== "object") continue;
-      const name = Reflect.get(value, "Name") || Reflect.get(value, "ShortName") || "";
-      const shortName = Reflect.get(value, "ShortName") || Reflect.get(value, "Name") || "";
+      const name: unknown = Reflect.get(value, "Name") || Reflect.get(value, "ShortName") || "";
+      const shortName: unknown = Reflect.get(value, "ShortName") || Reflect.get(value, "Name") || "";
       if (name && shortName) out.push({ name: String(name), shortName: String(shortName) });
     }
     return out;

@@ -163,9 +163,9 @@ export class AudioSessionManager {
     
     // Store the next part for when current audio ends
     this.audioElement?.addEventListener('ended', () => {
-      this.startWithPart(audioPath).catch(error => {
+      this.startWithPart(audioPath).catch((error: unknown) => {
         logError('Failed to start queued part:', error);
-        this.handleError(error);
+        this.handleError(toError(error));
       });
     }, { once: true });
   }
@@ -323,6 +323,25 @@ export class AudioSessionManager {
     }
   }
   
+  /**
+   * Release resources held by a playback session.
+   * Pauses the audio element, ends an open MediaSource and revokes the object URL.
+   */
+  static releaseResources(session: PlaybackSession | null): void {
+    if (!session) return;
+    try { session.audioEl?.pause(); } catch { void 0; }
+    try {
+      if (session.mediaSource && session.mediaSource.readyState === "open") {
+        session.mediaSource.endOfStream();
+      }
+    } catch { void 0; }
+    try {
+      if (session.objectUrl) {
+        URL.revokeObjectURL(session.objectUrl);
+      }
+    } catch { void 0; }
+  }
+
   // Private methods
   
   private transitionState(newState: AudioSessionState): void {
@@ -503,24 +522,3 @@ audio.addEventListener('error', (event) => {
     this.currentUrl = null;
   }
 }
-
-/**
- * Legacy helper function for backward compatibility.
- * @deprecated Use AudioSessionManager instead
- */
-export async function cleanupSessionResources(session: PlaybackSession | null, setNull: boolean = false): Promise<PlaybackSession | null> {
-  if (!session) return null;
-  try { session.audioEl?.pause(); } catch { void 0; }
-  try {
-    if (session.mediaSource && session.mediaSource.readyState === "open") {
-      session.mediaSource.endOfStream();
-    }
-  } catch { void 0; }
-  try {
-    if (session.objectUrl) {
-      URL.revokeObjectURL(session.objectUrl);
-    }
-  } catch { void 0; }
-  return setNull ? null : session;
-}
-

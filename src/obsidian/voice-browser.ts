@@ -23,7 +23,7 @@ export class CartesiaVoiceBrowser extends Modal {
   }
 
   onOpen(): void {
-    this.setTitle("Browse Cartesia voices");
+    this.titleEl.setText("Browse Cartesia voices");
     this.contentEl.createEl("p", {
       text: "Recommended puts native accent matches and AudioVault picks first among loaded results.",
     });
