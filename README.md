@@ -11,7 +11,7 @@ AudioVault is a free [MIT-licensed](LICENSE) plugin. Generating audio requires y
 ## Getting started
 
 1. [Install AudioVault](#installation), open a note, and tap the headphones icon in the ribbon.
-2. If the note has a saved MP3, AudioVault plays it immediately. Otherwise, follow the in-app setup to create a Cartesia account and add your key. The short setup guide is bundled with AudioVault and plays without a connection or credits.
+2. If the note has a saved MP3, AudioVault plays it immediately. Otherwise, if you haven't added a key, follow the in-app setup to create a Cartesia account and add your key.
 3. Select **Listen to this note**. Playback starts as soon as the first part is ready.
 
 ## Commands
@@ -79,7 +79,6 @@ For generation on iOS the text is split into smaller parts; keep Obsidian open w
 - **Pipeline:** buffered parts with one part prepared ahead; the vault file is written once the job finishes.
 - **Interrupted jobs:** partial parts stay under `pending-audio` for a later resume.
 - **Compatibility:** older generated MP3s stay playable from their `Generated audio` links, without a note version to compare against.
-- **Setup guide:** the English MP3 is embedded in `main.js`. It was generated locally with [Kokoro v1.0](https://huggingface.co/hexgrad/Kokoro-82M) (`af_heart`, Apache-2.0). It's a spoken guide, not a Cartesia voice sample; no model or voice weights are included.
 
 ## License and support
 

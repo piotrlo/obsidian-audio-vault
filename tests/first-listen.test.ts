@@ -3,7 +3,6 @@ import type { App, PluginManifest } from "obsidian";
 import AudioVaultPlugin from "../src/index";
 import { DEFAULT_SETTINGS } from "../src/core/settings";
 import { FirstListenModal } from "../src/obsidian/first-listen";
-import welcome from "../src/obsidian/first-listen-audio.json";
 
 type SetupActions = ConstructorParameters<typeof FirstListenModal>[1];
 
@@ -34,7 +33,7 @@ function fixture(raw: string) {
   };
 }
 
-test("first play without a key opens setup and only offers autoplay once", async () => {
+test("first play without a key opens one setup and resumes the original note after saving a key", async () => {
   const { plugin, readBinary, switchNote, openFile, getActiveFile } = fixture("A note with no saved recording.");
   const setups: SetupActions[] = [];
   const open = spyOn(FirstListenModal.prototype, "open").mockImplementation(function (this: FirstListenModal) {
@@ -44,10 +43,10 @@ test("first play without a key opens setup and only offers autoplay once", async
   try {
     await plugin.readCurrentNote();
     await plugin.readCurrentNote();
-    expect(setups.map(({ autoplay }) => autoplay)).toEqual([true]);
+    expect(setups).toHaveLength(1);
     setups[0].closed();
     await plugin.readCurrentNote();
-    expect(setups.map(({ autoplay }) => autoplay)).toEqual([true, false]);
+    expect(setups).toHaveLength(2);
     expect(readBinary).not.toHaveBeenCalled();
 
     setups[1].saveKey("test-key");
@@ -81,10 +80,4 @@ test("a saved MP3 plays without opening setup or requiring a key", async () => {
   } finally {
     open.mockRestore();
   }
-});
-
-test("bundled guide contains an MP3 rather than a URL", () => {
-  const bytes = Buffer.from(welcome.mp3Base64, "base64");
-  expect(bytes.length).toBeGreaterThan(1000);
-  expect(bytes.subarray(0, 3).toString()).toBe("ID3");
 });

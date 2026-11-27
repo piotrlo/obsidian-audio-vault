@@ -1,19 +1,15 @@
 import { Modal, Setting, type App, type ButtonComponent } from "obsidian";
-import welcome from "./first-listen-audio.json";
 
 const accountUrl = "https://play.cartesia.ai/";
 const keysUrl = "https://play.cartesia.ai/keys";
 
 type FirstListenOptions = {
-  autoplay: boolean;
   saveKey: (key: string) => void;
   listen: () => void;
   closed: () => void;
 };
 
 export class FirstListenModal extends Modal {
-  private sample?: HTMLAudioElement;
-
   constructor(app: App, private readonly options: FirstListenOptions) {
     super(app);
   }
@@ -23,21 +19,6 @@ export class FirstListenModal extends Modal {
     this.contentEl.createEl("p", {
       text: "AudioVault reads your notes aloud with Cartesia. Set up a free Cartesia account to get started.",
     });
-    const sampleLabel = this.contentEl.createEl("p", { text: "Audio setup guide" });
-    const sample = this.sample = this.contentEl.createEl("audio", {
-      attr: {
-        "aria-label": "Audio setup guide",
-        controls: "",
-        preload: "none",
-        src: `data:audio/mpeg;base64,${welcome.mp3Base64}`,
-      },
-    });
-    if (this.options.autoplay) {
-      void sample.play().catch(() => {
-        if (this.sample === sample) sampleLabel.setText("Press play to hear the setup guide.");
-      });
-    }
-
     this.contentEl.createEl("p", {
       text: "When you generate audio, the readable text of your note is sent to Cartesia and uses credits from your account. Playing saved MP3s uses no credits.",
     });
@@ -48,10 +29,6 @@ export class FirstListenModal extends Modal {
   }
 
   onClose(): void {
-    this.sample?.pause();
-    this.sample?.removeAttribute("src");
-    this.sample?.load();
-    this.sample = undefined;
     this.contentEl.empty();
     this.options.closed();
   }
