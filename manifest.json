@@ -1,7 +1,7 @@
 {
   "id": "audio-vault",
   "name": "AudioVault",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "minAppVersion": "1.4.0",
   "author": "Piotr Loch",
   "description": "Listen to your notes with Cartesia and save MP3s in your vault for offline playback.",
