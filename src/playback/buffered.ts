@@ -15,6 +15,11 @@ import { Platform } from "obsidian";
 import { toError } from "../utils/errors";
 
 /**
+ * Synthesized audio part produced by a buffered playback task.
+ */
+type BufferedTaskResult = { buffer: ArrayBuffer; mime: string; idx: number };
+
+/**
  * Configuration for enhanced buffered playback.
  */
 export interface EnhancedBufferedConfig {
@@ -193,7 +198,7 @@ if (Array.isArray(prefetchTasks) && prefetchTasks[idx] !== undefined) {
         });
     };
     
-    const tasks: Array<Promise<{ buffer: ArrayBuffer; mime: string; idx: number }>> = new Array(chunks.length);
+    const tasks = new Array<Promise<BufferedTaskResult>>(chunks.length);
     let started = startIndex;
     
     // Start initial window of tasks

@@ -202,8 +202,8 @@ export async function prefetchAllParts(params: PrefetchOptions): Promise<Prefetc
   };
   
   // Task management
-  const tasks: Array<Promise<PrefetchResult>> = new Array(totalParts);
-  const resolvers: Array<(value: PrefetchResult) => void> = new Array(totalParts);
+  const tasks = new Array<Promise<PrefetchResult>>(totalParts);
+  const resolvers = new Array<(value: PrefetchResult) => void>(totalParts);
   
   // Initialize promises for all parts
   for (let i = 0; i < totalParts; i++) {

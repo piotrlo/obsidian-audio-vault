@@ -32,14 +32,17 @@ export const DEFAULT_SETTINGS: TtsSettings = {
   licenseUsagePeriod: undefined
 };
 
-export function loadTtsSettings(saved: Partial<TtsSettings> | null): TtsSettings {
+export function loadTtsSettings(saved: unknown): TtsSettings {
+  const stored: Partial<TtsSettings> = saved !== null && typeof saved === "object"
+    ? saved
+    : {};
   return {
     ...DEFAULT_SETTINGS,
-    ...saved,
+    ...stored,
     ttsProvider: "cartesia",
-    cartesiaVoiceId: validVoiceId(saved?.cartesiaVoiceId) ? saved.cartesiaVoiceId : CARTESIA_VOICES[0].shortName,
-    cartesiaVoiceLabel: typeof saved?.cartesiaVoiceLabel === "string" ? saved.cartesiaVoiceLabel.slice(0, 256) : undefined,
-    cartesiaVoiceLocale: typeof saved?.cartesiaVoiceLocale === "string" ? normalizeVoiceLocale(saved.cartesiaVoiceLocale) : undefined,
+    cartesiaVoiceId: validVoiceId(stored.cartesiaVoiceId) ? stored.cartesiaVoiceId : CARTESIA_VOICES[0].shortName,
+    cartesiaVoiceLabel: typeof stored.cartesiaVoiceLabel === "string" ? stored.cartesiaVoiceLabel.slice(0, 256) : undefined,
+    cartesiaVoiceLocale: typeof stored.cartesiaVoiceLocale === "string" ? normalizeVoiceLocale(stored.cartesiaVoiceLocale) : undefined,
     useBackend: false,
     backendUrl: undefined,
     azureApiKey: "",

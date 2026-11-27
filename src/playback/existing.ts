@@ -7,7 +7,7 @@ import type { PlaybackSession, TtsSettings } from "../types";
 import { mimeFromFormat } from "../core/helpers";
 import { fileExtFromFormat, playbackRateFromRateSetting } from "../core/helpers";
 import { waitForEndOrAbort } from "../core/audio";
-import { cleanupSessionResources as cleanupSessionResourcesHelper } from "./session";
+import { AudioSessionManager } from "./session";
 import { notify as notifyUtil } from "../core/notify";
 
 export async function tryPlayExistingParts(params: {
@@ -41,7 +41,7 @@ export async function tryPlayExistingParts(params: {
           try { notifyUtil(settings, `Audio play failed (existing merged): ${msg}`); } catch { void 0; }
         }
         await waitForEndOrAbort(audioEl, abort.signal);
-        await cleanupSessionResourcesHelper(session);
+        AudioSessionManager.releaseResources(session);
         setSession(null);
         if (!stopRequested()) { try { notifyUtil(settings, "Finished playing existing audio."); } catch { void 0; } }
         return true;
@@ -78,7 +78,7 @@ export async function tryPlayExistingParts(params: {
         try { notifyUtil(settings, `Audio play failed (existing): ${msg}`); } catch { void 0; }
       }
       await waitForEndOrAbort(audioEl, abort.signal);
-      await cleanupSessionResourcesHelper(session);
+      AudioSessionManager.releaseResources(session);
       setSession(null);
     }
     if (!stopRequested()) { try { notifyUtil(settings, "Finished playing existing audio."); } catch { void 0; } }

@@ -293,7 +293,7 @@ export async function readManifestSafe(
     }
     
     const raw = await app.vault.adapter.read(path);
-    const parsed = JSON.parse(raw);
+    const parsed: unknown = JSON.parse(raw);
     
     // Validate using Zod schema
     const result = safeParseManifest(parsed);

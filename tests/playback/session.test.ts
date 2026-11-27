@@ -7,7 +7,6 @@ import {
   AudioSessionManager,
   type AudioSessionState,
   type AudioSessionEventListener,
-  cleanupSessionResources,
 } from "../../src/playback/session";
 
 // Mock HTML Audio element for testing
@@ -293,15 +292,34 @@ test("AudioSessionManager handles disposal correctly", async () => {
   );
 });
 
-// Legacy function tests
-test("cleanupSessionResources returns null when setNull=true", async () => {
-  const s = await cleanupSessionResources(null, true);
-  expect(s).toBeNull();
+test("AudioSessionManager.releaseResources pauses audio, ends MediaSource and revokes object URL", () => {
+  const originalRevoke = globalThis.URL.revokeObjectURL;
+  let paused = false;
+  let ended = false;
+  let revoked: string | undefined;
+  globalThis.URL.revokeObjectURL = (url: string) => { revoked = url; };
+  try {
+    const session = {
+      abort: new AbortController(),
+      audioEl: { pause: () => { paused = true; } } as any,
+      mediaSource: { readyState: "open", endOfStream: () => { ended = true; } } as any,
+      sourceBuffer: null,
+      lastBlob: null,
+      objectUrl: "blob:mock-url",
+    };
+    AudioSessionManager.releaseResources(session);
+
+    expect(paused).toBe(true);
+    expect(ended).toBe(true);
+    expect(revoked).toBe("blob:mock-url");
+  } finally {
+    globalThis.URL.revokeObjectURL = originalRevoke;
+  }
 });
 
-test("cleanupSessionResources keeps object when setNull=false", async () => {
-  const session = { abort: new AbortController(), audioEl: null, mediaSource: null, sourceBuffer: null, lastBlob: null } as any;
-  const r = await cleanupSessionResources(session, false);
-  expect(r).not.toBeNull();
+test("AudioSessionManager.releaseResources tolerates missing resources", () => {
+  expect(() => AudioSessionManager.releaseResources(null)).not.toThrow();
+  const session = { abort: new AbortController(), audioEl: null, mediaSource: null, sourceBuffer: null, lastBlob: null };
+  expect(() => AudioSessionManager.releaseResources(session)).not.toThrow();
 });
 
