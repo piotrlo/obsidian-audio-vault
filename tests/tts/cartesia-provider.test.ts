@@ -7,11 +7,13 @@ const originalFetch = globalThis.fetch;
 const voice = CARTESIA_VOICES[0].shortName;
 afterEach(() => { globalThis.fetch = originalFetch; });
 
-test("defaults to an English voice and preserves an existing Polish voice", () => {
-  expect(CARTESIA_VOICES[0].name).toBe("Jacqueline (English)");
-  expect(loadTtsSettings(null).cartesiaVoiceId).toBe(voice);
-  const polishVoice = CARTESIA_VOICES.find((entry) => entry.name === "Agnieszka (Polish)")!;
-  expect(loadTtsSettings({ cartesiaVoiceId: polishVoice.shortName }).cartesiaVoiceId).toBe(polishVoice.shortName);
+test("defaults to Paige and preserves saved English and Polish voices", () => {
+  expect(CARTESIA_VOICES[0].name).toBe("Paige (English)");
+  expect(loadTtsSettings(null).cartesiaVoiceId).toBe("86faee7e-bf54-4293-bd90-076138544609");
+  for (const name of ["Jacqueline (English)", "Agnieszka (Polish)"]) {
+    const savedVoice = CARTESIA_VOICES.find((entry) => entry.name === name)!;
+    expect(loadTtsSettings({ cartesiaVoiceId: savedVoice.shortName }).cartesiaVoiceId).toBe(savedVoice.shortName);
+  }
 });
 
 test("sends unwrapped note text and streams MP3 from Cartesia", async () => {

@@ -10,8 +10,9 @@ AudioVault is a free [MIT-licensed](LICENSE) plugin. Generating audio requires y
 
 ## Getting started
 
-1. [Install AudioVault](#installation) and add your [Cartesia API key](https://play.cartesia.ai/keys) in Settings → AudioVault.
-2. Open a note and tap the headphones icon in the ribbon. Playback starts as soon as the first part is ready, or uses the MP3 if it's already saved.
+1. [Install AudioVault](#installation), open a note, and tap the headphones icon in the ribbon.
+2. If the note has a saved MP3, AudioVault plays it immediately. Otherwise, if you haven't added a key, follow the in-app setup to create a Cartesia account and add your key. The short spoken guide is included and plays offline without credits.
+3. Select **Listen to this note**. Playback starts as soon as the first part is ready.
 
 ## Commands
 
@@ -45,7 +46,7 @@ See [Cartesia pricing](https://cartesia.ai/pricing) for current plans and terms.
 
 **Via BRAT:** add `piotrlo/obsidian-audio-vault` as a beta plugin.
 
-Then open **Settings → AudioVault**, create an API key at [play.cartesia.ai/keys](https://play.cartesia.ai/keys), and paste it. Jacqueline is the default English voice; Marcin and Agnieszka are available for Polish. **Browse voices** searches the voices your own Cartesia account can use and filters by language (`pl`, `fr`) or accent (`en-GB`). To force a language, enter e.g. `pl-PL` in **Language (optional override)**.
+Then open **Settings → AudioVault**, create an API key at [play.cartesia.ai/keys](https://play.cartesia.ai/keys), and paste it. Paige is the default English voice for new setups; Jacqueline is still available in English, and Marcin and Agnieszka are available for Polish. **Browse voices** searches the voices your own Cartesia account can use and filters by language (`pl`, `fr`) or accent (`en-GB`). To force a language, enter e.g. `pl-PL` in **Language (optional override)**.
 
 **Upgrading from a manual install of 1.0.2 or earlier:** disable the old plugin first — its folder was `.obsidian/plugins/obsidian-audiovault`. Notes, MP3s and `Generated audio` links keep working. Re-enter your Cartesia key if prompted.
 

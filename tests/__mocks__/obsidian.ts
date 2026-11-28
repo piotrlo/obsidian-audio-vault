@@ -14,6 +14,22 @@ export class TFile {
 
 export class App {}
 
+export class Plugin {
+  constructor(readonly app: App, readonly manifest: unknown) {}
+}
+
+export class PluginSettingTab {}
+
+export class Setting {}
+
+export class Modal {
+  onClose(): void {}
+  open(): void {}
+  close(): void { this.onClose(); }
+}
+
+export function setTooltip(): void {}
+
 export class Notice {
   constructor(readonly message: string) {}
 }
